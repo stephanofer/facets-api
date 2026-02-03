@@ -1,0 +1,24 @@
+onlyBuiltDependencies:
+  - '-'
+  - /
+  - '@'
+  - '@nestjs/core'
+  - '@prisma/engines'
+  - '@sentry-internal/node-cpu-profiler'
+  - '@swc/core'
+  - a
+  - c
+  - d
+  - e
+  - f
+  - i
+  - l
+  - n
+  - o
+  - p
+  - prisma
+  - r
+  - s
+  - t
+  - u
+  - y
