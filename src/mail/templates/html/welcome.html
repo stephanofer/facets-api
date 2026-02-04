@@ -1,0 +1,271 @@
+<!--
+  FACETS - Welcome Email Template
+  
+  Template Name: welcome
+  Variables:
+    - {{userName}}  - User's display name
+    - {{appName}}   - Application name (Facets)
+    - {{loginUrl}}  - Direct link to login page
+  
+  INSTRUCTIONS FOR MAILTRAP:
+  1. Go to https://mailtrap.io/sending/templates
+  2. Click "Create New Template"
+  3. Set name: "Welcome Email"
+  4. Set subject: "Welcome to {{appName}}! 🎉"
+  5. Copy this HTML into the template editor
+  6. Save and copy the UUID
+  7. Paste UUID in src/mail/templates/template.registry.ts
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to {{appName}}</title>
+    <style>
+      /* Reset and base styles */
+      body {
+        margin: 0;
+        padding: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+          'Helvetica Neue', Arial, sans-serif;
+        font-size: 16px;
+        line-height: 1.6;
+        color: #1a1a2e;
+        background-color: #f4f4f8;
+      }
+
+      /* Container */
+      .container {
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 40px 20px;
+      }
+
+      /* Card */
+      .card {
+        background-color: #ffffff;
+        border-radius: 16px;
+        box-shadow:
+          0 4px 6px rgba(0, 0, 0, 0.05),
+          0 10px 20px rgba(0, 0, 0, 0.03);
+        overflow: hidden;
+      }
+
+      /* Header */
+      .header {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        padding: 40px 32px;
+        text-align: center;
+      }
+
+      .logo {
+        font-size: 32px;
+        font-weight: 700;
+        color: #ffffff;
+        margin: 0;
+        letter-spacing: -0.5px;
+      }
+
+      .emoji {
+        font-size: 48px;
+        display: block;
+        margin-top: 16px;
+      }
+
+      /* Content */
+      .content {
+        padding: 40px 32px;
+      }
+
+      .greeting {
+        font-size: 24px;
+        font-weight: 600;
+        color: #1a1a2e;
+        margin: 0 0 16px 0;
+      }
+
+      .message {
+        color: #4a4a68;
+        margin: 0 0 24px 0;
+      }
+
+      /* Features list */
+      .features {
+        background-color: #f8f8fc;
+        border-radius: 12px;
+        padding: 24px;
+        margin: 24px 0;
+      }
+
+      .features-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #6366f1;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin: 0 0 16px 0;
+      }
+
+      .feature-item {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 12px;
+      }
+
+      .feature-item:last-child {
+        margin-bottom: 0;
+      }
+
+      .feature-icon {
+        color: #10b981;
+        font-weight: bold;
+        margin-right: 12px;
+        flex-shrink: 0;
+      }
+
+      .feature-text {
+        color: #4a4a68;
+        margin: 0;
+      }
+
+      /* Button */
+      .button-container {
+        text-align: center;
+        margin: 32px 0;
+      }
+
+      .button {
+        display: inline-block;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        color: #ffffff !important;
+        text-decoration: none;
+        padding: 16px 40px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 16px;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+      }
+
+      /* Footer */
+      .footer {
+        text-align: center;
+        padding: 24px 32px;
+        border-top: 1px solid #e8e8f0;
+      }
+
+      .footer-text {
+        color: #9ca3af;
+        font-size: 14px;
+        margin: 0;
+      }
+
+      .footer-links {
+        margin-top: 16px;
+      }
+
+      .footer-link {
+        color: #6366f1;
+        text-decoration: none;
+        font-size: 14px;
+        margin: 0 12px;
+      }
+
+      /* Responsive */
+      @media only screen and (max-width: 480px) {
+        .container {
+          padding: 20px 12px;
+        }
+
+        .header,
+        .content,
+        .footer {
+          padding-left: 24px;
+          padding-right: 24px;
+        }
+
+        .greeting {
+          font-size: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="card">
+        <!-- Header -->
+        <div class="header">
+          <h1 class="logo">{{appName}}</h1>
+          <span class="emoji">🎉</span>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+          <h2 class="greeting">Welcome, {{userName}}!</h2>
+
+          <p class="message">
+            Thank you for joining {{appName}}! We're thrilled to have you on
+            board. Your journey to better financial management starts now.
+          </p>
+
+          <div class="features">
+            <p class="features-title">What you can do with Facets</p>
+
+            <div class="feature-item">
+              <span class="feature-icon">✓</span>
+              <p class="feature-text">
+                Track all your expenses and income in one place
+              </p>
+            </div>
+
+            <div class="feature-item">
+              <span class="feature-icon">✓</span>
+              <p class="feature-text">
+                Set financial goals and watch your progress
+              </p>
+            </div>
+
+            <div class="feature-item">
+              <span class="feature-icon">✓</span>
+              <p class="feature-text">Manage debts and loans effortlessly</p>
+            </div>
+
+            <div class="feature-item">
+              <span class="feature-icon">✓</span>
+              <p class="feature-text">
+                Set up recurring payments and never miss a bill
+              </p>
+            </div>
+          </div>
+
+          <p class="message">
+            Ready to take control of your finances? Log in now and start
+            organizing your money!
+          </p>
+
+          <div class="button-container">
+            <a href="{{loginUrl}}" class="button">Get Started</a>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+          <p class="footer-text">© 2026 {{appName}}. All rights reserved.</p>
+          <div class="footer-links">
+            <a href="#" class="footer-link">Help Center</a>
+            <a href="#" class="footer-link">Privacy Policy</a>
+            <a href="#" class="footer-link">Terms of Service</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

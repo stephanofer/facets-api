@@ -23,7 +23,8 @@
       "@config/*": ["src/config/*"],
       "@database/*": ["src/database/*"],
       "@modules/*": ["src/modules/*"],
-      "@health/*": ["src/health/*"]
+      "@health/*": ["src/health/*"],
+      "@mail/*": ["src/mail/*"]
     },
 
     "inlineSources": true,

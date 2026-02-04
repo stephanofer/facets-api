@@ -24,6 +24,15 @@ export const configuration = () => ({
     ttl: parseInt(process.env.RATE_LIMIT_TTL || '60000', 10),
     max: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
   },
+  mail: {
+    apiToken: process.env.MAILTRAP_API_TOKEN,
+    senderEmail: process.env.MAILTRAP_SENDER_EMAIL,
+    senderName: process.env.MAILTRAP_SENDER_NAME || 'Facets',
+    sandbox: process.env.MAILTRAP_SANDBOX === 'true',
+    testInboxId: process.env.MAILTRAP_TEST_INBOX_ID
+      ? parseInt(process.env.MAILTRAP_TEST_INBOX_ID, 10)
+      : undefined,
+  },
 });
 
 export type Configuration = ReturnType<typeof configuration>;

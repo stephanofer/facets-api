@@ -27,6 +27,13 @@ export const envSchema = z.object({
   // Rate Limiting
   RATE_LIMIT_TTL: z.coerce.number().default(60000),
   RATE_LIMIT_MAX: z.coerce.number().default(100),
+
+  // Mailtrap
+  MAILTRAP_API_TOKEN: z.string().min(1),
+  MAILTRAP_SENDER_EMAIL: z.string().email(),
+  MAILTRAP_SENDER_NAME: z.string().default('Facets'),
+  MAILTRAP_SANDBOX: z.coerce.boolean().default(true),
+  MAILTRAP_TEST_INBOX_ID: z.coerce.number().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

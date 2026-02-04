@@ -51,4 +51,8 @@ export class ConfigService {
   get rateLimit(): Configuration['rateLimit'] {
     return this.configService.get('rateLimit', { infer: true });
   }
+
+  get mail(): Configuration['mail'] {
+    return this.configService.get('mail', { infer: true });
+  }
 }

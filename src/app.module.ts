@@ -3,6 +3,7 @@ import { SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@config/config.module';
 import { DatabaseModule } from '@database/database.module';
 import { HealthModule } from '@health/health.module';
+import { MailModule } from '@mail/mail.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { HealthModule } from '@health/health.module';
     // Global modules
     ConfigModule,
     DatabaseModule,
+    MailModule,
 
     // Feature modules
     HealthModule,

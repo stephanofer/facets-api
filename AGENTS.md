@@ -44,8 +44,9 @@ When performing these actions, ALWAYS invoke the corresponding skill FIRST:
 
 | E2E Tests  | `test/`            | @nestjs/testing, Supertest |
 
-| Error Monitoring | Sentry              | Sentry SDK                 |
-| Documentation | Swagger              | Swagger                |
+| Error Monitoring | Sentry | Sentry SDK |
+| Documentation | Swagger | Swagger |
+| Email Service | Mailtrap | Mailtrap SDK |
 
 ## Architecture
 
@@ -79,11 +80,15 @@ src/
 
 ├── config/                 # Configuration module
 
-├── database/               # Prisma module
+├── database/               # Prisma module
 
-├── health/                 # Health checks
+├── health/                 # Health checks
 
-└── modules/                # Feature modules
+├── mail/                   # Email module (Mailtrap)
+│   ├── providers/          # Mail provider implementations
+│   └── templates/          # Email template types and registry
+
+└── modules/                # Feature modules
 
     ├── auth/               # Authentication
 
