@@ -45,6 +45,7 @@ When performing these actions, ALWAYS invoke the corresponding skill FIRST:
 | E2E Tests  | `test/`            | @nestjs/testing, Supertest |
 
 | Error Monitoring | Sentry              | Sentry SDK                 |
+| Documentation | Swagger              | Swagger                |
 
 ## Architecture
 

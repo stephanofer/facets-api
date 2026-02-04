@@ -16,6 +16,13 @@
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false,
     "strictBindCallApply": false,
-    "noFallthroughCasesInSwitch": false
+    "noFallthroughCasesInSwitch": false,
+    "paths": {
+      "@common/*": ["src/common/*"],
+      "@config/*": ["src/config/*"],
+      "@database/*": ["src/database/*"],
+      "@modules/*": ["src/modules/*"],
+      "@health/*": ["src/health/*"]
+    }
   }
 }

@@ -1,0 +1,16 @@
+{
+  "symbols.files.associations": {
+    "*.module.ts": "nest-module",
+    "*.controller.ts": "nest-controller",
+    "*.service.ts": "nest-service",
+    "*.guard.ts": "shield",
+    "*.interceptor.ts": "filter",
+    "*.middleware.ts": "gear",
+    "*.pipe.ts": "tools",
+    "*.decorator.ts": "symbol-misc",
+    "*.entity.ts": "database",
+    "*.dto.ts": "symbol-structure",
+    "*.interface.ts": "symbol-interface",
+    "*.enum.ts": "symbol-enum"
+  }
+}
