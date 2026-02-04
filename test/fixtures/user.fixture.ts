@@ -4,13 +4,15 @@
 export interface CreateUserFixture {
   email?: string;
   password?: string;
-  name?: string;
+  firstName?: string;
+  lastName?: string;
 }
 
 export function createUserFixture(overrides: CreateUserFixture = {}) {
   return {
     email: overrides.email ?? `test-${Date.now()}@example.com`,
     password: overrides.password ?? 'SecureP@ss123',
-    name: overrides.name ?? 'Test User',
+    firstName: overrides.firstName ?? 'Test',
+    lastName: overrides.lastName ?? 'User',
   };
 }

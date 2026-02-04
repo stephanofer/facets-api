@@ -6,3 +6,245 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// =============================================================================
+// PHASE 1: Core Authentication
+// =============================================================================
+
+model User {
+  id              String     @id @default(cuid(2))
+  email           String     @unique
+  password        String // bcrypt hashed
+  firstName       String
+  lastName        String
+  emailVerified   Boolean    @default(false)
+  emailVerifiedAt DateTime?
+  status          UserStatus @default(PENDING_VERIFICATION)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  refreshTokens  RefreshToken[]
+  otpCodes       OtpCode[]
+  subscription   Subscription?
+  usageRecords   UsageRecord[]
+  planChangeLogs PlanChangeLog[]
+
+  @@index([email])
+  @@index([status])
+  @@map("users")
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid(2))
+  token     String    @unique // hashed
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// =============================================================================
+// PHASE 2: Email Verification & Password Recovery
+// =============================================================================
+
+model OtpCode {
+  id          String   @id @default(cuid(2))
+  code        String // 6 digits
+  type        OtpType
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(5)
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, type, usedAt, expiresAt])
+  @@index([expiresAt])
+  @@map("otp_codes")
+}
+
+enum OtpType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+// =============================================================================
+// PHASE 3: Subscription System & Feature Access
+// =============================================================================
+
+model Plan {
+  id            String   @id @default(cuid(2))
+  code          String   @unique // 'free', 'pro', 'premium'
+  name          String
+  description   String?
+  priceMonthly  Decimal  @db.Decimal(10, 2)
+  priceCurrency String   @default("USD") @db.VarChar(3)
+  priceYearly   Decimal? @db.Decimal(10, 2)
+  isActive      Boolean  @default(true)
+  isDefault     Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions          Subscription[]
+  scheduledSubscriptions Subscription[]    @relation("ScheduledPlan")
+  planFeatures           PlanFeature[]
+  fromChangeLogs         PlanChangeLog[]   @relation("FromPlan")
+  toChangeLogs           PlanChangeLog[]   @relation("ToPlan")
+
+  @@index([code])
+  @@index([isActive, sortOrder])
+  @@map("plans")
+}
+
+model Subscription {
+  id                 String             @id @default(cuid(2))
+  userId             String             @unique
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId             String
+  plan               Plan               @relation(fields: [planId], references: [id])
+  status             SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart DateTime           @default(now())
+  currentPeriodEnd   DateTime? // null for free plan
+
+  // Trial
+  trialStart DateTime?
+  trialEnd   DateTime?
+
+  // Phase 4: Scheduled changes (for downgrades)
+  scheduledPlanId   String?
+  scheduledPlan     Plan?     @relation("ScheduledPlan", fields: [scheduledPlanId], references: [id])
+  scheduledChangeAt DateTime?
+
+  // Phase 4: Cancellation
+  cancelledAt  DateTime?
+  cancelReason String?
+
+  // Phase 4: Grace period (for overages after downgrade)
+  graceOverages  Json?
+  gracePeriodEnd DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
+  @@index([scheduledChangeAt])
+  @@index([gracePeriodEnd])
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+// =============================================================================
+// PHASE 4: Plan Management (Upgrade/Downgrade)
+// =============================================================================
+
+model PlanChangeLog {
+  id              String         @id @default(cuid(2))
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromPlanId      String
+  fromPlan        Plan           @relation("FromPlan", fields: [fromPlanId], references: [id])
+  toPlanId        String
+  toPlan          Plan           @relation("ToPlan", fields: [toPlanId], references: [id])
+  changeType      PlanChangeType
+  requestedAt     DateTime       @default(now())
+  effectiveAt     DateTime?
+  scheduledFor    DateTime?
+  prorationAmount Decimal?       @db.Decimal(10, 2)
+  reason          String?
+  metadata        Json?
+  createdAt       DateTime       @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("plan_change_logs")
+}
+
+enum PlanChangeType {
+  UPGRADE
+  DOWNGRADE_SCHEDULED
+  DOWNGRADE_APPLIED
+  CANCELLATION
+  CANCELLATION_APPLIED
+  REACTIVATION
+}
+
+model PlanFeature {
+  id          String           @id @default(cuid(2))
+  planId      String
+  plan        Plan             @relation(fields: [planId], references: [id], onDelete: Cascade)
+  featureCode String
+  limitType   FeatureLimitType @default(BOOLEAN)
+  limitValue  Int              @default(1)
+  limitPeriod LimitPeriod?
+  featureType FeatureType      @default(RESOURCE)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@unique([planId, featureCode])
+  @@index([featureCode])
+  @@map("plan_features")
+}
+
+enum FeatureLimitType {
+  BOOLEAN // on/off
+  COUNT // numeric limit
+  UNLIMITED // no limit
+}
+
+enum FeatureType {
+  RESOURCE // Count from actual table (accounts, goals) - deletable
+  CONSUMABLE // Count from UsageRecord (transactions) - period-based
+}
+
+enum LimitPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+model UsageRecord {
+  id          String      @id @default(cuid(2))
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  featureCode String
+  periodType  LimitPeriod
+  periodStart DateTime
+  periodEnd   DateTime
+  count       Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([userId, featureCode, periodStart])
+  @@index([userId, featureCode])
+  @@index([periodEnd])
+  @@map("usage_records")
+}

@@ -4,9 +4,12 @@ onlyBuiltDependencies:
   - '@'
   - '@nestjs/core'
   - '@prisma/engines'
+  - '@scarf/scarf'
   - '@sentry-internal/node-cpu-profiler'
+  - '@sentry/cli'
   - '@swc/core'
   - a
+  - bcrypt
   - c
   - d
   - e

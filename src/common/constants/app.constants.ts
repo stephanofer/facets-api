@@ -6,15 +6,82 @@ export const APP_CONSTANTS = {
   SALT_ROUNDS: 12,
 } as const;
 
+// OTP Configuration - Phase 2
+export const OTP_CONSTANTS = {
+  /** OTP code length (6 digits) */
+  CODE_LENGTH: 6,
+  /** OTP expiration time in minutes */
+  EXPIRY_MINUTES: 10,
+  /** Maximum verification attempts before lockout */
+  MAX_ATTEMPTS: 5,
+  /** Minimum seconds between OTP requests (cooldown) */
+  COOLDOWN_SECONDS: 60,
+  /** Maximum OTP requests per hour (rate limit) */
+  RATE_LIMIT_PER_HOUR: 5,
+  /** Reset token expiration in minutes (for password reset flow) */
+  RESET_TOKEN_EXPIRY_MINUTES: 5,
+} as const;
+
+// Subscription Configuration - Phase 4
+export const SUBSCRIPTION_CONSTANTS = {
+  /** Grace period in days for users to reduce resources after downgrade */
+  GRACE_PERIOD_DAYS: 7,
+  /** Default billing period in days for paid plans */
+  BILLING_PERIOD_DAYS: 30,
+} as const;
+
 export const ERROR_CODES = {
+  // Validation
   VALIDATION_ERROR: 'VALIDATION_ERROR',
+
+  // Authentication
   INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  EMAIL_NOT_VERIFIED: 'EMAIL_NOT_VERIFIED',
+  ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
+  ACCOUNT_DELETED: 'ACCOUNT_DELETED',
+  EMAIL_ALREADY_EXISTS: 'EMAIL_ALREADY_EXISTS',
   TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+  REFRESH_TOKEN_REVOKED: 'REFRESH_TOKEN_REVOKED',
+  REFRESH_TOKEN_INVALID: 'REFRESH_TOKEN_INVALID',
+
+  // Authorization
   UNAUTHORIZED: 'UNAUTHORIZED',
   FORBIDDEN: 'FORBIDDEN',
+
+  // Resources
   RESOURCE_NOT_FOUND: 'RESOURCE_NOT_FOUND',
   CONFLICT: 'CONFLICT',
+
+  // Rate limiting
   RATE_LIMIT_EXCEEDED: 'RATE_LIMIT_EXCEEDED',
+
+  // OTP - Phase 2
+  INVALID_OTP: 'INVALID_OTP',
+  OTP_EXPIRED: 'OTP_EXPIRED',
+  OTP_MAX_ATTEMPTS: 'OTP_MAX_ATTEMPTS',
+  OTP_RATE_LIMITED: 'OTP_RATE_LIMITED',
+  OTP_COOLDOWN: 'OTP_COOLDOWN',
+  USER_NOT_FOUND: 'USER_NOT_FOUND',
+  EMAIL_ALREADY_VERIFIED: 'EMAIL_ALREADY_VERIFIED',
+  INVALID_RESET_TOKEN: 'INVALID_RESET_TOKEN',
+
+  // Subscriptions - Phase 3
+  FEATURE_NOT_AVAILABLE: 'FEATURE_NOT_AVAILABLE',
+  FEATURE_LIMIT_EXCEEDED: 'FEATURE_LIMIT_EXCEEDED',
+  NOT_AN_UPGRADE: 'NOT_AN_UPGRADE',
+  NOT_A_DOWNGRADE: 'NOT_A_DOWNGRADE',
+  ALREADY_ON_PLAN: 'ALREADY_ON_PLAN',
+  RESOURCE_OVERAGE: 'RESOURCE_OVERAGE',
+  NO_SUBSCRIPTION: 'NO_SUBSCRIPTION',
+
+  // Subscriptions - Phase 4 (Plan Management)
+  CANNOT_CANCEL_FREE_PLAN: 'CANNOT_CANCEL_FREE_PLAN',
+  NO_SCHEDULED_CHANGE: 'NO_SCHEDULED_CHANGE',
+  NO_PENDING_CANCELLATION: 'NO_PENDING_CANCELLATION',
+  PLAN_NOT_FOUND: 'PLAN_NOT_FOUND',
+  SUBSCRIPTION_ALREADY_CANCELLED: 'SUBSCRIPTION_ALREADY_CANCELLED',
+
+  // Server
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 

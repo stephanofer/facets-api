@@ -1,0 +1,649 @@
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  HttpStatus,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
+import { ConfigService } from '@config/config.service';
+import { UsersService } from '@modules/users/users.service';
+import { RefreshTokensRepository } from '@modules/auth/refresh-tokens.repository';
+import { OtpService } from '@modules/otp/otp.service';
+import { MailService } from '@mail/mail.service';
+import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
+import { RegisterDto } from '@modules/auth/dtos/register.dto';
+import { LoginDto } from '@modules/auth/dtos/login.dto';
+import {
+  VerifyEmailDto,
+  ResendVerificationDto,
+  ForgotPasswordDto,
+  VerifyResetCodeDto,
+  ResetPasswordDto,
+} from '@modules/auth/dtos/verification.dto';
+import {
+  JwtPayload,
+  RefreshTokenPayload,
+  TokensResponseDto,
+  AuthUserDto,
+  LoginResponseDto,
+  RegisterResponseDto,
+  MessageResponseDto,
+  VerifyEmailResponseDto,
+  VerifyResetCodeResponseDto,
+} from '@modules/auth/dtos/auth-response.dto';
+import { BusinessException } from '@common/exceptions/business.exception';
+import { ERROR_CODES, APP_CONSTANTS } from '@common/constants/app.constants';
+import { User, OtpType, UserStatus } from '../../generated/prisma/client';
+
+interface RequestMetadata {
+  userAgent?: string;
+  ipAddress?: string;
+}
+
+@Injectable()
+export class AuthService {
+  private readonly accessTokenExpiry: number; // in seconds
+
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly refreshTokensRepository: RefreshTokensRepository,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly otpService: OtpService,
+    private readonly mailService: MailService,
+    private readonly subscriptionsService: SubscriptionsService,
+  ) {
+    // Parse access token expiry to seconds (e.g., '1h' -> 3600)
+    this.accessTokenExpiry = this.parseExpiryToSeconds(
+      this.configService.jwt.accessExpires || '1h',
+    );
+  }
+
+  /**
+   * Register a new user
+   *
+   * Creates user with PENDING_VERIFICATION status and sends verification OTP email.
+   */
+  async register(dto: RegisterDto): Promise<RegisterResponseDto> {
+    // Check if email already exists
+    const emailExists = await this.usersService.emailExists(dto.email);
+    if (emailExists) {
+      throw new ConflictException({
+        code: ERROR_CODES.EMAIL_ALREADY_EXISTS,
+        message: 'An account with this email already exists',
+      });
+    }
+
+    // Hash password with bcrypt (12 rounds as per design)
+    const hashedPassword = await bcrypt.hash(
+      dto.password,
+      APP_CONSTANTS.SALT_ROUNDS,
+    );
+
+    // Create user
+    const user = await this.usersService.create({
+      email: dto.email,
+      password: hashedPassword,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+    });
+
+    // Assign FREE plan subscription
+    const subscription =
+      await this.subscriptionsService.createSubscriptionForNewUser(user.id);
+
+    // Generate OTP and send verification email
+    await this.sendVerificationEmail(user);
+
+    return {
+      message:
+        'Registration successful. Please check your email to verify your account.',
+      user: this.toAuthUserDto(user, {
+        code: subscription.plan.code,
+        name: subscription.plan.name,
+      }),
+    };
+  }
+
+  /**
+   * Login a user with email and password
+   *
+   * Validates credentials and user status, then generates tokens.
+   */
+  async login(
+    dto: LoginDto,
+    metadata?: RequestMetadata,
+  ): Promise<LoginResponseDto> {
+    // Find user by email
+    const user = await this.usersService.findByEmail(dto.email);
+    if (!user) {
+      throw new UnauthorizedException({
+        code: ERROR_CODES.INVALID_CREDENTIALS,
+        message: 'Invalid email or password',
+      });
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException({
+        code: ERROR_CODES.INVALID_CREDENTIALS,
+        message: 'Invalid email or password',
+      });
+    }
+
+    // Check if user can login (status check)
+    const loginStatus = this.usersService.canLogin(user);
+    if (!loginStatus.allowed) {
+      this.throwStatusError(loginStatus.reason!);
+    }
+
+    // Generate tokens
+    const tokens = await this.generateTokens(user, metadata);
+
+    // Get user's plan
+    const plan = await this.getUserPlan(user.id);
+
+    return {
+      tokens,
+      user: this.toAuthUserDto(user, plan),
+    };
+  }
+
+  /**
+   * Verify email with OTP code
+   *
+   * Validates the OTP, marks user as verified, sends welcome email, and returns tokens for auto-login.
+   */
+  async verifyEmail(
+    dto: VerifyEmailDto,
+    metadata?: RequestMetadata,
+  ): Promise<VerifyEmailResponseDto> {
+    // Find user by email
+    const user = await this.usersService.findByEmail(dto.email);
+    if (!user) {
+      throw new BusinessException(
+        ERROR_CODES.USER_NOT_FOUND,
+        'No account found with this email address',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    // Check if already verified
+    if (user.emailVerified) {
+      throw new BusinessException(
+        ERROR_CODES.EMAIL_ALREADY_VERIFIED,
+        'Email is already verified. Please login.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Verify OTP
+    await this.otpService.verify(dto.code, user.id, OtpType.EMAIL_VERIFICATION);
+
+    // Mark user as verified
+    const updatedUser = await this.usersService.verifyEmail(user.id);
+
+    // Send welcome email (async, don't block the response)
+    this.sendWelcomeEmail(updatedUser).catch((error) => {
+      // Log error but don't fail the verification
+      console.error('Failed to send welcome email:', error);
+    });
+
+    // Generate tokens for auto-login
+    const tokens = await this.generateTokens(updatedUser, metadata);
+
+    // Get user's plan
+    const plan = await this.getUserPlan(updatedUser.id);
+
+    return {
+      message: 'Email verified successfully. You are now logged in.',
+      tokens,
+      user: this.toAuthUserDto(updatedUser, plan),
+    };
+  }
+
+  /**
+   * Resend verification email
+   *
+   * Generates a new OTP and sends verification email.
+   */
+  async resendVerification(
+    dto: ResendVerificationDto,
+  ): Promise<MessageResponseDto> {
+    // Find user by email
+    const user = await this.usersService.findByEmail(dto.email);
+    if (!user) {
+      // Return success message even if user not found (avoid email enumeration)
+      return {
+        message:
+          'If an account exists with this email, a verification code has been sent.',
+      };
+    }
+
+    // Check if already verified
+    if (user.emailVerified) {
+      throw new BusinessException(
+        ERROR_CODES.EMAIL_ALREADY_VERIFIED,
+        'Email is already verified. Please login.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Generate new OTP and send email
+    await this.sendVerificationEmail(user);
+
+    return {
+      message:
+        'If an account exists with this email, a verification code has been sent.',
+    };
+  }
+
+  /**
+   * Initiate password reset (forgot password)
+   *
+   * Generates OTP and sends password reset email.
+   * Always returns success to prevent email enumeration.
+   */
+  async forgotPassword(dto: ForgotPasswordDto): Promise<MessageResponseDto> {
+    // Find user by email
+    const user = await this.usersService.findByEmail(dto.email);
+
+    // Always return success to prevent email enumeration
+    const successMessage = {
+      message:
+        'If an account exists with this email, a password reset code has been sent.',
+    };
+
+    if (!user) {
+      return successMessage;
+    }
+
+    // Don't send reset email for deleted accounts
+    if (user.status === UserStatus.DELETED) {
+      return successMessage;
+    }
+
+    // Generate OTP and send password reset email
+    await this.sendPasswordResetEmail(user);
+
+    return successMessage;
+  }
+
+  /**
+   * Verify password reset code
+   *
+   * Validates the OTP without consuming it (still needs to be used in resetPassword).
+   */
+  async verifyResetCode(
+    dto: VerifyResetCodeDto,
+  ): Promise<VerifyResetCodeResponseDto> {
+    // Find user by email
+    const user = await this.usersService.findByEmail(dto.email);
+    if (!user) {
+      throw new BusinessException(
+        ERROR_CODES.INVALID_OTP,
+        'Invalid or expired reset code',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Verify OTP (this will throw if invalid)
+    // Note: We verify AND consume the OTP here for security
+    // The resetPassword endpoint will validate that email matches
+    await this.otpService.verify(dto.code, user.id, OtpType.PASSWORD_RESET);
+
+    // We need to generate a new OTP for the actual reset
+    // This is a two-step process for better UX
+    await this.sendPasswordResetEmail(user);
+
+    return {
+      message:
+        'Code verified. A new code has been sent for the password reset.',
+      valid: true,
+    };
+  }
+
+  /**
+   * Reset password with verified OTP
+   *
+   * Updates password and revokes all refresh tokens (logout from all devices).
+   */
+  async resetPassword(dto: ResetPasswordDto): Promise<MessageResponseDto> {
+    // Find user by email
+    const user = await this.usersService.findByEmail(dto.email);
+    if (!user) {
+      throw new BusinessException(
+        ERROR_CODES.INVALID_OTP,
+        'Invalid or expired reset code',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Verify OTP
+    await this.otpService.verify(dto.code, user.id, OtpType.PASSWORD_RESET);
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(
+      dto.newPassword,
+      APP_CONSTANTS.SALT_ROUNDS,
+    );
+
+    // Update password
+    await this.usersService.updatePassword(user.id, hashedPassword);
+
+    // Revoke ALL refresh tokens (security: logout from all devices)
+    await this.refreshTokensRepository.revokeAllForUser(user.id);
+
+    return {
+      message:
+        'Password has been reset successfully. Please login with your new password.',
+    };
+  }
+
+  /**
+   * Refresh access token using a valid refresh token
+   *
+   * Implements token rotation: the used refresh token is revoked
+   * and a new one is issued.
+   */
+  async refreshTokens(
+    payload: RefreshTokenPayload & { refreshToken: string },
+    metadata?: RequestMetadata,
+  ): Promise<TokensResponseDto> {
+    // Find the refresh token in database
+    const storedToken = await this.refreshTokensRepository.findById(
+      payload.tokenId,
+    );
+
+    if (!storedToken) {
+      throw new UnauthorizedException({
+        code: ERROR_CODES.REFRESH_TOKEN_INVALID,
+        message: 'Invalid refresh token',
+      });
+    }
+
+    // Check if token is still valid (not revoked, not expired)
+    if (!this.refreshTokensRepository.isTokenValid(storedToken)) {
+      throw new UnauthorizedException({
+        code: ERROR_CODES.REFRESH_TOKEN_REVOKED,
+        message: 'Refresh token has been revoked or expired',
+      });
+    }
+
+    // Verify token hash matches (extra security)
+    const tokenHash = this.hashToken(payload.refreshToken);
+    if (storedToken.token !== tokenHash) {
+      // Token mismatch - possible token theft, revoke all user tokens
+      await this.refreshTokensRepository.revokeAllForUser(storedToken.userId);
+      throw new UnauthorizedException({
+        code: ERROR_CODES.REFRESH_TOKEN_INVALID,
+        message: 'Invalid refresh token',
+      });
+    }
+
+    // Revoke the current token (rotation)
+    await this.refreshTokensRepository.revoke(storedToken.id);
+
+    // Get user to generate new tokens
+    const user = await this.usersService.findById(storedToken.userId);
+    if (!user) {
+      throw new UnauthorizedException({
+        code: ERROR_CODES.UNAUTHORIZED,
+        message: 'User not found',
+      });
+    }
+
+    // Check user status
+    const loginStatus = this.usersService.canLogin(user);
+    if (!loginStatus.allowed) {
+      this.throwStatusError(loginStatus.reason!);
+    }
+
+    // Generate new tokens
+    return this.generateTokens(user, metadata);
+  }
+
+  /**
+   * Logout - revoke the specific refresh token
+   */
+  async logout(refreshToken: string): Promise<void> {
+    const tokenHash = this.hashToken(refreshToken);
+    await this.refreshTokensRepository.revokeByToken(tokenHash);
+  }
+
+  /**
+   * Logout from all devices - revoke all refresh tokens for user
+   */
+  async logoutAll(userId: string): Promise<{ revokedCount: number }> {
+    const result = await this.refreshTokensRepository.revokeAllForUser(userId);
+    return { revokedCount: result.count };
+  }
+
+  /**
+   * Get current user by ID (for /auth/me endpoint)
+   */
+  async getMe(userId: string): Promise<AuthUserDto> {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException({
+        code: ERROR_CODES.UNAUTHORIZED,
+        message: 'User not found',
+      });
+    }
+
+    const plan = await this.getUserPlan(userId);
+    return this.toAuthUserDto(user, plan);
+  }
+
+  // ==========================================================================
+  // Private helper methods
+  // ==========================================================================
+
+  /**
+   * Get user's current plan info (for including in auth responses)
+   */
+  private async getUserPlan(
+    userId: string,
+  ): Promise<{ code: string; name: string } | undefined> {
+    try {
+      const subscription =
+        await this.subscriptionsService.getUserSubscription(userId);
+      return {
+        code: subscription.plan.code,
+        name: subscription.plan.name,
+      };
+    } catch {
+      // User may not have a subscription yet (shouldn't happen, but be safe)
+      return undefined;
+    }
+  }
+
+  /**
+   * Send verification email with OTP
+   */
+  private async sendVerificationEmail(user: User): Promise<void> {
+    const otpResult = await this.otpService.generate(
+      user.id,
+      OtpType.EMAIL_VERIFICATION,
+    );
+
+    await this.mailService.sendTemplate('email-verification', user.email, {
+      userName: user.firstName,
+      otpCode: otpResult.code,
+      expiresInMinutes: this.otpService.getExpiryMinutes(),
+    });
+  }
+
+  /**
+   * Send welcome email after successful email verification
+   */
+  private async sendWelcomeEmail(user: User): Promise<void> {
+    // TODO: Move this URL to configuration when frontend is ready
+    const loginUrl = 'https://app.facets.com/login';
+
+    await this.mailService.sendTemplate('welcome', user.email, {
+      userName: user.firstName,
+      appName: 'Facets',
+      loginUrl,
+    });
+  }
+
+  /**
+   * Send password reset email with OTP
+   */
+  private async sendPasswordResetEmail(user: User): Promise<void> {
+    const otpResult = await this.otpService.generate(
+      user.id,
+      OtpType.PASSWORD_RESET,
+    );
+
+    await this.mailService.sendTemplate('password-reset', user.email, {
+      userName: user.firstName,
+      otpCode: otpResult.code,
+      expiresInMinutes: this.otpService.getExpiryMinutes(),
+    });
+  }
+
+  /**
+   * Generate access and refresh tokens
+   */
+  private async generateTokens(
+    user: User,
+    metadata?: RequestMetadata,
+  ): Promise<TokensResponseDto> {
+    // Generate a unique token ID for the refresh token
+    const tokenId = crypto.randomUUID();
+
+    // Create JWT payloads
+    const accessPayload: JwtPayload = {
+      sub: user.id,
+      email: user.email,
+    };
+
+    const refreshPayload: RefreshTokenPayload = {
+      sub: user.id,
+      email: user.email,
+      tokenId,
+    };
+
+    // Calculate expiry times in seconds
+    const refreshExpirySeconds = this.parseExpiryToSeconds(
+      this.configService.jwt.refreshExpires || '7d',
+    );
+
+    // Generate tokens
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(accessPayload, {
+        secret: this.configService.jwt.accessSecret,
+        expiresIn: this.accessTokenExpiry,
+      }),
+      this.jwtService.signAsync(refreshPayload, {
+        secret: this.configService.jwt.refreshSecret,
+        expiresIn: refreshExpirySeconds,
+      }),
+    ]);
+
+    const expiresAt = new Date(Date.now() + refreshExpirySeconds * 1000);
+
+    await this.refreshTokensRepository.create({
+      token: this.hashToken(refreshToken),
+      userId: user.id,
+      expiresAt,
+      userAgent: metadata?.userAgent,
+      ipAddress: metadata?.ipAddress,
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      expiresIn: this.accessTokenExpiry,
+    };
+  }
+
+  /**
+   * Hash a token for storage (using SHA-256)
+   */
+  private hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  /**
+   * Convert User entity to AuthUserDto (excludes sensitive fields)
+   */
+  private toAuthUserDto(
+    user: User,
+    plan?: { code: string; name: string },
+  ): AuthUserDto {
+    return {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      emailVerified: user.emailVerified,
+      status: user.status,
+      createdAt: user.createdAt,
+      plan,
+    };
+  }
+
+  /**
+   * Parse expiry string to seconds (e.g., '1h' -> 3600, '7d' -> 604800)
+   */
+  private parseExpiryToSeconds(expiry: string): number {
+    const match = expiry.match(/^(\d+)(s|m|h|d)$/);
+    if (!match) {
+      // Default to 1 hour if invalid format
+      return 3600;
+    }
+
+    const value = parseInt(match[1], 10);
+    const unit = match[2];
+
+    switch (unit) {
+      case 's':
+        return value;
+      case 'm':
+        return value * 60;
+      case 'h':
+        return value * 60 * 60;
+      case 'd':
+        return value * 24 * 60 * 60;
+      default:
+        return 3600;
+    }
+  }
+
+  /**
+   * Throw appropriate error based on user status
+   */
+  private throwStatusError(reason: string): never {
+    switch (reason) {
+      case 'EMAIL_NOT_VERIFIED':
+        throw new BusinessException(
+          ERROR_CODES.EMAIL_NOT_VERIFIED,
+          'Please verify your email before logging in',
+          HttpStatus.FORBIDDEN,
+        );
+      case 'ACCOUNT_SUSPENDED':
+        throw new BusinessException(
+          ERROR_CODES.ACCOUNT_SUSPENDED,
+          'Your account has been suspended',
+          HttpStatus.FORBIDDEN,
+        );
+      case 'ACCOUNT_DELETED':
+        throw new BusinessException(
+          ERROR_CODES.ACCOUNT_DELETED,
+          'This account has been deleted',
+          HttpStatus.FORBIDDEN,
+        );
+      default:
+        throw new UnauthorizedException({
+          code: ERROR_CODES.UNAUTHORIZED,
+          message: 'Account access denied',
+        });
+    }
+  }
+}

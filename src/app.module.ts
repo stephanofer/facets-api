@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@config/config.module';
 import { DatabaseModule } from '@database/database.module';
 import { HealthModule } from '@health/health.module';
 import { MailModule } from '@mail/mail.module';
+import { AuthModule } from '@modules/auth/auth.module';
+import { SubscriptionsModule } from '@modules/subscriptions/subscriptions.module';
+import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -17,8 +21,17 @@ import { MailModule } from '@mail/mail.module';
 
     // Feature modules
     HealthModule,
+    AuthModule,
+    SubscriptionsModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    // Global JWT Auth Guard - all routes protected by default
+    // Use @Public() decorator for public routes
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
 })
 export class AppModule {}

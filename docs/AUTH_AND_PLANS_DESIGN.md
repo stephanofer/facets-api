@@ -1,8 +1,9 @@
 # Authentication & Subscription Plans - Design Document
 
-> **Status**: Draft - Pending Review  
+> **Status**: Implemented (95%+ Complete)  
 > **Version**: 1.0  
 > **Date**: February 2026
+> **Last Audit**: February 4, 2026
 
 ---
 
@@ -84,7 +85,8 @@ model User {
   id              String       @id @default(cuid(2))
   email           String       @unique
   password        String       // bcrypt hashed
-  name            String?
+  firstName       String
+  lastName        String
   emailVerified   Boolean      @default(false)
   emailVerifiedAt DateTime?
   status          UserStatus   @default(PENDING_VERIFICATION)
@@ -129,7 +131,7 @@ model RefreshToken {
 
 **Registration:**
 
-1. Usuario envía `POST /auth/register` con email, password, name
+1. Usuario envía `POST /auth/register` con email, password, firstName, lastName
 2. Validar email único, hashear password (bcrypt, 12 rounds)
 3. Crear User con `status=PENDING_VERIFICATION`
 4. Responder con mensaje de verificación (OTP se envía en Phase 2)
@@ -176,25 +178,25 @@ model RefreshToken {
 
 **DB:**
 
-- [ ] User model (email, password, status, emailVerified, emailVerifiedAt)
-- [ ] RefreshToken model
-- [ ] Migration
+- [x] User model (email, password, status, emailVerified, emailVerifiedAt, firstName, lastName)
+- [x] RefreshToken model
+- [x] Migration
 
 **Auth Module:**
 
-- [ ] JWT Strategy (access tokens)
-- [ ] JWT Refresh Strategy (refresh tokens)
-- [ ] AuthService (register, login, refresh, logout, logoutAll)
-- [ ] AuthController
+- [x] JWT Strategy (access tokens)
+- [x] JWT Refresh Strategy (refresh tokens)
+- [x] AuthService (register, login, refresh, logout, logoutAll)
+- [x] AuthController
 
 **Users Module:**
 
-- [ ] UsersRepository
-- [ ] UsersService
+- [x] UsersRepository
+- [x] UsersService
 
 **Tests:**
 
-- [ ] Unit tests AuthService
+- [x] Unit tests AuthService
 - [ ] E2E tests: register, login, refresh, logout
 
 ---
@@ -287,32 +289,32 @@ enum OtpType {
 
 **DB:**
 
-- [ ] OtpCode model
-- [ ] Migration
+- [x] OtpCode model
+- [x] Migration
 
 **OTP Module:**
 
-- [ ] OtpRepository
-- [ ] OtpService (generate, verify, invalidate, checkRateLimit, checkCooldown)
+- [x] OtpRepository
+- [x] OtpService (generate, verify, invalidate, checkRateLimit, checkCooldown)
 
 **Email Module:**
 
-- [ ] EmailService (interface + stub implementation)
-- [ ] Templates: EMAIL_VERIFICATION, PASSWORD_RESET
+- [x] EmailService (interface + stub implementation)
+- [x] Templates: EMAIL_VERIFICATION, PASSWORD_RESET
 
 **Auth Updates:**
 
-- [ ] verify-email endpoint (auto-login después de verificar)
-- [ ] resend-verification endpoint
-- [ ] forgot-password endpoint
-- [ ] verify-reset-code endpoint
-- [ ] reset-password endpoint (invalidar todas las sesiones)
-- [ ] Actualizar register para enviar OTP
-- [ ] Actualizar login para verificar status=ACTIVE
+- [x] verify-email endpoint (auto-login después de verificar)
+- [x] resend-verification endpoint
+- [x] forgot-password endpoint
+- [x] verify-reset-code endpoint
+- [x] reset-password endpoint (invalidar todas las sesiones)
+- [x] Actualizar register para enviar OTP
+- [x] Actualizar login para verificar status=ACTIVE
 
 **Tests:**
 
-- [ ] Unit tests OtpService
+- [x] Unit tests OtpService
 - [ ] E2E tests: verify-email, resend, forgot-password, reset-password
 
 ---
@@ -658,45 +660,45 @@ const features = {
 
 **DB:**
 
-- [ ] Plan, Subscription, PlanFeature, UsageRecord models
-- [ ] Migration
+- [x] Plan, Subscription, PlanFeature, UsageRecord models
+- [x] Migration
 
 **Seed (prisma/seed.ts):**
 
-- [ ] Crear 3 planes: Free (isDefault: true), Pro, Premium
-- [ ] Crear PlanFeatures para cada plan según Feature Matrix
-- [ ] Usar upsert para que sea idempotente
-- [ ] Marcar featureType correcto: RESOURCE vs CONSUMABLE
+- [x] Crear 3 planes: Free (isDefault: true), Pro, Premium
+- [x] Crear PlanFeatures para cada plan según Feature Matrix
+- [x] Usar upsert para que sea idempotente
+- [x] Marcar featureType correcto: RESOURCE vs CONSUMABLE
 
 **Subscriptions Module:**
 
-- [ ] PlansRepository
-- [ ] SubscriptionsRepository
-- [ ] UsageRepository
-- [ ] SubscriptionsService
-  - [ ] getUserSubscription()
-  - [ ] getPlanFeature()
-  - [ ] checkFeatureAccess() - diferencia RESOURCE vs CONSUMABLE
-  - [ ] incrementUsage()
-  - [ ] decrementUsage()
-  - [ ] getCurrentUsage()
-  - [ ] getCurrentPeriod() helper
-- [ ] PlansController
-- [ ] SubscriptionsController
+- [x] PlansRepository
+- [x] SubscriptionsRepository
+- [x] UsageRepository
+- [x] SubscriptionsService
+  - [x] getUserSubscription()
+  - [x] getPlanFeature()
+  - [x] checkFeatureAccess() - diferencia RESOURCE vs CONSUMABLE
+  - [x] incrementUsage()
+  - [x] decrementUsage()
+  - [x] getCurrentUsage()
+  - [x] getCurrentPeriod() helper
+- [x] PlansController
+- [x] SubscriptionsController
 
 **Constants:**
 
-- [ ] features.constant.ts con todos los feature codes
+- [x] features.constant.ts con todos los feature codes
 
 **Guards & Decorators:**
 
-- [ ] FeatureGuard
-- [ ] @RequireFeature decorator
+- [x] FeatureGuard
+- [x] @RequireFeature decorator
 
 **Auth Updates:**
 
-- [ ] Asignar plan FREE en registro
-- [ ] Incluir plan en response de usuario (/auth/me, login)
+- [x] Asignar plan FREE en registro
+- [x] Incluir plan en response de usuario (/auth/me, login)
 
 **Integration Example:**
 
@@ -857,35 +859,35 @@ async handleExpiredGracePeriods() {
 
 **DB:**
 
-- [ ] Agregar scheduledPlanId, scheduledChangeAt, cancelledAt, cancelReason, graceOverages, gracePeriodEnd a Subscription
-- [ ] PlanChangeLog model
-- [ ] Migration
+- [x] Agregar scheduledPlanId, scheduledChangeAt, cancelledAt, cancelReason, graceOverages, gracePeriodEnd a Subscription
+- [x] PlanChangeLog model
+- [x] Migration
 
 **Subscriptions Service (adicional):**
 
-- [ ] upgradePlan()
-- [ ] downgradePlan()
-- [ ] cancelSubscription()
-- [ ] reactivateSubscription()
-- [ ] cancelScheduledChange()
-- [ ] previewPlanChange()
-- [ ] checkResourceOverages()
-- [ ] calculateProration()
-- [ ] logPlanChange()
+- [x] upgradePlan()
+- [x] downgradePlan()
+- [x] cancelSubscription()
+- [x] reactivateSubscription()
+- [x] cancelScheduledChange()
+- [x] previewPlanChange()
+- [x] checkResourceOverages()
+- [x] calculateProration()
+- [x] logPlanChange()
 
 **Cron Service:**
 
-- [ ] SubscriptionsCronService
-- [ ] applyScheduledPlanChanges() (hourly)
-- [ ] handleExpiredGracePeriods() (daily)
+- [x] SubscriptionsCronService
+- [x] applyScheduledPlanChanges() (hourly)
+- [x] handleExpiredGracePeriods() (daily)
 
 **Email Templates:**
 
-- [ ] SUBSCRIPTION_CANCELLED
-- [ ] PLAN_CHANGED
-- [ ] PLAN_CHANGED_WITH_GRACE
-- [ ] GRACE_PERIOD_WARNING
-- [ ] GRACE_PERIOD_EXPIRED
+- [ ] SUBSCRIPTION_CANCELLED (placeholder UUID)
+- [ ] PLAN_CHANGED (placeholder UUID)
+- [ ] PLAN_CHANGED_WITH_GRACE (placeholder UUID)
+- [ ] GRACE_PERIOD_WARNING (placeholder UUID)
+- [ ] GRACE_PERIOD_EXPIRED (placeholder UUID)
 
 **Tests:**
 
@@ -1006,4 +1008,108 @@ prisma/
 
 ---
 
-**Next Steps**: Una vez aprobado, comenzar con Phase 1 (Core Authentication).
+## Implementation Status Summary
+
+**Last Audit: February 4, 2026**
+
+### Completed (✅)
+
+| Phase   | Description                                                                | Status  |
+| ------- | -------------------------------------------------------------------------- | ------- |
+| Phase 1 | Core Authentication (register, login, JWT, refresh tokens, logout)         | ✅ 100% |
+| Phase 2 | Email Verification & Password Recovery (OTP, verify email, reset password) | ✅ 100% |
+| Phase 3 | Subscription System & Feature Access (plans, features, guards, decorators) | ✅ 95%  |
+| Phase 4 | Plan Management (upgrade, downgrade, cancel, cron jobs)                    | ✅ 90%  |
+
+### Pending Items
+
+1. **E2E Tests** - No E2E tests for auth or subscription flows (only health check exists)
+2. **Unit Tests** - Missing unit tests for SubscriptionsService and PlanManagementService
+3. **Email Templates** - Phase 4 email templates have placeholder UUIDs in Mailtrap registry
+4. **Integration Example** - No feature module (Accounts, Goals, etc.) integrated with @RequireFeature yet
+5. **Resource Counting** - `getResourceCount()` in PlanManagementService returns 0 (needs feature modules)
+
+### Files Structure (Actual)
+
+```
+src/modules/
+├── auth/
+│   ├── auth.module.ts
+│   ├── auth.controller.ts
+│   ├── auth.service.ts
+│   ├── auth.service.spec.ts          ✅
+│   ├── refresh-tokens.repository.ts
+│   ├── strategies/
+│   │   ├── jwt.strategy.ts
+│   │   └── jwt-refresh.strategy.ts
+│   └── dtos/
+│       ├── register.dto.ts
+│       ├── login.dto.ts
+│       ├── refresh-token.dto.ts
+│       ├── verification.dto.ts
+│       └── auth-response.dto.ts
+├── users/
+│   ├── users.module.ts
+│   ├── users.service.ts
+│   └── users.repository.ts
+├── otp/
+│   ├── otp.module.ts
+│   ├── otp.service.ts
+│   ├── otp.service.spec.ts           ✅
+│   └── otp.repository.ts
+└── subscriptions/
+    ├── subscriptions.module.ts
+    ├── subscriptions.controller.ts
+    ├── subscriptions.service.ts
+    ├── plans.controller.ts
+    ├── plan-management.service.ts
+    ├── subscriptions-cron.service.ts
+    ├── constants/
+    │   └── features.constant.ts
+    ├── repositories/
+    │   ├── plans.repository.ts
+    │   ├── subscriptions.repository.ts
+    │   ├── usage.repository.ts
+    │   └── plan-change-log.repository.ts
+    └── dtos/
+        ├── subscription.dto.ts
+        └── plan-management.dto.ts
+
+src/mail/
+├── mail.module.ts
+├── mail.service.ts
+├── mail.service.spec.ts              ✅
+├── providers/
+│   ├── mail-provider.interface.ts
+│   └── mailtrap.provider.ts
+└── templates/
+    ├── template.types.ts
+    ├── template.registry.ts
+    └── html/
+        ├── welcome.html
+        ├── email-verification.html
+        └── password-reset.html
+
+src/common/
+├── guards/
+│   ├── jwt-auth.guard.ts
+│   └── feature.guard.ts
+└── decorators/
+    ├── public.decorator.ts
+    ├── current-user.decorator.ts
+    └── feature.decorator.ts
+
+prisma/
+├── schema.prisma                     ✅ All models
+└── seed.ts                           ✅ 3 plans + 12 features each
+
+test/
+└── app.e2e-spec.ts                   ⚠️ Only health check
+```
+
+### Next Steps
+
+1. Create actual Mailtrap templates for Phase 4 emails
+2. Add E2E tests for auth and subscription flows
+3. Add unit tests for SubscriptionsService and PlanManagementService
+4. Implement first feature module (Accounts) with @RequireFeature integration
