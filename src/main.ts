@@ -1,3 +1,6 @@
+// IMPORTANT: Sentry must be imported first to ensure proper instrumentation
+import './instrument';
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
