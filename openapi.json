@@ -1,0 +1,2147 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "operationId": "HealthController_check_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The Health Check is successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {},
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The Health Check is not successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {
+                        "redis": {
+                          "status": "down",
+                          "message": "Could not connect"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        },
+                        "redis": {
+                          "status": "down",
+                          "message": "Could not connect"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/api/v1/health/live": {
+      "get": {
+        "operationId": "HealthController_live_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "operationId": "HealthController_ready_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The Health Check is successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {},
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The Health Check is not successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "error"
+                    },
+                    "info": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "error": {
+                      "type": "object",
+                      "example": {
+                        "redis": {
+                          "status": "down",
+                          "message": "Could not connect"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      },
+                      "nullable": true
+                    },
+                    "details": {
+                      "type": "object",
+                      "example": {
+                        "database": {
+                          "status": "up"
+                        },
+                        "redis": {
+                          "status": "down",
+                          "message": "Could not connect"
+                        }
+                      },
+                      "additionalProperties": {
+                        "type": "object",
+                        "required": [
+                          "status"
+                        ],
+                        "properties": {
+                          "status": {
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "description": "Create a new user account. A verification OTP will be sent to the provided email.",
+        "operationId": "AuthController_register_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully, verification email sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "409": {
+            "description": "Email already exists"
+          }
+        },
+        "summary": "Register new user",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "description": "Authenticate with email and password. User must have verified email. Returns access and refresh tokens.",
+        "operationId": "AuthController_login_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "403": {
+            "description": "Account not verified or suspended"
+          }
+        },
+        "summary": "Login user",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/verify-email": {
+      "post": {
+        "description": "Verify email address using the 6-digit OTP sent to email. On success, returns tokens for auto-login.",
+        "operationId": "AuthController_verifyEmail_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyEmailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email verified successfully, user logged in",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyEmailResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired OTP code"
+          },
+          "429": {
+            "description": "Too many failed attempts"
+          }
+        },
+        "summary": "Verify email with OTP",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/resend-verification": {
+      "post": {
+        "description": "Request a new verification OTP. Rate limited to prevent abuse (60s cooldown, 5/hour max).",
+        "operationId": "AuthController_resendVerification_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendVerificationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Verification email sent (if account exists)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Email already verified"
+          },
+          "429": {
+            "description": "Rate limit exceeded or cooldown period active"
+          }
+        },
+        "summary": "Resend verification email",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/forgot-password": {
+      "post": {
+        "description": "Request a password reset OTP. Always returns success to prevent email enumeration.",
+        "operationId": "AuthController_forgotPassword_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset email sent (if account exists)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "summary": "Request password reset",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/verify-reset-code": {
+      "post": {
+        "description": "Verify the 6-digit OTP for password reset. Use before resetting password to validate code.",
+        "operationId": "AuthController_verifyResetCode_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyResetCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reset code verified successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyResetCodeResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired reset code"
+          },
+          "429": {
+            "description": "Too many failed attempts"
+          }
+        },
+        "summary": "Verify password reset code",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/reset-password": {
+      "post": {
+        "description": "Reset password using the 6-digit OTP. All active sessions will be terminated.",
+        "operationId": "AuthController_resetPassword_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired reset code, or password validation failed"
+          },
+          "429": {
+            "description": "Too many failed attempts"
+          }
+        },
+        "summary": "Reset password",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "description": "Get new access and refresh tokens. The used refresh token is revoked (rotation).",
+        "operationId": "AuthController_refresh_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tokens refreshed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokensResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or expired refresh token"
+          }
+        },
+        "summary": "Refresh tokens",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "description": "Revoke the refresh token to logout from current device.",
+        "operationId": "AuthController_logout_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Logged out successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Logout",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/logout-all": {
+      "post": {
+        "description": "Revoke all refresh tokens to logout from all devices.",
+        "operationId": "AuthController_logoutAll_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Logged out from all devices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Logout from all devices",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "description": "Get the profile of the currently authenticated user.",
+        "operationId": "AuthController_getMe_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "User profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get current user",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/plans": {
+      "get": {
+        "description": "Get all available subscription plans with their features and pricing.",
+        "operationId": "PlansController_getAllPlans_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of all active plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlansListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List all plans",
+        "tags": [
+          "Plans"
+        ]
+      }
+    },
+    "/api/v1/plans/{code}": {
+      "get": {
+        "description": "Get detailed information about a specific plan by its code.",
+        "operationId": "PlansController_getPlanByCode_v1",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "description": "Plan code (free, pro, premium)",
+            "schema": {
+              "example": "pro",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plan details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Plan not found"
+          }
+        },
+        "summary": "Get plan details",
+        "tags": [
+          "Plans"
+        ]
+      }
+    },
+    "/api/v1/subscriptions/current": {
+      "get": {
+        "description": "Get the current user's subscription details including plan and status.",
+        "operationId": "SubscriptionsController_getCurrentSubscription_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current subscription details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentSubscriptionResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "No active subscription found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get current subscription",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
+    "/api/v1/subscriptions/usage": {
+      "get": {
+        "description": "Get the current usage for all features in the user's plan. Shows current count, limits, and percentage used.",
+        "operationId": "SubscriptionsController_getUsage_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Usage statistics for all features",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "No active subscription found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get usage statistics",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
+    "/api/v1/subscriptions/preview": {
+      "get": {
+        "description": "Preview the effects of changing to a different plan. Shows pricing, overages, and effective dates.",
+        "operationId": "SubscriptionsController_previewPlanChange_v1",
+        "parameters": [
+          {
+            "name": "planCode",
+            "required": true,
+            "in": "query",
+            "description": "Target plan code (e.g., \"pro\", \"premium\", \"free\")",
+            "schema": {
+              "example": "pro",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plan change preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Already on this plan"
+          },
+          "404": {
+            "description": "Subscription or plan not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Preview plan change",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
+    "/api/v1/subscriptions/upgrade": {
+      "post": {
+        "description": "Upgrade to a higher tier plan. The change takes effect immediately and proration is applied.",
+        "operationId": "SubscriptionsController_upgradePlan_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePlanDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Plan upgraded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradeResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid upgrade (same plan or lower tier)"
+          },
+          "404": {
+            "description": "Subscription or plan not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upgrade plan",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
+    "/api/v1/subscriptions/downgrade": {
+      "post": {
+        "description": "Downgrade to a lower tier plan. The change is scheduled for the end of the current billing period.",
+        "operationId": "SubscriptionsController_downgradePlan_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePlanDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Downgrade scheduled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DowngradeResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid downgrade (same plan or higher tier)"
+          },
+          "404": {
+            "description": "Subscription or plan not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Downgrade plan",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
+    "/api/v1/subscriptions/cancel": {
+      "post": {
+        "description": "Cancel the subscription. The user will be downgraded to the Free plan at the end of the billing period.",
+        "operationId": "SubscriptionsController_cancelSubscription_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelSubscriptionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cancellation scheduled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot cancel free plan or already cancelled"
+          },
+          "404": {
+            "description": "No active subscription found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancel subscription",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
+    "/api/v1/subscriptions/reactivate": {
+      "post": {
+        "description": "Reactivate a cancelled subscription before the cancellation takes effect.",
+        "operationId": "SubscriptionsController_reactivateSubscription_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Subscription reactivated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReactivateResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No pending cancellation to reactivate"
+          },
+          "404": {
+            "description": "No active subscription found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reactivate subscription",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
+    "/api/v1/subscriptions/scheduled": {
+      "delete": {
+        "description": "Cancel a scheduled downgrade or cancellation. The subscription will remain on the current plan.",
+        "operationId": "SubscriptionsController_cancelScheduledChange_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Scheduled change cancelled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelScheduledChangeResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No scheduled change to cancel"
+          },
+          "404": {
+            "description": "No active subscription found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancel scheduled change",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    },
+    "/api/v1/subscriptions/history": {
+      "get": {
+        "description": "Get a list of all plan changes for the current user.",
+        "operationId": "SubscriptionsController_getPlanChangeHistory_v1",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Maximum number of records to return (default: 20)",
+            "schema": {
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plan change history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanChangeHistoryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get plan change history",
+        "tags": [
+          "Subscriptions"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Facets API",
+    "description": "Professional Finance Tracker SaaS API",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "User password (min 8 chars, must contain uppercase, lowercase, and number)",
+            "example": "SecurePass123",
+            "minLength": 8,
+            "maxLength": 128
+          },
+          "firstName": {
+            "type": "string",
+            "description": "User first name",
+            "example": "John"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "User last name",
+            "example": "Doe"
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "firstName",
+          "lastName"
+        ]
+      },
+      "AuthPlanDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Plan code",
+            "example": "free"
+          },
+          "name": {
+            "type": "string",
+            "description": "Plan display name",
+            "example": "Free"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ]
+      },
+      "AuthUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "User unique identifier",
+            "example": "cuid_123456789"
+          },
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "user@example.com"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "User first name",
+            "example": "John"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "User last name",
+            "example": "Doe"
+          },
+          "emailVerified": {
+            "type": "boolean",
+            "description": "Whether the email has been verified",
+            "example": true
+          },
+          "status": {
+            "type": "string",
+            "description": "User account status",
+            "example": "ACTIVE",
+            "enum": [
+              "PENDING_VERIFICATION",
+              "ACTIVE",
+              "SUSPENDED",
+              "DELETED"
+            ]
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Account creation date",
+            "example": "2026-02-04T12:00:00.000Z"
+          },
+          "plan": {
+            "description": "Current subscription plan",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuthPlanDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "firstName",
+          "lastName",
+          "emailVerified",
+          "status",
+          "createdAt"
+        ]
+      },
+      "RegisterResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Registration successful. Please check your email to verify your account."
+          },
+          "user": {
+            "$ref": "#/components/schemas/AuthUserDto"
+          }
+        },
+        "required": [
+          "message",
+          "user"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "description": "User password",
+            "example": "SecurePass123"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "TokensResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "JWT access token for API authentication",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Refresh token for obtaining new access tokens",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "expiresIn": {
+            "type": "number",
+            "description": "Access token expiration time in seconds",
+            "example": 3600
+          }
+        },
+        "required": [
+          "accessToken",
+          "refreshToken",
+          "expiresIn"
+        ]
+      },
+      "LoginResponseDto": {
+        "type": "object",
+        "properties": {
+          "tokens": {
+            "$ref": "#/components/schemas/TokensResponseDto"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AuthUserDto"
+          }
+        },
+        "required": [
+          "tokens",
+          "user"
+        ]
+      },
+      "VerifyEmailDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "user@example.com"
+          },
+          "code": {
+            "type": "string",
+            "description": "6-digit OTP code received via email",
+            "example": "123456",
+            "minLength": 6,
+            "maxLength": 6
+          }
+        },
+        "required": [
+          "email",
+          "code"
+        ]
+      },
+      "VerifyEmailResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Email verified successfully"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/TokensResponseDto"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AuthUserDto"
+          }
+        },
+        "required": [
+          "message",
+          "tokens",
+          "user"
+        ]
+      },
+      "ResendVerificationDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "user@example.com"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "MessageResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Response message",
+            "example": "Operation completed successfully"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      },
+      "ForgotPasswordDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "user@example.com"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "VerifyResetCodeDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "user@example.com"
+          },
+          "code": {
+            "type": "string",
+            "description": "6-digit OTP code received via email",
+            "example": "123456",
+            "minLength": 6,
+            "maxLength": 6
+          }
+        },
+        "required": [
+          "email",
+          "code"
+        ]
+      },
+      "VerifyResetCodeResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Code verified. You can now reset your password."
+          },
+          "valid": {
+            "type": "boolean",
+            "description": "Whether the code is valid",
+            "example": true
+          }
+        },
+        "required": [
+          "message",
+          "valid"
+        ]
+      },
+      "ResetPasswordDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "User email address",
+            "example": "user@example.com"
+          },
+          "code": {
+            "type": "string",
+            "description": "6-digit OTP code received via email",
+            "example": "123456",
+            "minLength": 6,
+            "maxLength": 6
+          },
+          "newPassword": {
+            "type": "string",
+            "description": "New password (min 8 chars, must include uppercase, lowercase, and number)",
+            "example": "NewPassword123",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "email",
+          "code",
+          "newPassword"
+        ]
+      },
+      "RefreshTokenDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "description": "Refresh token received during login or previous refresh",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "PlanFeatureDto": {
+        "type": "object",
+        "properties": {
+          "featureCode": {
+            "type": "string",
+            "description": "Feature code identifier"
+          },
+          "limitType": {
+            "type": "string",
+            "enum": [
+              "BOOLEAN",
+              "COUNT",
+              "UNLIMITED"
+            ],
+            "description": "Type of limit"
+          },
+          "limitValue": {
+            "type": "number",
+            "description": "Limit value (-1 for unlimited, 0/1 for boolean)"
+          },
+          "featureType": {
+            "type": "string",
+            "enum": [
+              "RESOURCE",
+              "CONSUMABLE"
+            ],
+            "description": "Feature type"
+          },
+          "limitPeriod": {
+            "type": "string",
+            "enum": [
+              "DAILY",
+              "WEEKLY",
+              "MONTHLY",
+              "YEARLY"
+            ],
+            "description": "Period for consumable features"
+          }
+        },
+        "required": [
+          "featureCode",
+          "limitType",
+          "limitValue"
+        ]
+      },
+      "PlanDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Plan ID"
+          },
+          "code": {
+            "type": "string",
+            "description": "Plan code (free, pro, premium)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Plan description"
+          },
+          "priceMonthly": {
+            "type": "number",
+            "description": "Monthly price"
+          },
+          "priceYearly": {
+            "type": "number",
+            "description": "Yearly price (with discount)"
+          },
+          "priceCurrency": {
+            "type": "string",
+            "description": "Currency code"
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "Is this the default plan for new users"
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Sort order for display"
+          },
+          "features": {
+            "description": "Features included in this plan",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanFeatureDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "priceMonthly",
+          "priceCurrency",
+          "isDefault",
+          "sortOrder",
+          "features"
+        ]
+      },
+      "PlansListResponseDto": {
+        "type": "object",
+        "properties": {
+          "plans": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanDto"
+            }
+          }
+        },
+        "required": [
+          "plans"
+        ]
+      },
+      "SubscriptionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Subscription ID"
+          },
+          "status": {
+            "type": "string",
+            "description": "Subscription status"
+          },
+          "currentPeriodStart": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Current billing period start"
+          },
+          "currentPeriodEnd": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Current billing period end (null for free plan)"
+          },
+          "trialStart": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Trial start date"
+          },
+          "trialEnd": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Trial end date"
+          },
+          "plan": {
+            "description": "Current plan details",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlanDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "currentPeriodStart",
+          "plan"
+        ]
+      },
+      "CurrentSubscriptionResponseDto": {
+        "type": "object",
+        "properties": {
+          "subscription": {
+            "$ref": "#/components/schemas/SubscriptionDto"
+          }
+        },
+        "required": [
+          "subscription"
+        ]
+      },
+      "FeatureUsageDto": {
+        "type": "object",
+        "properties": {
+          "featureCode": {
+            "type": "string",
+            "description": "Feature code"
+          },
+          "current": {
+            "type": "number",
+            "description": "Current usage count"
+          },
+          "limit": {
+            "type": "number",
+            "description": "Maximum allowed (-1 for unlimited)"
+          },
+          "limitType": {
+            "type": "string",
+            "description": "Type of limit"
+          },
+          "featureType": {
+            "type": "string",
+            "description": "Feature type (RESOURCE or CONSUMABLE)"
+          },
+          "periodType": {
+            "type": "string",
+            "description": "Period type for consumable features"
+          },
+          "periodEnd": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Period end date for consumable features"
+          },
+          "usagePercentage": {
+            "type": "number",
+            "description": "Percentage of limit used (0-100+)"
+          },
+          "limitReached": {
+            "type": "boolean",
+            "description": "Whether the limit has been reached"
+          }
+        },
+        "required": [
+          "featureCode",
+          "current",
+          "limit",
+          "limitType",
+          "featureType",
+          "usagePercentage",
+          "limitReached"
+        ]
+      },
+      "UsageResponseDto": {
+        "type": "object",
+        "properties": {
+          "planCode": {
+            "type": "string",
+            "description": "Plan code"
+          },
+          "planName": {
+            "type": "string",
+            "description": "Plan name"
+          },
+          "features": {
+            "description": "Usage details for each feature",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeatureUsageDto"
+            }
+          }
+        },
+        "required": [
+          "planCode",
+          "planName",
+          "features"
+        ]
+      },
+      "ResourceOverageDto": {
+        "type": "object",
+        "properties": {
+          "featureCode": {
+            "type": "string",
+            "description": "Feature code with overage",
+            "example": "accounts"
+          },
+          "current": {
+            "type": "number",
+            "description": "Current count of resources",
+            "example": 5
+          },
+          "newLimit": {
+            "type": "number",
+            "description": "New limit after plan change",
+            "example": 2
+          },
+          "overage": {
+            "type": "number",
+            "description": "Number of resources over the limit",
+            "example": 3
+          },
+          "hasGracePeriod": {
+            "type": "boolean",
+            "description": "Whether this feature will have a grace period",
+            "example": true
+          }
+        },
+        "required": [
+          "featureCode",
+          "current",
+          "newLimit",
+          "overage",
+          "hasGracePeriod"
+        ]
+      },
+      "PlanChangePreviewDto": {
+        "type": "object",
+        "properties": {
+          "currentPlan": {
+            "description": "Current plan details",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlanDto"
+              }
+            ]
+          },
+          "targetPlan": {
+            "description": "Target plan details",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PlanDto"
+              }
+            ]
+          },
+          "changeType": {
+            "type": "string",
+            "description": "Type of change",
+            "enum": [
+              "UPGRADE",
+              "DOWNGRADE"
+            ]
+          },
+          "immediate": {
+            "type": "boolean",
+            "description": "Whether the change is applied immediately"
+          },
+          "effectiveAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "When the change will be applied (for downgrades)"
+          },
+          "prorationAmount": {
+            "type": "number",
+            "description": "Proration amount (positive = credit, negative = charge)",
+            "example": 2.5
+          },
+          "overages": {
+            "description": "Resources that exceed new plan limits",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceOverageDto"
+            }
+          },
+          "hasOverages": {
+            "type": "boolean",
+            "description": "Whether there are any overages"
+          },
+          "gracePeriodEnd": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Grace period end date if there are overages"
+          }
+        },
+        "required": [
+          "currentPlan",
+          "targetPlan",
+          "changeType",
+          "immediate",
+          "overages",
+          "hasOverages"
+        ]
+      },
+      "PreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "preview": {
+            "$ref": "#/components/schemas/PlanChangePreviewDto"
+          }
+        },
+        "required": [
+          "preview"
+        ]
+      },
+      "ChangePlanDto": {
+        "type": "object",
+        "properties": {
+          "planCode": {
+            "type": "string",
+            "description": "Target plan code to change to",
+            "example": "pro"
+          }
+        },
+        "required": [
+          "planCode"
+        ]
+      },
+      "UpgradeResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Successfully upgraded to Pro plan"
+          },
+          "subscription": {
+            "description": "Updated subscription details",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SubscriptionDto"
+              }
+            ]
+          },
+          "prorationAmount": {
+            "type": "number",
+            "description": "Proration amount applied"
+          }
+        },
+        "required": [
+          "message",
+          "subscription"
+        ]
+      },
+      "DowngradeResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Downgrade to Free plan scheduled for end of billing period"
+          },
+          "subscription": {
+            "description": "Current subscription (plan not changed yet)",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SubscriptionDto"
+              }
+            ]
+          },
+          "scheduledFor": {
+            "format": "date-time",
+            "type": "string",
+            "description": "When the downgrade will be applied"
+          },
+          "targetPlanCode": {
+            "type": "string",
+            "description": "Target plan code"
+          },
+          "overages": {
+            "description": "Resources that will exceed new plan limits",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceOverageDto"
+            }
+          },
+          "gracePeriodEnd": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Grace period end date if there are overages"
+          }
+        },
+        "required": [
+          "message",
+          "subscription",
+          "scheduledFor",
+          "targetPlanCode",
+          "overages"
+        ]
+      },
+      "CancelSubscriptionDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Reason for cancellation",
+            "example": "Too expensive",
+            "maxLength": 500
+          }
+        }
+      },
+      "CancelResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Subscription cancellation scheduled"
+          },
+          "cancelledAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "When the subscription will be cancelled"
+          },
+          "effectiveAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "When the subscription will effectively end"
+          }
+        },
+        "required": [
+          "message",
+          "cancelledAt",
+          "effectiveAt"
+        ]
+      },
+      "ReactivateResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Subscription reactivated successfully"
+          },
+          "subscription": {
+            "description": "Updated subscription details",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SubscriptionDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "message",
+          "subscription"
+        ]
+      },
+      "CancelScheduledChangeResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Success message",
+            "example": "Scheduled change cancelled successfully"
+          },
+          "subscription": {
+            "description": "Updated subscription details",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SubscriptionDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "message",
+          "subscription"
+        ]
+      },
+      "PlanChangeLogDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fromPlanCode": {
+            "type": "string"
+          },
+          "fromPlanName": {
+            "type": "string"
+          },
+          "toPlanCode": {
+            "type": "string"
+          },
+          "toPlanName": {
+            "type": "string"
+          },
+          "changeType": {
+            "type": "string",
+            "enum": [
+              "UPGRADE",
+              "DOWNGRADE_SCHEDULED",
+              "DOWNGRADE_APPLIED",
+              "CANCELLATION",
+              "CANCELLATION_APPLIED",
+              "REACTIVATION"
+            ]
+          },
+          "requestedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "effectiveAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "scheduledFor": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "prorationAmount": {
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "fromPlanCode",
+          "fromPlanName",
+          "toPlanCode",
+          "toPlanName",
+          "changeType",
+          "requestedAt"
+        ]
+      },
+      "PlanChangeHistoryResponseDto": {
+        "type": "object",
+        "properties": {
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanChangeLogDto"
+            }
+          }
+        },
+        "required": [
+          "history"
+        ]
+      }
+    }
+  }
+}

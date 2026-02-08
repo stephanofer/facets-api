@@ -12,6 +12,7 @@ import { AllExceptionsFilter } from '@common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from '@common/interceptors/transform-response.interceptor';
 import { LoggingInterceptor } from '@common/interceptors/logging.interceptor';
 import { TimeoutInterceptor } from '@common/interceptors/timeout.interceptor';
+import { writeFileSync } from 'node:fs';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -67,6 +68,9 @@ async function bootstrap() {
 
     const document = SwaggerModule.createDocument(app, swaggerConfig);
     SwaggerModule.setup('docs', app, document);
+
+    writeFileSync('./openapi.json', JSON.stringify(document, null, 2));
+    console.log('📄 OpenAPI exported: ./openapi.json');
   }
 
   const port = configService.port;

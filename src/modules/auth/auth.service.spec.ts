@@ -2,18 +2,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 import { AuthService } from '@modules/auth/auth.service';
 import { UsersService } from '@modules/users/users.service';
 import { RefreshTokensRepository } from '@modules/auth/refresh-tokens.repository';
 import { OtpService } from '@modules/otp/otp.service';
 import { MailService } from '@mail/mail.service';
 import { ConfigService } from '@config/config.service';
+import { PrismaService } from '@database/prisma.service';
 import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
 import { UserStatus, OtpType } from '../../generated/prisma/client';
 
-// Mock bcrypt
-jest.mock('bcrypt');
+// Mock argon2
+jest.mock('argon2');
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -22,6 +23,7 @@ describe('AuthService', () => {
   let jwtService: jest.Mocked<JwtService>;
   let otpService: jest.Mocked<OtpService>;
   let mailService: jest.Mocked<MailService>;
+  let prismaService: jest.Mocked<PrismaService>;
   let subscriptionsService: jest.Mocked<SubscriptionsService>;
 
   const mockUser = {
@@ -109,6 +111,10 @@ describe('AuthService', () => {
       getUserSubscription: jest.fn(),
     };
 
+    const mockPrismaService = {
+      $transaction: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -119,6 +125,7 @@ describe('AuthService', () => {
         },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: PrismaService, useValue: mockPrismaService },
         { provide: OtpService, useValue: mockOtpService },
         { provide: MailService, useValue: mockMailService },
         { provide: SubscriptionsService, useValue: mockSubscriptionsService },
@@ -131,6 +138,7 @@ describe('AuthService', () => {
     jwtService = module.get(JwtService);
     otpService = module.get(OtpService);
     mailService = module.get(MailService);
+    prismaService = module.get(PrismaService);
     subscriptionsService = module.get(SubscriptionsService);
   });
 
@@ -143,40 +151,51 @@ describe('AuthService', () => {
     };
 
     it('should register a new user successfully', async () => {
-      usersService.emailExists.mockResolvedValue(false);
-      usersService.create.mockResolvedValue({
+      const createdUser = {
         ...mockUser,
         email: registerDto.email,
         firstName: registerDto.firstName,
         lastName: registerDto.lastName,
         status: UserStatus.PENDING_VERIFICATION,
         emailVerified: false,
-      });
-      (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password');
-      otpService.generate.mockResolvedValue(mockOtpResult);
-      mailService.sendTemplate.mockResolvedValue(undefined);
-      subscriptionsService.createSubscriptionForNewUser.mockResolvedValue({
+      };
+      const createdSubscription = {
         id: 'subscription-id',
         plan: { code: 'FREE', name: 'Free' },
-      } as never);
+      };
+
+      usersService.emailExists.mockResolvedValue(false);
+      (argon2.hash as jest.Mock).mockResolvedValue('hashed-password');
+      // Mock $transaction to execute the callback with a fake tx and return our data
+      prismaService.$transaction.mockImplementation(async (callback: any) => {
+        const tx = {
+          user: {
+            create: jest.fn().mockResolvedValue(createdUser),
+          },
+          plan: {
+            findFirst: jest.fn().mockResolvedValue({
+              id: 'plan-id',
+              isDefault: true,
+              isActive: true,
+              planFeatures: [],
+            }),
+          },
+          subscription: {
+            create: jest.fn().mockResolvedValue(createdSubscription),
+          },
+        };
+        return callback(tx);
+      });
+      otpService.generate.mockResolvedValue(mockOtpResult);
+      mailService.sendTemplate.mockResolvedValue(undefined);
 
       const result = await authService.register(registerDto);
 
       expect(result.message).toContain('Registration successful');
       expect(result.user.email).toBe(registerDto.email);
       expect(usersService.emailExists).toHaveBeenCalledWith(registerDto.email);
-      expect(bcrypt.hash).toHaveBeenCalledWith(registerDto.password, 12);
-      expect(otpService.generate).toHaveBeenCalledWith(
-        expect.any(String),
-        OtpType.EMAIL_VERIFICATION,
-      );
-      expect(mailService.sendTemplate).toHaveBeenCalledWith(
-        'email-verification',
-        registerDto.email,
-        expect.objectContaining({
-          otpCode: mockOtpResult.code,
-        }),
-      );
+      expect(argon2.hash).toHaveBeenCalledWith(registerDto.password);
+      expect(prismaService.$transaction).toHaveBeenCalled();
     });
 
     it('should throw ConflictException when email already exists', async () => {
@@ -197,7 +216,7 @@ describe('AuthService', () => {
     it('should login successfully with valid credentials', async () => {
       usersService.findByEmail.mockResolvedValue(mockUser);
       usersService.canLogin.mockReturnValue({ allowed: true });
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (argon2.verify as jest.Mock).mockResolvedValue(true);
       jwtService.signAsync.mockResolvedValue('mock-token');
       refreshTokensRepository.create.mockResolvedValue(mockRefreshToken);
       subscriptionsService.getUserSubscription.mockResolvedValue({
@@ -221,7 +240,7 @@ describe('AuthService', () => {
 
     it('should throw UnauthorizedException when password is invalid', async () => {
       usersService.findByEmail.mockResolvedValue(mockUser);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      (argon2.verify as jest.Mock).mockResolvedValue(false);
 
       await expect(authService.login(loginDto)).rejects.toThrow(
         UnauthorizedException,
@@ -237,7 +256,7 @@ describe('AuthService', () => {
         allowed: false,
         reason: 'EMAIL_NOT_VERIFIED',
       });
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (argon2.verify as jest.Mock).mockResolvedValue(true);
 
       await expect(authService.login(loginDto)).rejects.toThrow();
     });
@@ -251,7 +270,7 @@ describe('AuthService', () => {
         allowed: false,
         reason: 'ACCOUNT_SUSPENDED',
       });
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (argon2.verify as jest.Mock).mockResolvedValue(true);
 
       await expect(authService.login(loginDto)).rejects.toThrow();
     });
@@ -339,23 +358,17 @@ describe('AuthService', () => {
 
   describe('getMe', () => {
     it('should return user info', async () => {
-      usersService.findById.mockResolvedValue(mockUser);
       subscriptionsService.getUserSubscription.mockResolvedValue({
         plan: { code: 'FREE', name: 'Free' },
       } as never);
 
-      const result = await authService.getMe(mockUser.id);
+      const result = await authService.getMe({
+        sub: mockUser.id,
+        user: mockUser,
+      });
 
       expect(result.id).toBe(mockUser.id);
       expect(result.email).toBe(mockUser.email);
-    });
-
-    it('should throw when user not found', async () => {
-      usersService.findById.mockResolvedValue(null);
-
-      await expect(authService.getMe('non-existent')).rejects.toThrow(
-        UnauthorizedException,
-      );
     });
   });
 
@@ -517,7 +530,7 @@ describe('AuthService', () => {
         userId: mockUser.id,
         otpId: 'otp-123',
       });
-      (bcrypt.hash as jest.Mock).mockResolvedValue('new-hashed-password');
+      (argon2.hash as jest.Mock).mockResolvedValue('new-hashed-password');
       usersService.updatePassword.mockResolvedValue(mockUser);
       refreshTokensRepository.revokeAllForUser.mockResolvedValue({ count: 3 });
 

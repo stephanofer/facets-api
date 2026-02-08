@@ -3,7 +3,6 @@ export const APP_CONSTANTS = {
   MAX_PAGE_SIZE: 100,
   MIN_PAGE_SIZE: 1,
   DEFAULT_TIMEOUT: 30000, // 30 seconds
-  SALT_ROUNDS: 12,
 } as const;
 
 // OTP Configuration - Phase 2

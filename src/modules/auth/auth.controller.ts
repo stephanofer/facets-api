@@ -39,10 +39,8 @@ import {
   VerifyResetCodeResponseDto,
 } from '@modules/auth/dtos/auth-response.dto';
 import { Public } from '@common/decorators/public.decorator';
-import {
-  CurrentUser,
-  JwtPayload,
-} from '@common/decorators/current-user.decorator';
+import { CurrentUser } from '@common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '@modules/auth/strategies/jwt.strategy';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -339,7 +337,7 @@ export class AuthController {
     type: MessageResponseDto,
   })
   async logoutAll(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<MessageResponseDto> {
     const result = await this.authService.logoutAll(user.sub);
     return { message: `Logged out from ${result.revokedCount} device(s)` };
@@ -363,8 +361,8 @@ export class AuthController {
     status: HttpStatus.UNAUTHORIZED,
     description: 'Not authenticated',
   })
-  async getMe(@CurrentUser() user: JwtPayload): Promise<AuthUserDto> {
-    return this.authService.getMe(user.sub);
+  async getMe(@CurrentUser() user: AuthenticatedUser): Promise<AuthUserDto> {
+    return this.authService.getMe(user);
   }
 
   // ===========================================================================

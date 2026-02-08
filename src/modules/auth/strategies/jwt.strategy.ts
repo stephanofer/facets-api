@@ -4,6 +4,17 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@config/config.service';
 import { UsersService } from '@modules/users/users.service';
 import { JwtPayload } from '@modules/auth/dtos/auth-response.dto';
+import { User } from '../../../generated/prisma/client';
+
+/**
+ * Authenticated user attached to request.user by Passport
+ *
+ * Extends JwtPayload with the full User entity so downstream
+ * controllers/services don't need to re-query the database.
+ */
+export interface AuthenticatedUser extends JwtPayload {
+  user: User;
+}
 
 /**
  * JWT Strategy for validating access tokens
@@ -30,12 +41,13 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   /**
-   * Validate the JWT payload and return the user
+   * Validate the JWT payload and return the authenticated user
    *
    * This method is called after the JWT signature is verified.
-   * The returned value will be attached to request.user
+   * Returns the full user entity alongside JWT fields so controllers
+   * don't need to re-query the database.
    */
-  async validate(payload: JwtPayload): Promise<JwtPayload> {
+  async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
     // Verify the user still exists and is active
     const user = await this.usersService.findById(payload.sub);
 
@@ -50,10 +62,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       );
     }
 
-    // Return the payload (will be attached to request.user)
+    // Return payload + full user (attached to request.user)
     return {
       sub: payload.sub,
       email: payload.email,
+      user,
     };
   }
 }

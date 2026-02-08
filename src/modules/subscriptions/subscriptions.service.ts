@@ -255,6 +255,9 @@ export class SubscriptionsService {
 
   /**
    * Get current usage for all features for a user
+   *
+   * Uses a single batch query to fetch all usage records instead of
+   * querying individually per feature (resolves N+1 problem).
    */
   async getUserUsage(userId: string): Promise<UsageResponseDto> {
     const subscription =
@@ -268,12 +271,14 @@ export class SubscriptionsService {
       );
     }
 
-    const features: FeatureUsageDto[] = [];
+    // Batch query: get ALL usage records for this user in one query
+    const allUsage = await this.usageRepository.getAllCurrentUsage(userId);
+    const usageMap = new Map(allUsage.map((u) => [u.featureCode, u]));
 
-    for (const planFeature of subscription.plan.planFeatures) {
-      const featureUsage = await this.getFeatureUsage(userId, planFeature);
-      features.push(featureUsage);
-    }
+    // Map features synchronously using the pre-fetched usage data
+    const features: FeatureUsageDto[] = subscription.plan.planFeatures.map(
+      (planFeature) => this.mapFeatureUsage(planFeature, usageMap),
+    );
 
     return {
       planCode: subscription.plan.code,
@@ -283,36 +288,26 @@ export class SubscriptionsService {
   }
 
   /**
-   * Get usage details for a single feature
+   * Map a plan feature to its usage DTO using pre-fetched usage data
+   *
+   * This is a synchronous operation — no DB queries needed because
+   * usage data was already fetched in batch.
    */
-  private async getFeatureUsage(
-    userId: string,
+  private mapFeatureUsage(
     planFeature: PlanFeature,
-  ): Promise<FeatureUsageDto> {
+    usageMap: Map<string, { count: number; periodEnd: Date }>,
+  ): FeatureUsageDto {
     let current = 0;
     let periodEnd: Date | undefined;
 
     if (planFeature.limitType === FeatureLimitType.COUNT) {
       if (planFeature.featureType === FeatureType.CONSUMABLE) {
-        // Get from UsageRecord
-        const periodType = planFeature.limitPeriod ?? LimitPeriod.MONTHLY;
-        current = await this.usageRepository.getCurrentUsage(
-          userId,
-          planFeature.featureCode,
-          periodType,
-        );
-
-        // Get period end from usage record
-        const usageRecord = await this.usageRepository.getOrCreateForPeriod(
-          userId,
-          planFeature.featureCode,
-          periodType,
-        );
-        periodEnd = usageRecord.periodEnd;
+        const usageRecord = usageMap.get(planFeature.featureCode);
+        current = usageRecord?.count ?? 0;
+        periodEnd = usageRecord?.periodEnd;
       }
-      // For RESOURCE type, the caller would need to provide the count
-      // This is intentionally left at 0 here as the actual count
-      // should come from the specific resource service
+      // For RESOURCE type, the actual count should come from the specific
+      // resource service — intentionally left at 0 here
     }
 
     const limit = planFeature.limitValue;

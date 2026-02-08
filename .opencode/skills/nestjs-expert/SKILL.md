@@ -139,19 +139,19 @@ find src -name "*.module.ts" -type f | head -5 | xargs -I {} basename {} .module
 nest info
 
 # Check for circular dependencies
-npm run build -- --watch=false
+pnpm run build -- --watch=false
 
 # Validate module structure
-npm run lint
+pnpm run lint
 ```
 
 ### Fix Validation
 
 ```bash
 # Verify fixes (validation order)
-npm run build          # 1. Typecheck first
-npm run test           # 2. Run unit tests
-npm run test:e2e       # 3. Run e2e tests if needed
+pnpm run build          # 1. Typecheck first
+pnpm run test           # 2. Run unit tests
+pnpm run test:e2e       # 3. Run e2e tests if needed
 ```
 
 **Validation order**: typecheck → unit tests → integration tests → e2e tests

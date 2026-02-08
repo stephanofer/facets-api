@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
+import { CacheModule } from '@nestjs/cache-manager';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@config/config.module';
 import { DatabaseModule } from '@database/database.module';
@@ -18,6 +19,12 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
     ConfigModule,
     DatabaseModule,
     MailModule,
+
+    // In-memory cache (plans, features — near-static data)
+    CacheModule.register({
+      ttl: 300_000, // 5 minutes default TTL (in ms)
+      isGlobal: true,
+    }),
 
     // Feature modules
     HealthModule,

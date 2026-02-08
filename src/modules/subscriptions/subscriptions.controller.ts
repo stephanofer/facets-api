@@ -32,10 +32,8 @@ import {
   CancelScheduledChangeResponseDto,
   PlanChangeHistoryResponseDto,
 } from '@modules/subscriptions/dtos/plan-management.dto';
-import {
-  CurrentUser,
-  JwtPayload,
-} from '@common/decorators/current-user.decorator';
+import { CurrentUser } from '@common/decorators/current-user.decorator';
+import { AuthenticatedUser } from '@modules/auth/strategies/jwt.strategy';
 
 @ApiTags('Subscriptions')
 @ApiBearerAuth()
@@ -73,7 +71,7 @@ export class SubscriptionsController {
     description: 'Not authenticated',
   })
   async getCurrentSubscription(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<CurrentSubscriptionResponseDto> {
     const subscription = await this.subscriptionsService.getUserSubscription(
       user.sub,
@@ -103,7 +101,9 @@ export class SubscriptionsController {
     status: HttpStatus.UNAUTHORIZED,
     description: 'Not authenticated',
   })
-  async getUsage(@CurrentUser() user: JwtPayload): Promise<UsageResponseDto> {
+  async getUsage(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<UsageResponseDto> {
     return this.subscriptionsService.getUserUsage(user.sub);
   }
 
@@ -139,7 +139,7 @@ export class SubscriptionsController {
     description: 'Already on this plan',
   })
   async previewPlanChange(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: AuthenticatedUser,
     @Query('planCode') planCode: string,
   ): Promise<PreviewResponseDto> {
     const preview = await this.planManagementService.previewPlanChange(
@@ -173,7 +173,7 @@ export class SubscriptionsController {
     description: 'Invalid upgrade (same plan or lower tier)',
   })
   async upgradePlan(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: ChangePlanDto,
   ): Promise<UpgradeResponseDto> {
     return this.planManagementService.upgradePlan(
@@ -207,7 +207,7 @@ export class SubscriptionsController {
     description: 'Invalid downgrade (same plan or higher tier)',
   })
   async downgradePlan(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: ChangePlanDto,
   ): Promise<DowngradeResponseDto> {
     return this.planManagementService.downgradePlan(
@@ -241,7 +241,7 @@ export class SubscriptionsController {
     description: 'Cannot cancel free plan or already cancelled',
   })
   async cancelSubscription(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CancelSubscriptionDto,
   ): Promise<CancelResponseDto> {
     return this.planManagementService.cancelSubscription(
@@ -275,7 +275,7 @@ export class SubscriptionsController {
     description: 'No pending cancellation to reactivate',
   })
   async reactivateSubscription(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<ReactivateResponseDto> {
     return this.planManagementService.reactivateSubscription(user.sub);
   }
@@ -303,7 +303,7 @@ export class SubscriptionsController {
     description: 'No scheduled change to cancel',
   })
   async cancelScheduledChange(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: AuthenticatedUser,
   ): Promise<CancelScheduledChangeResponseDto> {
     return this.planManagementService.cancelScheduledChange(user.sub);
   }
@@ -328,7 +328,7 @@ export class SubscriptionsController {
     type: PlanChangeHistoryResponseDto,
   })
   async getPlanChangeHistory(
-    @CurrentUser() user: JwtPayload,
+    @CurrentUser() user: AuthenticatedUser,
     @Query('limit') limit?: number,
   ): Promise<PlanChangeHistoryResponseDto> {
     const history = await this.planManagementService.getPlanChangeHistory(

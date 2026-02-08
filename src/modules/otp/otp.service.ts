@@ -31,11 +31,11 @@ export class OtpService {
    * 4. Creates a new OTP
    */
   async generate(userId: string, type: OtpType): Promise<OtpGenerationResult> {
-    // Check rate limit (5 OTPs per hour)
-    await this.checkRateLimit(userId, type);
-
-    // Check cooldown (60 seconds between requests)
-    await this.checkCooldown(userId, type);
+    // Check rate limit and cooldown in parallel (independent checks)
+    await Promise.all([
+      this.checkRateLimit(userId, type),
+      this.checkCooldown(userId, type),
+    ]);
 
     // Invalidate previous OTPs of this type
     await this.otpRepository.invalidateAllForUser(userId, type);
@@ -59,6 +59,69 @@ export class OtpService {
     return {
       code,
       expiresAt,
+      otpId: otp.id,
+    };
+  }
+
+  /**
+   * Verify an OTP code without consuming it
+   *
+   * Used by verify-reset-code to validate the code is correct
+   * without marking it as used. The OTP will be consumed later
+   * when the actual reset happens.
+   *
+   * Still increments attempts on invalid codes for security.
+   */
+  async verifyWithoutConsuming(
+    code: string,
+    userId: string,
+    type: OtpType,
+  ): Promise<OtpVerificationResult> {
+    const otp = await this.otpRepository.findActiveOtp(userId, type);
+
+    if (!otp) {
+      throw new BusinessException(
+        ERROR_CODES.INVALID_OTP,
+        'Invalid or expired verification code',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Check if expired
+    if (otp.expiresAt < new Date()) {
+      throw new BusinessException(
+        ERROR_CODES.OTP_EXPIRED,
+        'Verification code has expired. Please request a new one.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Check if max attempts exceeded
+    if (otp.attempts >= otp.maxAttempts) {
+      throw new BusinessException(
+        ERROR_CODES.OTP_MAX_ATTEMPTS,
+        'Too many failed attempts. Please request a new code.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    // Verify the code
+    if (otp.code !== code) {
+      // Increment attempts
+      await this.otpRepository.incrementAttempts(otp.id);
+
+      const remainingAttempts = otp.maxAttempts - otp.attempts - 1;
+      throw new BusinessException(
+        ERROR_CODES.INVALID_OTP,
+        `Invalid verification code. ${remainingAttempts} attempt(s) remaining.`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Do NOT mark as used — the OTP will be consumed in the actual operation
+    return {
+      valid: true,
+      userId: otp.userId,
       otpId: otp.id,
     };
   }

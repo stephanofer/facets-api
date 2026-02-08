@@ -22,6 +22,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   constructor(private readonly configService: ConfigService) {
     const pool = new Pool({
       connectionString: configService.database.url,
+      max: 20, // Maximum connections in the pool
+      idleTimeoutMillis: 30_000, // Close idle connections after 30s
+      connectionTimeoutMillis: 5_000, // Timeout new connection attempts after 5s
     });
 
     const adapter = new PrismaPg(pool);
@@ -31,16 +34,16 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
 
     super({
       adapter,
-      log: isDev
-        ? [
-            { emit: 'event', level: 'query' },
-            { emit: 'stdout', level: 'error' },
-            { emit: 'stdout', level: 'warn' },
-          ]
-        : [
-            { emit: 'stdout', level: 'error' },
-            { emit: 'stdout', level: 'warn' },
-          ],
+      // log: isDev
+      //   ? [
+      //       { emit: 'event', level: 'query' },
+      //       { emit: 'stdout', level: 'error' },
+      //       { emit: 'stdout', level: 'warn' },
+      //     ]
+      //   : [
+      //       { emit: 'stdout', level: 'error' },
+      //       { emit: 'stdout', level: 'warn' },
+      //     ],
     });
 
     this.isDevelopment = isDev;

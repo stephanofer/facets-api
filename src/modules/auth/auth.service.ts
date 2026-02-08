@@ -1,13 +1,15 @@
 import {
   Injectable,
+  Logger,
   UnauthorizedException,
   ConflictException,
   HttpStatus,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
 import { ConfigService } from '@config/config.service';
+import { PrismaService } from '@database/prisma.service';
 import { UsersService } from '@modules/users/users.service';
 import { RefreshTokensRepository } from '@modules/auth/refresh-tokens.repository';
 import { OtpService } from '@modules/otp/otp.service';
@@ -34,8 +36,13 @@ import {
   VerifyResetCodeResponseDto,
 } from '@modules/auth/dtos/auth-response.dto';
 import { BusinessException } from '@common/exceptions/business.exception';
-import { ERROR_CODES, APP_CONSTANTS } from '@common/constants/app.constants';
-import { User, OtpType, UserStatus } from '../../generated/prisma/client';
+import { ERROR_CODES } from '@common/constants/app.constants';
+import {
+  User,
+  OtpType,
+  UserStatus,
+  SubscriptionStatus,
+} from '../../generated/prisma/client';
 
 interface RequestMetadata {
   userAgent?: string;
@@ -44,6 +51,7 @@ interface RequestMetadata {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly accessTokenExpiry: number; // in seconds
 
   constructor(
@@ -51,6 +59,7 @@ export class AuthService {
     private readonly refreshTokensRepository: RefreshTokensRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
     private readonly mailService: MailService,
     private readonly subscriptionsService: SubscriptionsService,
@@ -76,26 +85,60 @@ export class AuthService {
       });
     }
 
-    // Hash password with bcrypt (12 rounds as per design)
-    const hashedPassword = await bcrypt.hash(
-      dto.password,
-      APP_CONSTANTS.SALT_ROUNDS,
+    // Hash password with Argon2id (more secure, faster than bcrypt)
+    const hashedPassword = await argon2.hash(dto.password);
+
+    // Create user + subscription atomically in a single transaction
+    const { user, subscription } = await this.prisma.$transaction(
+      async (tx) => {
+        const newUser = await tx.user.create({
+          data: {
+            email: dto.email.toLowerCase(),
+            password: hashedPassword,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            status: UserStatus.PENDING_VERIFICATION,
+            emailVerified: false,
+          },
+        });
+
+        const defaultPlan = await tx.plan.findFirst({
+          where: { isDefault: true, isActive: true },
+          include: { planFeatures: true },
+        });
+
+        if (!defaultPlan) {
+          throw new BusinessException(
+            ERROR_CODES.INTERNAL_ERROR,
+            'Default plan not configured',
+            HttpStatus.INTERNAL_SERVER_ERROR,
+          );
+        }
+
+        const newSubscription = await tx.subscription.create({
+          data: {
+            userId: newUser.id,
+            planId: defaultPlan.id,
+            status: SubscriptionStatus.ACTIVE,
+            currentPeriodStart: new Date(),
+            currentPeriodEnd: null, // Free plan has no end date
+          },
+          include: {
+            plan: { include: { planFeatures: true } },
+          },
+        });
+
+        return { user: newUser, subscription: newSubscription };
+      },
     );
 
-    // Create user
-    const user = await this.usersService.create({
-      email: dto.email,
-      password: hashedPassword,
-      firstName: dto.firstName,
-      lastName: dto.lastName,
+    // Generate OTP and send verification email (fire-and-forget, don't block response)
+    this.sendVerificationEmail(user).catch((error) => {
+      this.logger.error(
+        `Failed to send verification email to ${user.email}`,
+        error.stack,
+      );
     });
-
-    // Assign FREE plan subscription
-    const subscription =
-      await this.subscriptionsService.createSubscriptionForNewUser(user.id);
-
-    // Generate OTP and send verification email
-    await this.sendVerificationEmail(user);
 
     return {
       message:
@@ -126,7 +169,7 @@ export class AuthService {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(dto.password, user.password);
+    const isPasswordValid = await argon2.verify(user.password, dto.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException({
         code: ERROR_CODES.INVALID_CREDENTIALS,
@@ -140,11 +183,11 @@ export class AuthService {
       this.throwStatusError(loginStatus.reason!);
     }
 
-    // Generate tokens
-    const tokens = await this.generateTokens(user, metadata);
-
-    // Get user's plan
-    const plan = await this.getUserPlan(user.id);
+    // Generate tokens and get plan in parallel (independent operations)
+    const [tokens, plan] = await Promise.all([
+      this.generateTokens(user, metadata),
+      this.getUserPlan(user.id),
+    ]);
 
     return {
       tokens,
@@ -186,17 +229,19 @@ export class AuthService {
     // Mark user as verified
     const updatedUser = await this.usersService.verifyEmail(user.id);
 
-    // Send welcome email (async, don't block the response)
+    // Send welcome email (fire-and-forget, don't block the response)
     this.sendWelcomeEmail(updatedUser).catch((error) => {
-      // Log error but don't fail the verification
-      console.error('Failed to send welcome email:', error);
+      this.logger.error(
+        `Failed to send welcome email to ${updatedUser.email}`,
+        error.stack,
+      );
     });
 
-    // Generate tokens for auto-login
-    const tokens = await this.generateTokens(updatedUser, metadata);
-
-    // Get user's plan
-    const plan = await this.getUserPlan(updatedUser.id);
+    // Generate tokens and get plan in parallel (independent operations)
+    const [tokens, plan] = await Promise.all([
+      this.generateTokens(updatedUser, metadata),
+      this.getUserPlan(updatedUser.id),
+    ]);
 
     return {
       message: 'Email verified successfully. You are now logged in.',
@@ -232,8 +277,13 @@ export class AuthService {
       );
     }
 
-    // Generate new OTP and send email
-    await this.sendVerificationEmail(user);
+    // Generate new OTP and send email (fire-and-forget, don't block response)
+    this.sendVerificationEmail(user).catch((error) => {
+      this.logger.error(
+        `Failed to send verification email to ${user.email}`,
+        error.stack,
+      );
+    });
 
     return {
       message:
@@ -266,8 +316,13 @@ export class AuthService {
       return successMessage;
     }
 
-    // Generate OTP and send password reset email
-    await this.sendPasswordResetEmail(user);
+    // Generate OTP and send password reset email (fire-and-forget, don't block response)
+    this.sendPasswordResetEmail(user).catch((error) => {
+      this.logger.error(
+        `Failed to send password reset email to ${user.email}`,
+        error.stack,
+      );
+    });
 
     return successMessage;
   }
@@ -275,7 +330,9 @@ export class AuthService {
   /**
    * Verify password reset code
    *
-   * Validates the OTP without consuming it (still needs to be used in resetPassword).
+   * Validates the OTP without consuming it — the same OTP will be
+   * consumed when resetPassword() is called. This avoids the previous
+   * pattern of consuming + regenerating + sending another email.
    */
   async verifyResetCode(
     dto: VerifyResetCodeDto,
@@ -290,18 +347,15 @@ export class AuthService {
       );
     }
 
-    // Verify OTP (this will throw if invalid)
-    // Note: We verify AND consume the OTP here for security
-    // The resetPassword endpoint will validate that email matches
-    await this.otpService.verify(dto.code, user.id, OtpType.PASSWORD_RESET);
-
-    // We need to generate a new OTP for the actual reset
-    // This is a two-step process for better UX
-    await this.sendPasswordResetEmail(user);
+    // Verify OTP without consuming it (will be consumed in resetPassword)
+    await this.otpService.verifyWithoutConsuming(
+      dto.code,
+      user.id,
+      OtpType.PASSWORD_RESET,
+    );
 
     return {
-      message:
-        'Code verified. A new code has been sent for the password reset.',
+      message: 'Code verified successfully.',
       valid: true,
     };
   }
@@ -326,16 +380,13 @@ export class AuthService {
     await this.otpService.verify(dto.code, user.id, OtpType.PASSWORD_RESET);
 
     // Hash new password
-    const hashedPassword = await bcrypt.hash(
-      dto.newPassword,
-      APP_CONSTANTS.SALT_ROUNDS,
-    );
+    const hashedPassword = await argon2.hash(dto.newPassword);
 
-    // Update password
-    await this.usersService.updatePassword(user.id, hashedPassword);
-
-    // Revoke ALL refresh tokens (security: logout from all devices)
-    await this.refreshTokensRepository.revokeAllForUser(user.id);
+    // Update password and revoke all tokens in parallel (independent operations)
+    await Promise.all([
+      this.usersService.updatePassword(user.id, hashedPassword),
+      this.refreshTokensRepository.revokeAllForUser(user.id),
+    ]);
 
     return {
       message:
@@ -384,11 +435,12 @@ export class AuthService {
       });
     }
 
-    // Revoke the current token (rotation)
-    await this.refreshTokensRepository.revoke(storedToken.id);
+    // Revoke current token and fetch user in parallel (independent operations)
+    const [, user] = await Promise.all([
+      this.refreshTokensRepository.revoke(storedToken.id),
+      this.usersService.findById(storedToken.userId),
+    ]);
 
-    // Get user to generate new tokens
-    const user = await this.usersService.findById(storedToken.userId);
     if (!user) {
       throw new UnauthorizedException({
         code: ERROR_CODES.UNAUTHORIZED,
@@ -423,19 +475,16 @@ export class AuthService {
   }
 
   /**
-   * Get current user by ID (for /auth/me endpoint)
+   * Get current user (for /auth/me endpoint)
+   *
+   * Uses the user already loaded by JwtStrategy to avoid a redundant DB query.
    */
-  async getMe(userId: string): Promise<AuthUserDto> {
-    const user = await this.usersService.findById(userId);
-    if (!user) {
-      throw new UnauthorizedException({
-        code: ERROR_CODES.UNAUTHORIZED,
-        message: 'User not found',
-      });
-    }
-
-    const plan = await this.getUserPlan(userId);
-    return this.toAuthUserDto(user, plan);
+  async getMe(authenticatedUser: {
+    sub: string;
+    user: User;
+  }): Promise<AuthUserDto> {
+    const plan = await this.getUserPlan(authenticatedUser.sub);
+    return this.toAuthUserDto(authenticatedUser.user, plan);
   }
 
   // ==========================================================================
