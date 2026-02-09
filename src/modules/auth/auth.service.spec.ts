@@ -93,6 +93,10 @@ describe('AuthService', () => {
         accessExpires: '1h',
         refreshExpires: '7d',
       },
+      isProduction: false,
+      cookie: {
+        refreshTokenPath: '/api/v1/auth/refresh',
+      },
     };
 
     const mockOtpService = {
@@ -555,6 +559,52 @@ describe('AuthService', () => {
       usersService.findByEmail.mockResolvedValue(null);
 
       await expect(authService.resetPassword(resetDto)).rejects.toThrow();
+    });
+  });
+
+  // ==========================================================================
+  // Cookie Management Tests
+  // ==========================================================================
+
+  describe('setRefreshTokenCookie', () => {
+    it('should set HttpOnly cookie with correct options', () => {
+      const mockRes = {
+        cookie: jest.fn(),
+      } as unknown as import('express').Response;
+
+      authService.setRefreshTokenCookie(mockRes, 'test-refresh-token');
+
+      expect(mockRes.cookie).toHaveBeenCalledWith(
+        'refreshToken',
+        'test-refresh-token',
+        expect.objectContaining({
+          httpOnly: true,
+          secure: false, // Not production in tests
+          sameSite: 'strict',
+          path: '/api/v1/auth/refresh',
+        }),
+      );
+
+      // Verify maxAge is set and is a positive number (7 days in ms)
+      const cookieOptions = (mockRes.cookie as jest.Mock).mock.calls[0][2];
+      expect(cookieOptions.maxAge).toBe(7 * 24 * 60 * 60 * 1000);
+    });
+  });
+
+  describe('clearRefreshTokenCookie', () => {
+    it('should clear the refresh token cookie with correct options', () => {
+      const mockRes = {
+        clearCookie: jest.fn(),
+      } as unknown as import('express').Response;
+
+      authService.clearRefreshTokenCookie(mockRes);
+
+      expect(mockRes.clearCookie).toHaveBeenCalledWith('refreshToken', {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'strict',
+        path: '/api/v1/auth/refresh',
+      });
     });
   });
 });

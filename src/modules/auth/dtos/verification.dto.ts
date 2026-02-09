@@ -61,32 +61,9 @@ export class ForgotPasswordDto {
 }
 
 /**
- * DTO for verifying password reset code
- */
-export class VerifyResetCodeDto {
-  @ApiProperty({
-    description: 'User email address',
-    example: 'user@example.com',
-  })
-  @IsEmail({}, { message: 'Please provide a valid email address' })
-  @IsNotEmpty({ message: 'Email is required' })
-  email: string;
-
-  @ApiProperty({
-    description: '6-digit OTP code received via email',
-    example: '123456',
-    minLength: 6,
-    maxLength: 6,
-  })
-  @IsString()
-  @IsNotEmpty({ message: 'Reset code is required' })
-  @Length(6, 6, { message: 'Reset code must be 6 digits' })
-  @Matches(/^\d{6}$/, { message: 'Reset code must be 6 digits' })
-  code: string;
-}
-
-/**
- * DTO for resetting password with verified code
+ * DTO for resetting password with OTP code
+ *
+ * The OTP is verified and consumed in a single step — no separate verify-reset-code needed.
  */
 export class ResetPasswordDto {
   @ApiProperty({

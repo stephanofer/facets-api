@@ -5,6 +5,7 @@ import {
   Body,
   UseGuards,
   Req,
+  Res,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -15,7 +16,8 @@ import {
   ApiBearerAuth,
   ApiBody,
 } from '@nestjs/swagger';
-import { Request } from 'express';
+import { Throttle } from '@nestjs/throttler';
+import { Request, Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from '@modules/auth/auth.service';
 import { RegisterDto } from '@modules/auth/dtos/register.dto';
@@ -25,7 +27,6 @@ import {
   VerifyEmailDto,
   ResendVerificationDto,
   ForgotPasswordDto,
-  VerifyResetCodeDto,
   ResetPasswordDto,
 } from '@modules/auth/dtos/verification.dto';
 import {
@@ -36,7 +37,6 @@ import {
   AuthUserDto,
   RefreshTokenPayload,
   VerifyEmailResponseDto,
-  VerifyResetCodeResponseDto,
 } from '@modules/auth/dtos/auth-response.dto';
 import { Public } from '@common/decorators/public.decorator';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
@@ -51,6 +51,10 @@ export class AuthController {
    * Register a new user account
    */
   @Public()
+  @Throttle({
+    short: { limit: 1, ttl: 2000 },
+    medium: { limit: 3, ttl: 60000 },
+  })
   @Post('register')
   @ApiOperation({
     summary: 'Register new user',
@@ -70,20 +74,31 @@ export class AuthController {
     status: HttpStatus.BAD_REQUEST,
     description: 'Validation error',
   })
+  @ApiResponse({
+    status: HttpStatus.TOO_MANY_REQUESTS,
+    description: 'Rate limit exceeded',
+  })
   async register(@Body() dto: RegisterDto): Promise<RegisterResponseDto> {
     return this.authService.register(dto);
   }
 
   /**
    * Login with email and password
+   *
+   * Sets refresh token as HttpOnly cookie for web clients.
+   * Mobile/native clients should use the refresh token from the response body.
    */
   @Public()
+  @Throttle({
+    short: { limit: 1, ttl: 1000 },
+    medium: { limit: 5, ttl: 60000 },
+  })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Login user',
     description:
-      'Authenticate with email and password. User must have verified email. Returns access and refresh tokens.',
+      'Authenticate with email and password. User must have verified email. Returns access and refresh tokens. Web clients receive refresh token as HttpOnly cookie.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -98,14 +113,24 @@ export class AuthController {
     status: HttpStatus.FORBIDDEN,
     description: 'Account not verified or suspended',
   })
+  @ApiResponse({
+    status: HttpStatus.TOO_MANY_REQUESTS,
+    description: 'Rate limit exceeded',
+  })
   async login(
     @Body() dto: LoginDto,
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<LoginResponseDto> {
-    return this.authService.login(dto, {
+    const result = await this.authService.login(dto, {
       userAgent: req.headers['user-agent'],
       ipAddress: this.getClientIp(req),
     });
+
+    // Set refresh token as HttpOnly cookie (web clients use this, mobile ignores it)
+    this.authService.setRefreshTokenCookie(res, result.tokens.refreshToken);
+
+    return result;
   }
 
   // ===========================================================================
@@ -114,14 +139,20 @@ export class AuthController {
 
   /**
    * Verify email with OTP code
+   *
+   * Sets refresh token as HttpOnly cookie for web clients (auto-login).
    */
   @Public()
+  @Throttle({
+    short: { limit: 1, ttl: 1000 },
+    medium: { limit: 5, ttl: 60000 },
+  })
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Verify email with OTP',
     description:
-      'Verify email address using the 6-digit OTP sent to email. On success, returns tokens for auto-login.',
+      'Verify email address using the 6-digit OTP sent to email. On success, returns tokens for auto-login. Web clients receive refresh token as HttpOnly cookie.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -139,17 +170,27 @@ export class AuthController {
   async verifyEmail(
     @Body() dto: VerifyEmailDto,
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<VerifyEmailResponseDto> {
-    return this.authService.verifyEmail(dto, {
+    const result = await this.authService.verifyEmail(dto, {
       userAgent: req.headers['user-agent'],
       ipAddress: this.getClientIp(req),
     });
+
+    // Set refresh token as HttpOnly cookie (web clients use this, mobile ignores it)
+    this.authService.setRefreshTokenCookie(res, result.tokens.refreshToken);
+
+    return result;
   }
 
   /**
    * Resend verification email
    */
   @Public()
+  @Throttle({
+    short: { limit: 1, ttl: 2000 },
+    medium: { limit: 3, ttl: 60000 },
+  })
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -184,6 +225,10 @@ export class AuthController {
    * Request password reset (forgot password)
    */
   @Public()
+  @Throttle({
+    short: { limit: 1, ttl: 3000 },
+    medium: { limit: 3, ttl: 300000 },
+  })
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -207,45 +252,19 @@ export class AuthController {
   }
 
   /**
-   * Verify password reset code
-   */
-  @Public()
-  @Post('verify-reset-code')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Verify password reset code',
-    description:
-      'Verify the 6-digit OTP for password reset. Use before resetting password to validate code.',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Reset code verified successfully',
-    type: VerifyResetCodeResponseDto,
-  })
-  @ApiResponse({
-    status: HttpStatus.BAD_REQUEST,
-    description: 'Invalid or expired reset code',
-  })
-  @ApiResponse({
-    status: HttpStatus.TOO_MANY_REQUESTS,
-    description: 'Too many failed attempts',
-  })
-  async verifyResetCode(
-    @Body() dto: VerifyResetCodeDto,
-  ): Promise<VerifyResetCodeResponseDto> {
-    return this.authService.verifyResetCode(dto);
-  }
-
-  /**
    * Reset password with OTP
    */
   @Public()
+  @Throttle({
+    short: { limit: 1, ttl: 1000 },
+    medium: { limit: 5, ttl: 60000 },
+  })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Reset password',
     description:
-      'Reset password using the 6-digit OTP. All active sessions will be terminated.',
+      'Reset password using the 6-digit OTP. The OTP is verified and consumed in a single step. All active sessions will be terminated.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -272,6 +291,9 @@ export class AuthController {
 
   /**
    * Refresh access token
+   *
+   * Reads refresh token from HttpOnly cookie (web) or request body (mobile).
+   * Sets new refresh token as HttpOnly cookie for web clients.
    */
   @Public()
   @UseGuards(AuthGuard('jwt-refresh'))
@@ -280,7 +302,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Refresh tokens',
     description:
-      'Get new access and refresh tokens. The used refresh token is revoked (rotation).',
+      'Get new access and refresh tokens. The used refresh token is revoked (rotation). Web clients send refresh token via HttpOnly cookie; mobile clients send it in the request body.',
   })
   @ApiBody({ type: RefreshTokenDto })
   @ApiResponse({
@@ -292,37 +314,66 @@ export class AuthController {
     status: HttpStatus.UNAUTHORIZED,
     description: 'Invalid or expired refresh token',
   })
-  async refresh(@Req() req: Request): Promise<TokensResponseDto> {
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<TokensResponseDto> {
     const payload = req.user as RefreshTokenPayload & { refreshToken: string };
-    return this.authService.refreshTokens(payload, {
+    const tokens = await this.authService.refreshTokens(payload, {
       userAgent: req.headers['user-agent'],
       ipAddress: this.getClientIp(req),
     });
+
+    // Set new refresh token as HttpOnly cookie (web clients use this, mobile ignores it)
+    this.authService.setRefreshTokenCookie(res, tokens.refreshToken);
+
+    return tokens;
   }
 
   /**
    * Logout - revoke current refresh token
+   *
+   * Clears refresh token cookie for web clients.
+   * Mobile clients should send refresh token in body; web clients use the cookie.
    */
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Logout',
-    description: 'Revoke the refresh token to logout from current device.',
+    description:
+      'Revoke the refresh token to logout from current device. Web clients send refresh token via HttpOnly cookie; mobile clients send it in the request body.',
   })
-  @ApiBody({ type: RefreshTokenDto })
+  @ApiBody({ type: RefreshTokenDto, required: false })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Logged out successfully',
     type: MessageResponseDto,
   })
-  async logout(@Body() dto: RefreshTokenDto): Promise<MessageResponseDto> {
-    await this.authService.logout(dto.refreshToken);
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Body() dto: RefreshTokenDto,
+  ): Promise<MessageResponseDto> {
+    // Try cookie first (web clients), then body (mobile clients)
+    const refreshToken =
+      (req.cookies as Record<string, string | undefined>)?.refreshToken ??
+      dto.refreshToken;
+
+    if (refreshToken) {
+      await this.authService.logout(refreshToken);
+    }
+
+    // Always clear the cookie (no-op if not set)
+    this.authService.clearRefreshTokenCookie(res);
+
     return { message: 'Logged out successfully' };
   }
 
   /**
    * Logout from all devices
+   *
+   * Clears refresh token cookie for the current web session.
    */
   @Post('logout-all')
   @HttpCode(HttpStatus.OK)
@@ -338,8 +389,13 @@ export class AuthController {
   })
   async logoutAll(
     @CurrentUser() user: AuthenticatedUser,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<MessageResponseDto> {
     const result = await this.authService.logoutAll(user.sub);
+
+    // Clear the cookie for the current browser session
+    this.authService.clearRefreshTokenCookie(res);
+
     return { message: `Logged out from ${result.revokedCount} device(s)` };
   }
 

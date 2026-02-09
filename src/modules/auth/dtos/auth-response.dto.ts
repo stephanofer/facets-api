@@ -169,20 +169,3 @@ export class VerifyEmailResponseDto {
   @ApiProperty({ type: AuthUserDto })
   user: AuthUserDto;
 }
-
-/**
- * Reset code verification response - returns temporary reset token
- */
-export class VerifyResetCodeResponseDto {
-  @ApiProperty({
-    description: 'Success message',
-    example: 'Code verified. You can now reset your password.',
-  })
-  message: string;
-
-  @ApiProperty({
-    description: 'Whether the code is valid',
-    example: true,
-  })
-  valid: boolean;
-}

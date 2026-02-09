@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { CacheModule } from '@nestjs/cache-manager';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@config/config.module';
 import { DatabaseModule } from '@database/database.module';
@@ -20,6 +21,27 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
     DatabaseModule,
     MailModule,
 
+    // Multi-tier rate limiting (protects all endpoints by default)
+    ThrottlerModule.forRoot({
+      throttlers: [
+        {
+          name: 'short', // Burst protection
+          ttl: 1000, // 1 second
+          limit: 3,
+        },
+        {
+          name: 'medium', // General protection
+          ttl: 60000, // 1 minute
+          limit: 30,
+        },
+        {
+          name: 'long', // Sustained abuse protection
+          ttl: 3600000, // 1 hour
+          limit: 500,
+        },
+      ],
+    }),
+
     // In-memory cache (plans, features — near-static data)
     CacheModule.register({
       ttl: 300_000, // 5 minutes default TTL (in ms)
@@ -38,6 +60,12 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    // Global rate limiting - applies to all routes
+    // Use @Throttle() to override per-endpoint, @SkipThrottle() to skip
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
     },
   ],
 })

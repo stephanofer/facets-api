@@ -6,11 +6,18 @@ import { ConfigService } from '@config/config.service';
 import { RefreshTokenPayload } from '@modules/auth/dtos/auth-response.dto';
 
 /**
+ * Cookie name for the refresh token (HttpOnly, web clients)
+ */
+export const REFRESH_TOKEN_COOKIE_NAME = 'refreshToken';
+
+/**
  * JWT Refresh Strategy for validating refresh tokens
  *
- * This strategy extracts the refresh token from the request body,
- * validates it using the refresh token secret, and returns the payload
- * for further validation in the AuthService.
+ * Supports TWO extraction methods for multi-platform compatibility:
+ * 1. HttpOnly cookie (web clients) — secure against XSS
+ * 2. Request body (mobile/native clients) — stored in device Secure Storage
+ *
+ * Cookie is checked first; if not present, falls back to body.
  */
 @Injectable()
 export class JwtRefreshStrategy extends PassportStrategy(
@@ -24,7 +31,15 @@ export class JwtRefreshStrategy extends PassportStrategy(
     }
 
     super({
-      jwtFromRequest: ExtractJwt.fromBodyField('refreshToken'),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        // Priority 1: HttpOnly cookie (web clients)
+        (req: Request) =>
+          (req.cookies as Record<string, string | undefined>)?.[
+            REFRESH_TOKEN_COOKIE_NAME
+          ] ?? null,
+        // Priority 2: Request body (mobile/native clients)
+        ExtractJwt.fromBodyField('refreshToken'),
+      ]),
       ignoreExpiration: false,
       secretOrKey: refreshSecret,
       passReqToCallback: true,
@@ -34,14 +49,19 @@ export class JwtRefreshStrategy extends PassportStrategy(
   /**
    * Validate the refresh token payload
    *
-   * The actual token validation (checking if revoked, etc.) is done in AuthService.
-   * This just verifies the JWT signature and extracts the payload.
+   * Extracts the raw refresh token from cookie or body for hash comparison
+   * in AuthService. The actual token validation (checking if revoked, etc.)
+   * is done in AuthService.
    */
   validate(
     req: Request,
     payload: RefreshTokenPayload,
   ): RefreshTokenPayload & { refreshToken: string } {
-    const refreshToken = (req.body as { refreshToken?: string })?.refreshToken;
+    // Try cookie first, then body
+    const refreshToken =
+      (req.cookies as Record<string, string | undefined>)?.[
+        REFRESH_TOKEN_COOKIE_NAME
+      ] ?? (req.body as { refreshToken?: string })?.refreshToken;
 
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token not found');

@@ -8,6 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
+import { Response, CookieOptions } from 'express';
 import { ConfigService } from '@config/config.service';
 import { PrismaService } from '@database/prisma.service';
 import { UsersService } from '@modules/users/users.service';
@@ -15,13 +16,13 @@ import { RefreshTokensRepository } from '@modules/auth/refresh-tokens.repository
 import { OtpService } from '@modules/otp/otp.service';
 import { MailService } from '@mail/mail.service';
 import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
+import { REFRESH_TOKEN_COOKIE_NAME } from '@modules/auth/strategies/jwt-refresh.strategy';
 import { RegisterDto } from '@modules/auth/dtos/register.dto';
 import { LoginDto } from '@modules/auth/dtos/login.dto';
 import {
   VerifyEmailDto,
   ResendVerificationDto,
   ForgotPasswordDto,
-  VerifyResetCodeDto,
   ResetPasswordDto,
 } from '@modules/auth/dtos/verification.dto';
 import {
@@ -33,7 +34,6 @@ import {
   RegisterResponseDto,
   MessageResponseDto,
   VerifyEmailResponseDto,
-  VerifyResetCodeResponseDto,
 } from '@modules/auth/dtos/auth-response.dto';
 import { BusinessException } from '@common/exceptions/business.exception';
 import { ERROR_CODES } from '@common/constants/app.constants';
@@ -53,6 +53,7 @@ interface RequestMetadata {
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly accessTokenExpiry: number; // in seconds
+  private readonly refreshTokenExpirySeconds: number;
 
   constructor(
     private readonly usersService: UsersService,
@@ -67,6 +68,10 @@ export class AuthService {
     // Parse access token expiry to seconds (e.g., '1h' -> 3600)
     this.accessTokenExpiry = this.parseExpiryToSeconds(
       this.configService.jwt.accessExpires || '1h',
+    );
+    // Parse refresh token expiry to seconds (e.g., '7d' -> 604800)
+    this.refreshTokenExpirySeconds = this.parseExpiryToSeconds(
+      this.configService.jwt.refreshExpires || '7d',
     );
   }
 
@@ -328,42 +333,9 @@ export class AuthService {
   }
 
   /**
-   * Verify password reset code
-   *
-   * Validates the OTP without consuming it — the same OTP will be
-   * consumed when resetPassword() is called. This avoids the previous
-   * pattern of consuming + regenerating + sending another email.
-   */
-  async verifyResetCode(
-    dto: VerifyResetCodeDto,
-  ): Promise<VerifyResetCodeResponseDto> {
-    // Find user by email
-    const user = await this.usersService.findByEmail(dto.email);
-    if (!user) {
-      throw new BusinessException(
-        ERROR_CODES.INVALID_OTP,
-        'Invalid or expired reset code',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Verify OTP without consuming it (will be consumed in resetPassword)
-    await this.otpService.verifyWithoutConsuming(
-      dto.code,
-      user.id,
-      OtpType.PASSWORD_RESET,
-    );
-
-    return {
-      message: 'Code verified successfully.',
-      valid: true,
-    };
-  }
-
-  /**
    * Reset password with verified OTP
    *
-   * Updates password and revokes all refresh tokens (logout from all devices).
+   * Verifies the OTP, consumes it, updates the password, and revokes all sessions.
    */
   async resetPassword(dto: ResetPasswordDto): Promise<MessageResponseDto> {
     // Find user by email
@@ -578,11 +550,6 @@ export class AuthService {
       tokenId,
     };
 
-    // Calculate expiry times in seconds
-    const refreshExpirySeconds = this.parseExpiryToSeconds(
-      this.configService.jwt.refreshExpires || '7d',
-    );
-
     // Generate tokens
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(accessPayload, {
@@ -591,11 +558,13 @@ export class AuthService {
       }),
       this.jwtService.signAsync(refreshPayload, {
         secret: this.configService.jwt.refreshSecret,
-        expiresIn: refreshExpirySeconds,
+        expiresIn: this.refreshTokenExpirySeconds,
       }),
     ]);
 
-    const expiresAt = new Date(Date.now() + refreshExpirySeconds * 1000);
+    const expiresAt = new Date(
+      Date.now() + this.refreshTokenExpirySeconds * 1000,
+    );
 
     await this.refreshTokensRepository.create({
       token: this.hashToken(refreshToken),
@@ -694,5 +663,56 @@ export class AuthService {
           message: 'Account access denied',
         });
     }
+  }
+
+  // ==========================================================================
+  // Cookie management (for web clients)
+  // ==========================================================================
+
+  /**
+   * Get the cookie options for the refresh token
+   *
+   * - httpOnly: Not accessible from JavaScript (prevents XSS token theft)
+   * - secure: Only sent over HTTPS (except in development)
+   * - sameSite: 'strict' for CSRF protection
+   * - path: Restricted to the refresh endpoint only
+   * - maxAge: Matches the refresh token expiry
+   */
+  private getRefreshTokenCookieOptions(): CookieOptions {
+    return {
+      httpOnly: true,
+      secure: this.configService.isProduction,
+      sameSite: 'strict',
+      path: this.configService.cookie.refreshTokenPath,
+      maxAge: this.refreshTokenExpirySeconds * 1000, // Convert to milliseconds
+    };
+  }
+
+  /**
+   * Set the refresh token as an HttpOnly cookie on the response
+   *
+   * This is for web clients only. Mobile/native clients should use
+   * the refresh token from the response body and store it in Secure Storage.
+   */
+  setRefreshTokenCookie(res: Response, refreshToken: string): void {
+    res.cookie(
+      REFRESH_TOKEN_COOKIE_NAME,
+      refreshToken,
+      this.getRefreshTokenCookieOptions(),
+    );
+  }
+
+  /**
+   * Clear the refresh token cookie from the response
+   *
+   * Used during logout to ensure the cookie is removed from the browser.
+   */
+  clearRefreshTokenCookie(res: Response): void {
+    res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, {
+      httpOnly: true,
+      secure: this.configService.isProduction,
+      sameSite: 'strict',
+      path: this.configService.cookie.refreshTokenPath,
+    });
   }
 }

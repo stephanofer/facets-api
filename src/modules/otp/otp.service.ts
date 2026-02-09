@@ -28,7 +28,7 @@ export class OtpService {
    * 1. Checks rate limit (max 5 OTPs per hour)
    * 2. Checks cooldown (min 60s between requests)
    * 3. Invalidates previous OTPs of the same type
-   * 4. Creates a new OTP
+   * 4. Creates a new OTP with the code hashed (SHA-256)
    */
   async generate(userId: string, type: OtpType): Promise<OtpGenerationResult> {
     // Check rate limit and cooldown in parallel (independent checks)
@@ -43,19 +43,24 @@ export class OtpService {
     // Generate 6-digit OTP code
     const code = this.generateSecureCode();
 
+    // Hash the code before storing (defense in depth — if DB is compromised,
+    // attacker can't read active OTPs)
+    const hashedCode = this.hashOtp(code);
+
     // Calculate expiry (10 minutes)
     const expiresAt = new Date(
       Date.now() + OTP_CONSTANTS.EXPIRY_MINUTES * 60 * 1000,
     );
 
-    // Save OTP to database
+    // Save hashed OTP to database
     const otp = await this.otpRepository.create({
-      code,
+      code: hashedCode,
       type,
       userId,
       expiresAt,
     });
 
+    // Return the plain code (for the email), NOT the hash
     return {
       code,
       expiresAt,
@@ -64,77 +69,14 @@ export class OtpService {
   }
 
   /**
-   * Verify an OTP code without consuming it
-   *
-   * Used by verify-reset-code to validate the code is correct
-   * without marking it as used. The OTP will be consumed later
-   * when the actual reset happens.
-   *
-   * Still increments attempts on invalid codes for security.
-   */
-  async verifyWithoutConsuming(
-    code: string,
-    userId: string,
-    type: OtpType,
-  ): Promise<OtpVerificationResult> {
-    const otp = await this.otpRepository.findActiveOtp(userId, type);
-
-    if (!otp) {
-      throw new BusinessException(
-        ERROR_CODES.INVALID_OTP,
-        'Invalid or expired verification code',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Check if expired
-    if (otp.expiresAt < new Date()) {
-      throw new BusinessException(
-        ERROR_CODES.OTP_EXPIRED,
-        'Verification code has expired. Please request a new one.',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Check if max attempts exceeded
-    if (otp.attempts >= otp.maxAttempts) {
-      throw new BusinessException(
-        ERROR_CODES.OTP_MAX_ATTEMPTS,
-        'Too many failed attempts. Please request a new code.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-
-    // Verify the code
-    if (otp.code !== code) {
-      // Increment attempts
-      await this.otpRepository.incrementAttempts(otp.id);
-
-      const remainingAttempts = otp.maxAttempts - otp.attempts - 1;
-      throw new BusinessException(
-        ERROR_CODES.INVALID_OTP,
-        `Invalid verification code. ${remainingAttempts} attempt(s) remaining.`,
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Do NOT mark as used — the OTP will be consumed in the actual operation
-    return {
-      valid: true,
-      userId: otp.userId,
-      otpId: otp.id,
-    };
-  }
-
-  /**
-   * Verify an OTP code
+   * Verify an OTP code and consume it (mark as used)
    *
    * This method:
-   * 1. Finds the OTP by code, user, and type
+   * 1. Finds the active OTP for this user and type
    * 2. Checks if it's expired
    * 3. Checks if max attempts exceeded
-   * 4. Increments attempts if invalid
-   * 5. Marks as used if valid
+   * 4. Hashes the input and compares against stored hash
+   * 5. Marks as used if valid (OTP is ALWAYS consumed on success)
    */
   async verify(
     code: string,
@@ -170,8 +112,9 @@ export class OtpService {
       );
     }
 
-    // Verify the code
-    if (otp.code !== code) {
+    // Hash the input and compare against stored hash
+    const hashedInput = this.hashOtp(code);
+    if (otp.code !== hashedInput) {
       // Increment attempts
       await this.otpRepository.incrementAttempts(otp.id);
 
@@ -183,7 +126,7 @@ export class OtpService {
       );
     }
 
-    // Mark OTP as used
+    // Mark OTP as used (always consumed on success)
     await this.otpRepository.markAsUsed(otp.id);
 
     return {
@@ -232,6 +175,13 @@ export class OtpService {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
+  }
+
+  /**
+   * Hash an OTP code with SHA-256 for secure storage
+   */
+  private hashOtp(code: string): string {
+    return crypto.createHash('sha256').update(code).digest('hex');
   }
 
   /**

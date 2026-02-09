@@ -1,10 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpStatus } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { OtpService } from '@modules/otp/otp.service';
 import { OtpRepository } from '@modules/otp/otp.repository';
 import { OtpType } from '../../generated/prisma/client';
 import { BusinessException } from '@common/exceptions/business.exception';
 import { ERROR_CODES, OTP_CONSTANTS } from '@common/constants/app.constants';
+
+// Helper to hash OTP the same way the service does
+function hashOtp(code: string): string {
+  return crypto.createHash('sha256').update(code).digest('hex');
+}
 
 describe('OtpService', () => {
   let service: OtpService;
@@ -12,11 +18,12 @@ describe('OtpService', () => {
 
   const mockUserId = 'user-123';
   const mockOtpCode = '123456';
+  const mockHashedCode = hashOtp(mockOtpCode);
   const mockOtpId = 'otp-123';
 
   const createMockOtp = (overrides = {}) => ({
     id: mockOtpId,
-    code: mockOtpCode,
+    code: mockHashedCode, // Stored as hash in DB
     type: OtpType.EMAIL_VERIFICATION,
     userId: mockUserId,
     attempts: 0,
@@ -55,7 +62,7 @@ describe('OtpService', () => {
   });
 
   describe('generate', () => {
-    it('should generate a 6-digit OTP code', async () => {
+    it('should generate a 6-digit OTP code and store it hashed', async () => {
       repository.countRecentOtps.mockResolvedValue(0);
       repository.findMostRecent.mockResolvedValue(null);
       repository.invalidateAllForUser.mockResolvedValue(0);
@@ -73,9 +80,17 @@ describe('OtpService', () => {
         OtpType.EMAIL_VERIFICATION,
       );
 
+      // The returned code should be 6 digits (plain text for the email)
       expect(result.code).toMatch(/^\d{6}$/);
       expect(result.otpId).toBe(mockOtpId);
       expect(result.expiresAt).toBeInstanceOf(Date);
+
+      // The code stored in DB should be a SHA-256 hash, NOT the plain code
+      const storedCode = repository.create.mock.calls[0][0].code;
+      expect(storedCode).not.toBe(result.code);
+      expect(storedCode).toBe(hashOtp(result.code));
+      expect(storedCode).toHaveLength(64); // SHA-256 hex = 64 chars
+
       expect(repository.invalidateAllForUser).toHaveBeenCalledWith(
         mockUserId,
         OtpType.EMAIL_VERIFICATION,
@@ -152,14 +167,14 @@ describe('OtpService', () => {
   });
 
   describe('verify', () => {
-    it('should verify a valid OTP code', async () => {
+    it('should verify a valid OTP code by comparing hashes', async () => {
       repository.findActiveOtp.mockResolvedValue(createMockOtp());
       repository.markAsUsed.mockResolvedValue(
         createMockOtp({ usedAt: new Date() }),
       );
 
       const result = await service.verify(
-        mockOtpCode,
+        mockOtpCode, // Plain code — service will hash it internally
         mockUserId,
         OtpType.EMAIL_VERIFICATION,
       );

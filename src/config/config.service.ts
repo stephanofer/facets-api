@@ -55,4 +55,8 @@ export class ConfigService {
   get mail(): Configuration['mail'] {
     return this.configService.get('mail', { infer: true });
   }
+
+  get cookie(): Configuration['cookie'] {
+    return this.configService.get('cookie', { infer: true });
+  }
 }

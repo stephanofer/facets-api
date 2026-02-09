@@ -66,7 +66,7 @@ model RefreshToken {
 
 model OtpCode {
   id          String   @id @default(cuid(2))
-  code        String // 6 digits
+  code        String // SHA-256 hashed 6-digit OTP
   type        OtpType
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
