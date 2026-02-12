@@ -459,62 +459,6 @@ findAll(@CurrentUser() user: JwtPayload) {
 
 ---
 
-## Database Patterns
-
-### Prisma Schema Conventions
-
-```prisma
-
-// Use CUID2 for IDs (shorter, URL-safe, secure)
-model User {
-  id        String   @id @default(cuid(2))
-  email     String   @unique
-  password  String
-  name      String?
-
-  // Timestamps on EVERY model
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Soft delete (optional, per model)
-  deletedAt DateTime?
-
-  // Relations
-  accounts     Account[]
-  transactions Transaction[]
-
-  // Indexes
-  @@index([email])
-  @@map("users")  // Snake_case table names
-}
-
-model Account {
-  id       String      @id @default(cuid(2))
-  name     String
-  type     AccountType
-  balance  Decimal     @db.Decimal(19, 4)  // Money precision
-  currency String      @default("USD") @db.VarChar(3)
-
-  // Owner relationship
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])
-  @@map("accounts")
-}
-
-enum AccountType {
-  CASH
-  DEBIT_CARD
-  CREDIT_CARD
-  SAVINGS
-  INVESTMENT
-}
-```
-
 ### Repository Pattern
 
 ```typescript
@@ -735,14 +679,6 @@ describe('Auth (e2e)', () => {
   });
 });
 ```
-
-### Test Database
-
-```bash
-# .env.test
-DATABASE_URL="postgresql://user:pass@localhost:5432/facets_test"
-```
-
 ---
 
 ## Configuration Management
@@ -816,72 +752,6 @@ export class ConfigModule {}
 
 ---
 
-## Health Checks & Monitoring
-
-### Health Endpoint
-
-```
-GET /health          → Full health check
-GET /health/live     → Liveness probe (always 200)
-GET /health/ready    → Readiness probe (checks dependencies)
-```
-
-### Health Controller
-
-```typescript
-// health/health.controller.ts
-@Controller('health')
-export class HealthController {
-  constructor(
-    private health: HealthCheckService,
-    private db: PrismaHealthIndicator,
-  ) {}
-
-  @Get()
-  @HealthCheck()
-  check() {
-    return this.health.check([() => this.db.pingCheck('database')]);
-  }
-
-  @Get('live')
-  live() {
-    return { status: 'ok' };
-  }
-
-  @Get('ready')
-  @HealthCheck()
-  ready() {
-    return this.health.check([() => this.db.pingCheck('database')]);
-  }
-}
-```
-
-### Health Response
-
-```json
-{
-  "status": "ok",
-  "info": {
-    "database": { "status": "up" }
-  },
-  "error": {},
-  "details": {
-    "database": { "status": "up" }
-  }
-}
-```
-
-### Monitoring Checklist
-
-- [x] Health endpoints
-- [x] Sentry for error tracking
-- [x] Request ID in all responses
-- [x] Structured logging (JSON in production)
-- [ ] Metrics endpoint (Prometheus) - future
-- [ ] Distributed tracing (OpenTelemetry) - future
-
----
-
 ## Performance & Scalability
 
 ### Optimization Strategies
@@ -927,59 +797,6 @@ import { ThrottlerModule } from '@nestjs/throttler';
 
 ---
 
-## Security Checklist
-
-### Must Have (Day 1)
-
-- [x] **HTTPS only** (enforced at load balancer)
-- [x] **Helmet** - Security headers
-- [x] **CORS** - Configured for allowed origins
-- [x] **Rate Limiting** - Prevent brute force
-- [x] **Input Validation** - class-validator on all DTOs
-- [x] **SQL Injection** - Prisma parameterized queries
-- [x] **Password Hashing** - bcrypt with salt rounds 12
-- [x] **JWT Security** - Short expiry, refresh rotation
-- [x] **Sensitive Data** - Never log passwords, tokens
-
-### Main.ts Security Setup
-
-```typescript
-// main.ts
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
-  // Security
-  app.use(helmet());
-  app.enableCors({
-    origin: process.env.ALLOWED_ORIGINS?.split(','),
-    credentials: true,
-  });
-
-  // Global prefix
-  app.setGlobalPrefix('api/v1');
-
-  // Validation
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true, // Strip unknown properties
-      forbidNonWhitelisted: true, // Throw on unknown properties
-      transform: true, // Auto-transform types
-    }),
-  );
-
-  // Global filters & interceptors
-  app.useGlobalFilters(new AllExceptionsFilter(app.get(HttpAdapterHost)));
-  app.useGlobalInterceptors(
-    new TransformResponseInterceptor(),
-    new LoggingInterceptor(),
-    new TimeoutInterceptor(),
-  );
-
-  await app.listen(process.env.PORT || 3000);
-}
-```
-
----
 
 ### Path Aliases
 

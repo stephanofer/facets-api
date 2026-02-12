@@ -30,6 +30,20 @@ model User {
   subscription   Subscription?
   usageRecords   UsageRecord[]
   planChangeLogs PlanChangeLog[]
+  profile        UserProfile?
+  preferences    UserPreference[]
+
+  // Phase 6: Feature module relations
+  accounts          Account[]
+  categories        Category[]
+  transactions      Transaction[]
+  debts             Debt[]
+  debtPayments      DebtPayment[]
+  loans             Loan[]
+  loanPayments      LoanPayment[]
+  goals             Goal[]
+  goalContributions GoalContribution[]
+  recurringPayments RecurringPayment[]
 
   @@index([email])
   @@index([status])
@@ -65,16 +79,16 @@ model RefreshToken {
 // =============================================================================
 
 model OtpCode {
-  id          String   @id @default(cuid(2))
+  id          String    @id @default(cuid(2))
   code        String // SHA-256 hashed 6-digit OTP
   type        OtpType
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  attempts    Int      @default(0)
-  maxAttempts Int      @default(5)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
   expiresAt   DateTime
   usedAt      DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([userId, type, usedAt, expiresAt])
   @@index([expiresAt])
@@ -105,10 +119,10 @@ model Plan {
   updatedAt     DateTime @updatedAt
 
   subscriptions          Subscription[]
-  scheduledSubscriptions Subscription[]    @relation("ScheduledPlan")
+  scheduledSubscriptions Subscription[]  @relation("ScheduledPlan")
   planFeatures           PlanFeature[]
-  fromChangeLogs         PlanChangeLog[]   @relation("FromPlan")
-  toChangeLogs           PlanChangeLog[]   @relation("ToPlan")
+  fromChangeLogs         PlanChangeLog[] @relation("FromPlan")
+  toChangeLogs           PlanChangeLog[] @relation("ToPlan")
 
   @@index([code])
   @@index([isActive, sortOrder])
@@ -247,4 +261,833 @@ model UsageRecord {
   @@index([userId, featureCode])
   @@index([periodEnd])
   @@map("usage_records")
+}
+
+// =============================================================================
+// PHASE 5: User Profile, Preferences & Reference Data
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Reference Tables (low-cardinality, high-read → cacheable)
+// -----------------------------------------------------------------------------
+
+/// ISO 4217 currency reference table.
+/// Seeded with ~30 most common currencies. Extensible via INSERT (no migration needed).
+/// This is the SINGLE SOURCE OF TRUTH for currencies across the entire app.
+model Currency {
+  code         String  @id @db.VarChar(3) // ISO 4217: USD, EUR, ARS, etc.
+  name         String  @db.VarChar(100) // "US Dollar", "Euro", "Argentine Peso"
+  symbol       String  @db.VarChar(10) // "$", "€", "$"
+  decimalScale Int     @default(2) // Most currencies have 2 decimal places, JPY has 0, BHD has 3
+  isActive     Boolean @default(true)
+
+  userProfiles  UserProfile[]
+  accounts      Account[]
+  transactions  Transaction[]
+  debts         Debt[]
+  debtPayments  DebtPayment[]
+  loans         Loan[]
+  loanPayments  LoanPayment[]
+  goals         Goal[]
+  goalContributions GoalContribution[]
+
+  @@index([isActive])
+  @@map("currencies")
+}
+
+/// ISO 3166-1 country reference table.
+/// Seeded with ~50 most common countries. Extensible via INSERT.
+/// Used for user localization, tax rules (future), and regional features.
+model Country {
+  code         String  @id @db.VarChar(2) // ISO 3166-1 alpha-2: US, AR, BR, etc.
+  name         String  @db.VarChar(100) // "United States", "Argentina", "Brazil"
+  currencyCode String  @db.VarChar(3) // Default currency for this country
+  phoneCode    String  @db.VarChar(10) // "+1", "+54", "+55"
+  locale       String  @default("en-US") @db.VarChar(10) // BCP 47 locale tag
+  isActive     Boolean @default(true)
+
+  userProfiles UserProfile[]
+
+  @@index([isActive])
+  @@index([currencyCode])
+  @@map("countries")
+}
+
+// -----------------------------------------------------------------------------
+// User Profile (1:1 with User — separated from auth for performance)
+// -----------------------------------------------------------------------------
+
+/// Extended user information collected during/after onboarding.
+/// Separated from User to keep auth queries FAST (User table only has auth fields).
+///
+/// WHY 1:1 instead of columns on User?
+/// - User table is hit on EVERY authenticated request (JWT validation → findById)
+/// - Profile data is only needed in profile/settings screens
+/// - Keeps the auth hot path lean and fast
+model UserProfile {
+  id     String @id @default(cuid(2))
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Personal details
+  phone     String? @db.VarChar(20) // E.164 format: +5491155557777
+  avatarUrl String? @db.VarChar(500)
+
+  // Localization
+  countryCode  String?  @db.VarChar(2)
+  country      Country? @relation(fields: [countryCode], references: [code])
+  currencyCode String   @default("USD") @db.VarChar(3) // User's default/preferred currency
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+  timezone     String   @default("UTC") @db.VarChar(50) // IANA timezone: America/Argentina/Buenos_Aires
+  locale       String   @default("en-US") @db.VarChar(10) // BCP 47: es-AR, en-US, pt-BR
+
+  // Onboarding
+  onboardingCompletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([countryCode])
+  @@index([currencyCode])
+  @@map("user_profiles")
+}
+
+// -----------------------------------------------------------------------------
+// User Preferences (extensible per-user configuration system)
+// -----------------------------------------------------------------------------
+
+/// Registry of all available preferences with their defaults and validation.
+/// This table acts as a "schema" for preferences — it defines WHAT can be configured.
+///
+/// WHY a separate definition table?
+/// 1. Single source of truth for all available preferences
+/// 2. Default values live in the DB, not scattered across code
+/// 3. New preferences = INSERT, not a code deployment
+/// 4. Frontend can query this to dynamically render settings screens
+/// 5. Cacheable (low-cardinality, rarely changes → perfect cache candidate)
+model PreferenceDefinition {
+  id           String             @id @default(cuid(2))
+  category     PreferenceCategory
+  key          String             @db.VarChar(100) // e.g. "show_balance", "default_view", "date_format"
+  dataType     PreferenceDataType // Tells the app how to interpret the JSON value
+  defaultValue Json // Default value for this preference
+  label        String             @db.VarChar(200) // Human-readable: "Show balance on dashboard"
+  description  String? // Extended description for UI tooltips
+  sortOrder    Int                @default(0) // Display order within category
+  isActive     Boolean            @default(true) // Soft-disable without migration
+
+  userPreferences UserPreference[]
+
+  @@unique([category, key])
+  @@index([category, isActive])
+  @@map("preference_definitions")
+}
+
+/// Per-user preference values. Only stores preferences that DIFFER from the default.
+/// If a user hasn't customized a preference, it's NOT in this table — the app
+/// falls back to the default from PreferenceDefinition.
+///
+/// WHY this pattern?
+/// - Storage efficient: most users won't customize most preferences
+/// - Fast reads: one query gets ALL user overrides, merge with cached defaults
+/// - Extensible: adding a new preference is just an INSERT in PreferenceDefinition
+/// - No schema changes needed when adding/removing preferences
+model UserPreference {
+  id           String               @id @default(cuid(2))
+  userId       String
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferenceId String
+  preference   PreferenceDefinition @relation(fields: [preferenceId], references: [id], onDelete: Cascade)
+  value        Json // The user's custom value (type determined by PreferenceDefinition.dataType)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, preferenceId])
+  @@index([userId])
+  @@map("user_preferences")
+}
+
+enum PreferenceCategory {
+  DASHBOARD // What widgets/cards appear on home screen
+  APPEARANCE // Theme, font size, etc.
+  NOTIFICATIONS // Push notifications, email digests
+  PRIVACY // Data sharing, analytics opt-in
+  REGIONAL // Number format, date format, first day of week
+  TRANSACTIONS // Default filters, sorting, etc.
+}
+
+enum PreferenceDataType {
+  BOOLEAN // true/false toggles
+  STRING // text values, selections
+  NUMBER // numeric values
+  JSON // complex objects (e.g., dashboard widget layout)
+  STRING_ARRAY // list of strings (e.g., visible dashboard sections)
+}
+
+// =============================================================================
+// PHASE 6: Financial Accounts
+// =============================================================================
+
+/// Financial accounts represent WHERE money lives.
+/// Each account has a single currency and a running balance.
+///
+/// DESIGN DECISIONS:
+/// - Balance is stored as Decimal(19,4) for financial precision (handles up to
+///   999 trillion with 4 decimal places — covers all currencies including BHD 3 decimals)
+/// - Each account has its OWN currency — multi-currency support is per-account,
+///   not per-transaction. This keeps balance calculations simple and correct.
+/// - `includeInTotal` lets users exclude investment accounts from daily totals
+/// - Color/icon are stored for mobile UI customization (very common in finance apps)
+/// - Soft delete via `isArchived` — we NEVER hard-delete accounts that have transactions
+///   because that would break the audit trail. Archived accounts are hidden from UI
+///   but their transactions remain queryable.
+model Account {
+  id       String      @id @default(cuid(2))
+  userId   String
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name     String      @db.VarChar(100)
+  type     AccountType
+  balance  Decimal     @default(0) @db.Decimal(19, 4) // Running balance, updated by triggers/service
+
+  // Currency (FK to reference table)
+  currencyCode String   @default("USD") @db.VarChar(3)
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
+  // UI customization
+  color String? @db.VarChar(7) // Hex color: #FF5733
+  icon  String? @db.VarChar(50) // Icon identifier from the app's icon set
+
+  // Behavior flags
+  includeInTotal Boolean @default(true) // Include in dashboard total balance
+  isArchived     Boolean @default(false) // Soft-archive (hide from UI, keep data)
+
+  // Credit card specific fields
+  /// Credit limit for CREDIT_CARD type accounts. NULL for other types.
+  creditLimit Decimal? @db.Decimal(19, 4)
+  /// Day of month when credit card statement closes (1-31). NULL for non-credit.
+  statementClosingDay Int?
+  /// Day of month when payment is due (1-31). NULL for non-credit.
+  paymentDueDay       Int?
+
+  sortOrder Int @default(0) // User-defined display order
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  transactions        Transaction[]    @relation("TransactionAccount")
+  transfersIn         Transaction[]    @relation("TransferDestination")
+  debtPayments        DebtPayment[]
+  loanPayments        LoanPayment[]
+  goalContributions   GoalContribution[]
+  recurringPayments   RecurringPayment[]
+
+  @@index([userId, isArchived]) // Main query: "show me my active accounts"
+  @@index([userId, type]) // Filter by type: "show me my credit cards"
+  @@index([userId, currencyCode]) // Multi-currency grouping
+  @@map("accounts")
+}
+
+enum AccountType {
+  CASH
+  DEBIT_CARD
+  CREDIT_CARD
+  SAVINGS
+  INVESTMENT
+  DIGITAL_WALLET // PayPal, Mercado Pago, etc.
+  OTHER
+}
+
+// =============================================================================
+// PHASE 7: Categories (System + Custom, Hierarchical)
+// =============================================================================
+
+/// Transaction categories with support for:
+/// 1. System categories (seeded, shared by all users, not editable)
+/// 2. User custom categories (created by user, editable)
+/// 3. Two-level hierarchy (parent → children) — NOT unlimited depth
+///
+/// WHY two-level max instead of unlimited depth?
+/// - Finance apps work best with "Food → Restaurants", not "Food → Fast Food → Burgers → McDonalds"
+/// - Simpler queries (no recursive CTEs needed)
+/// - Better UX on mobile (2 taps max to categorize)
+/// - Every major finance app (YNAB, Mint, Money Manager) uses 2 levels max
+///
+/// WHY system + custom in the same table?
+/// - Single FK from Transaction → Category (no polymorphic mess)
+/// - System categories can be "overridden" by user categories with same parentId
+/// - Queries for "all my categories" are a single indexed query, not a UNION
+///
+/// The `isSystem` flag + `userId` NULL combo identifies system categories:
+/// - isSystem=true, userId=NULL → System category (shared, read-only)
+/// - isSystem=false, userId=X → User's custom category
+model Category {
+  id       String          @id @default(cuid(2))
+  userId   String? // NULL = system category, set = user's custom
+  user     User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentId String? // NULL = top-level category, set = subcategory
+  parent   Category?       @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children Category[]      @relation("CategoryHierarchy")
+  name     String          @db.VarChar(100)
+  type     TransactionType // EXPENSE, INCOME, or TRANSFER — categories are type-scoped
+
+  // UI
+  icon  String? @db.VarChar(50)
+  color String? @db.VarChar(7)
+
+  // Behavior
+  isSystem Boolean @default(false) // System categories can't be edited/deleted by users
+  isActive Boolean @default(true) // Soft-disable without delete
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions Transaction[]
+
+  // System categories: unique by name+type (no duplicates in system set)
+  // User categories: unique by userId+name+type+parentId (no duplicates per user per level)
+  @@unique([userId, name, type, parentId])
+  @@index([userId, type, isActive]) // Main query: "show me my expense categories"
+  @@index([parentId]) // Load children of a parent
+  @@index([isSystem, type, isActive]) // Load system categories by type
+  @@map("categories")
+}
+
+// =============================================================================
+// PHASE 8: Transactions (Expenses, Incomes, Transfers)
+// =============================================================================
+
+/// The CORE table of the entire application. Every financial movement is a Transaction.
+///
+/// DESIGN DECISIONS:
+/// - `amount` is ALWAYS POSITIVE. The `type` determines if it's income or expense.
+///   Why? Because "amount: -50, type: EXPENSE" is a double-negative nightmare.
+///   Positive amounts + explicit type = zero ambiguity.
+///
+/// - Transfers are modeled as a SINGLE transaction row with type=TRANSFER,
+///   a source `accountId`, and a destination `transferToAccountId`.
+///   Why single row? Because:
+///   1. It's atomic — no orphaned half-transfers
+///   2. The UI shows it as one item ("Transfer $500 from Checking to Savings")
+///   3. Balance updates happen in a DB transaction on both accounts
+///   4. Simpler than paired transactions (which need reconciliation logic)
+///
+/// - `date` is the user-facing date (when the user says it happened).
+///   `createdAt` is when it was recorded in the system.
+///   Why separate? Users often add transactions retroactively ("I bought groceries yesterday")
+///
+/// - `currencyCode` on Transaction allows recording the ORIGINAL currency
+///   even if the account uses a different one. For multi-currency scenarios,
+///   `exchangeRate` captures the conversion used. The account balance is
+///   always updated in the ACCOUNT's currency.
+model Transaction {
+  id     String @id @default(cuid(2))
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Type and amount
+  type   TransactionType
+  amount Decimal         @db.Decimal(19, 4) // ALWAYS positive. Type determines direction.
+
+  // Currency (may differ from account currency for multi-currency)
+  currencyCode String   @default("USD") @db.VarChar(3)
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+  exchangeRate Decimal? @db.Decimal(19, 10) // Rate used if currency != account currency
+
+  // Source account (required for all types)
+  accountId String
+  account   Account @relation("TransactionAccount", fields: [accountId], references: [id])
+
+  // Transfer destination (only for TRANSFER type)
+  transferToAccountId String?
+  transferToAccount   Account? @relation("TransferDestination", fields: [transferToAccountId], references: [id])
+
+  // Categorization
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  // Details
+  description String?  @db.VarChar(500)
+  notes       String? // Extended notes (longer text)
+  date        DateTime @db.Date // User-facing date (when it happened)
+
+  // Attachments (receipt photos, etc.) — stored as URL references
+  /// Array of attachment URLs. We store URLs, not blobs.
+  /// Future: could be a separate table if we need metadata per attachment.
+  attachments Json? // string[] of URLs
+
+  // Tags for flexible user-defined filtering (comma-separated or JSON array)
+  tags Json? // string[] — e.g. ["vacation", "work", "tax-deductible"]
+
+  // Reconciliation & status
+  isReconciled Boolean @default(false) // For bank reconciliation feature (future)
+  isPending    Boolean @default(false) // Pending transactions (e.g., credit card charges)
+
+  // Source tracking (was this manual, from recurring, from import?)
+  source          TransactionSource @default(MANUAL)
+  recurringPaymentId String?
+  recurringPayment   RecurringPayment? @relation(fields: [recurringPaymentId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Performance indexes — these are the most critical indexes in the ENTIRE app
+  @@index([userId, date(sort: Desc)]) // Dashboard: recent transactions
+  @@index([userId, accountId, date(sort: Desc)]) // Account detail: transactions for this account
+  @@index([userId, type, date(sort: Desc)]) // Filter: "show me my expenses this month"
+  @@index([userId, categoryId, date(sort: Desc)]) // Reports: spending by category
+  @@index([accountId]) // FK lookups
+  @@index([transferToAccountId]) // FK lookups for transfers
+  @@index([recurringPaymentId]) // Find transactions generated by a recurring payment
+  @@map("transactions")
+}
+
+enum TransactionType {
+  EXPENSE
+  INCOME
+  TRANSFER
+}
+
+enum TransactionSource {
+  MANUAL // User entered manually
+  RECURRING // Auto-generated from RecurringPayment
+  IMPORT // Imported from bank/CSV
+}
+
+// =============================================================================
+// PHASE 9: Debts (Informal money owed to/from people)
+// =============================================================================
+
+/// Debts are INFORMAL financial obligations between the user and other people.
+/// Think: "Juan me debe $500", "Le debo $200 a María".
+///
+/// This is NOT a loan with interest rates and amortization schedules.
+/// For formal loans, see the Loan model.
+///
+/// DESIGN DECISIONS:
+/// - `direction` (I_OWE vs THEY_OWE) is explicit rather than using positive/negative amounts.
+///   Clearer intent, no sign confusion, better for mobile UI.
+///
+/// - Debts have partial payments tracked via DebtPayment.
+///   `remainingAmount` is a denormalized field kept in sync by the service layer
+///   (or a DB trigger). Why denormalize? Because "show me all debts sorted by
+///   remaining amount" is a VERY common query, and computing it from SUM(payments)
+///   every time is expensive at scale.
+///
+/// - `status` is computed from business rules:
+///   ACTIVE → remainingAmount > 0
+///   SETTLED → remainingAmount = 0 (all paid)
+///   FORGIVEN → user chose to forgive the debt
+///   CANCELLED → debt was cancelled/voided
+model Debt {
+  id     String @id @default(cuid(2))
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Who and how much
+  counterpartyName String        @db.VarChar(200) // "Juan Pérez", "Mi hermano"
+  direction        DebtDirection // I_OWE or THEY_OWE
+  originalAmount   Decimal       @db.Decimal(19, 4) // Original debt amount
+  remainingAmount  Decimal       @db.Decimal(19, 4) // Denormalized: original - sum(payments)
+
+  // Currency
+  currencyCode String   @default("USD") @db.VarChar(3)
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
+  // Details
+  description String?   @db.VarChar(500)
+  notes       String?
+  dueDate     DateTime? @db.Date // Optional: when it should be paid
+  settledAt   DateTime? // When it was fully settled
+
+  status DebtStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments DebtPayment[]
+
+  @@index([userId, status]) // Main query: "show me my active debts"
+  @@index([userId, direction, status]) // Filter: "who owes me money?"
+  @@index([userId, dueDate]) // Upcoming due dates
+  @@map("debts")
+}
+
+enum DebtDirection {
+  I_OWE // User owes money to someone
+  THEY_OWE // Someone owes money to user
+}
+
+enum DebtStatus {
+  ACTIVE
+  SETTLED // Fully paid
+  FORGIVEN // User chose to forgive
+  CANCELLED // Voided/cancelled
+}
+
+/// Individual payments made toward a debt.
+/// Each payment reduces the debt's `remainingAmount`.
+///
+/// WHY a separate table instead of just updating the debt amount?
+/// - Full audit trail: "When did I pay? How much? From which account?"
+/// - Partial payments: debts are rarely paid in one shot
+/// - Account linking: the payment came FROM an account (affects that account's balance)
+model DebtPayment {
+  id     String @id @default(cuid(2))
+  debtId String
+  debt   Debt   @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount Decimal @db.Decimal(19, 4) // Payment amount
+
+  // Currency (in case payment is in different currency than debt)
+  currencyCode String   @default("USD") @db.VarChar(3)
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
+  // From which account was this paid?
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  notes   String?
+  paidAt  DateTime @default(now()) // When the payment was made
+
+  createdAt DateTime @default(now())
+
+  @@index([debtId]) // Payments for a debt
+  @@index([userId, paidAt(sort: Desc)]) // Recent payments by user
+  @@map("debt_payments")
+}
+
+// =============================================================================
+// PHASE 10: Loans (Formal loans with interest and amortization)
+// =============================================================================
+
+/// Formal loans from/to financial institutions or private lenders.
+/// Unlike Debts, Loans have:
+/// - Interest rates
+/// - Fixed number of installments
+/// - Amortization schedules
+/// - Formal payment tracking
+///
+/// DESIGN DECISIONS:
+/// - `direction` works like Debt: BORROWED (I took a loan) vs LENT (I gave a loan)
+///
+/// - We store `interestRate` as the ANNUAL rate (APR/TNA). The actual per-installment
+///   interest calculation depends on `interestType` (FIXED vs VARIABLE).
+///   We DON'T pre-compute amortization tables in the DB — that's a service-layer
+///   concern because rates can change (variable) and users can make early payments.
+///
+/// - `totalInstallments` is the original number of installments.
+///   `paidInstallments` is denormalized from COUNT(LoanPayment WHERE status=PAID).
+///   Again, denormalized for query performance.
+///
+/// - The `monthlyPayment` field stores the expected fixed installment amount.
+///   For variable-rate loans, this is recalculated when the rate changes.
+model Loan {
+  id     String @id @default(cuid(2))
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Loan details
+  lenderName    String        @db.VarChar(200) // "Banco Nación", "Mi tío Carlos"
+  direction     LoanDirection // BORROWED or LENT
+  principalAmount Decimal     @db.Decimal(19, 4) // Original loan amount
+  remainingBalance Decimal    @db.Decimal(19, 4) // Current outstanding balance
+
+  // Currency
+  currencyCode String   @default("USD") @db.VarChar(3)
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
+  // Interest
+  interestRate Decimal      @default(0) @db.Decimal(7, 4) // Annual rate: 12.5000% = 12.5000
+  interestType InterestType @default(FIXED)
+
+  // Installment plan
+  totalInstallments Int // Total number of installments
+  paidInstallments  Int     @default(0) // Denormalized: count of paid installments
+  monthlyPayment    Decimal @db.Decimal(19, 4) // Expected amount per installment
+
+  // Dates
+  startDate     DateTime  @db.Date // When the loan started
+  endDate       DateTime? @db.Date // Expected end date (calculated from installments)
+  nextPaymentDate DateTime? @db.Date // When next payment is due
+
+  // Details
+  description String? @db.VarChar(500)
+  notes       String?
+
+  status LoanStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments LoanPayment[]
+
+  @@index([userId, status]) // Main query: "show me my active loans"
+  @@index([userId, direction, status]) // Filter: "loans I took" vs "loans I gave"
+  @@index([userId, nextPaymentDate]) // Upcoming payments
+  @@map("loans")
+}
+
+enum LoanDirection {
+  BORROWED // User took a loan (they owe money)
+  LENT // User gave a loan (someone owes them)
+}
+
+enum InterestType {
+  FIXED // Interest rate doesn't change
+  VARIABLE // Interest rate can change (recalculated periodically)
+}
+
+enum LoanStatus {
+  ACTIVE
+  PAID_OFF // All installments paid
+  DEFAULTED // Missed too many payments
+  CANCELLED
+}
+
+/// Individual loan installment payments.
+/// Each payment tracks principal vs interest breakdown.
+///
+/// WHY track principal/interest separately?
+/// - Users need to know "how much of my payment goes to interest vs principal?"
+/// - Tax deductions in many countries are based on interest paid
+/// - Accurate remaining balance calculation
+model LoanPayment {
+  id     String @id @default(cuid(2))
+  loanId String
+  loan   Loan   @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  installmentNumber Int // Which installment is this (1, 2, 3...)
+  amount            Decimal @db.Decimal(19, 4) // Total payment amount
+  principalAmount   Decimal @db.Decimal(19, 4) // How much goes to principal
+  interestAmount    Decimal @db.Decimal(19, 4) // How much goes to interest
+
+  // Currency
+  currencyCode String   @default("USD") @db.VarChar(3)
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
+  // From which account?
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  // Payment tracking
+  dueDate DateTime         @db.Date // When this installment was due
+  paidAt  DateTime? // When it was actually paid (null = not yet paid)
+  status  LoanPaymentStatus @default(PENDING)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([loanId, installmentNumber]) // Each installment number is unique per loan
+  @@index([loanId, status]) // Payments for a loan filtered by status
+  @@index([userId, dueDate]) // Upcoming payments across all loans
+  @@index([userId, paidAt(sort: Desc)]) // Recent payments
+  @@map("loan_payments")
+}
+
+enum LoanPaymentStatus {
+  PENDING // Not yet due
+  DUE // Due but not paid
+  PAID // Paid on time
+  LATE // Paid late
+  MISSED // Not paid, past due
+}
+
+// =============================================================================
+// PHASE 11: Financial Goals (Savings targets)
+// =============================================================================
+
+/// Financial goals represent savings targets the user wants to achieve.
+/// Examples: "Emergency Fund: $10,000", "Vacation: $3,000", "New Car: $25,000"
+///
+/// DESIGN DECISIONS:
+/// - Goals have a `targetAmount` and a denormalized `currentAmount`.
+///   `currentAmount` = SUM(GoalContribution.amount). Denormalized for the same
+///   reason as debts — "show me my goals sorted by progress %" is too common
+///   to compute on the fly.
+///
+/// - Goals are NOT tied to a specific account. Why? Because a user might save
+///   for a vacation using money from multiple accounts. The GoalContribution
+///   tracks WHERE each contribution came from.
+///
+/// - `targetDate` is optional — some goals are open-ended ("emergency fund")
+///   while others have deadlines ("wedding in June 2027")
+///
+/// - Progress percentage is calculated at the application layer:
+///   progress = (currentAmount / targetAmount) * 100
+///   We DON'T store it because it's trivially computable and would be another
+///   field to keep in sync.
+model Goal {
+  id     String @id @default(cuid(2))
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name          String  @db.VarChar(200) // "Emergency Fund", "Vacation 2027"
+  description   String? @db.VarChar(500)
+  targetAmount  Decimal @db.Decimal(19, 4) // How much they want to save
+  currentAmount Decimal @default(0) @db.Decimal(19, 4) // Denormalized: sum of contributions
+
+  // Currency
+  currencyCode String   @default("USD") @db.VarChar(3)
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
+  // UI
+  color String? @db.VarChar(7)
+  icon  String? @db.VarChar(50)
+
+  // Timeline
+  targetDate  DateTime? @db.Date // Optional deadline
+  completedAt DateTime? // When goal was reached
+
+  status GoalStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contributions GoalContribution[]
+
+  @@index([userId, status]) // Main query: "show me my active goals"
+  @@index([userId, targetDate]) // Goals with upcoming deadlines
+  @@map("goals")
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED // Target reached
+  PAUSED // Temporarily paused
+  CANCELLED
+}
+
+/// Individual contributions toward a goal.
+/// Each contribution optionally links to an account (where money came from).
+///
+/// Contributions can be positive (adding money) or negative (withdrawing from goal).
+/// Why allow negative? Because life happens — sometimes you need to pull money
+/// FROM your emergency fund. The currentAmount on Goal handles this correctly.
+model GoalContribution {
+  id     String @id @default(cuid(2))
+  goalId String
+  goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount Decimal @db.Decimal(19, 4) // Can be negative (withdrawal from goal)
+
+  // Currency
+  currencyCode String   @default("USD") @db.VarChar(3)
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+
+  // From/to which account?
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  notes String?
+  date  DateTime @default(now()) // When the contribution was made
+
+  createdAt DateTime @default(now())
+
+  @@index([goalId]) // Contributions for a goal
+  @@index([userId, date(sort: Desc)]) // Recent contributions
+  @@map("goal_contributions")
+}
+
+// =============================================================================
+// PHASE 12: Recurring Payments (Scheduled/Auto transactions)
+// =============================================================================
+
+/// Recurring payments represent transactions that happen on a schedule.
+/// Examples: "Netflix $15/month", "Rent $1,200/month", "Salary $5,000/month"
+///
+/// DESIGN DECISIONS:
+/// - This is a TEMPLATE, not the actual transaction. When a recurring payment fires,
+///   it creates a Transaction with source=RECURRING and recurringPaymentId set.
+///   Why a template? Because the actual amount might change, the user might skip
+///   one occurrence, or the account might change.
+///
+/// - `frequency` + `frequencyInterval` gives flexible scheduling:
+///   Every 1 MONTH = monthly, Every 2 WEEKS = bi-weekly, Every 1 YEAR = annual
+///
+/// - `nextOccurrence` is the pre-computed next fire date. A CRON job or scheduled
+///   task checks this field to know what to generate today.
+///   Why pre-compute? Because computing "when is the next bi-weekly occurrence
+///   after X?" for every recurring payment on every check is expensive.
+///
+/// - `lastGeneratedAt` tracks when we last created a transaction from this template.
+///   Prevents double-generation if the CRON runs twice.
+///
+/// - `occurrencesCount` / `maxOccurrences` supports "repeat 12 times then stop"
+///   patterns (e.g., "12 monthly payments for this insurance")
+///
+/// - `endDate` supports "repeat until this date" patterns
+model RecurringPayment {
+  id     String @id @default(cuid(2))
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // What transaction to generate
+  name              String          @db.VarChar(200) // "Netflix", "Rent", "Salary"
+  type              TransactionType // EXPENSE or INCOME (not TRANSFER for now)
+  amount            Decimal         @db.Decimal(19, 4)
+  currencyCode      String          @default("USD") @db.VarChar(3)
+
+  // Source account
+  accountId String
+  account   Account @relation(fields: [accountId], references: [id])
+
+  // Category (optional)
+  categoryId String?
+
+  description String? @db.VarChar(500)
+
+  // Schedule
+  frequency         RecurringFrequency
+  frequencyInterval Int                @default(1) // Every N [frequency]. e.g., every 2 weeks
+  startDate         DateTime           @db.Date // When recurring starts
+  endDate           DateTime?          @db.Date // Optional: stop recurring after this date
+
+  // Occurrence tracking
+  nextOccurrence   DateTime? @db.Date // Pre-computed: next fire date
+  lastGeneratedAt  DateTime? // Last time a transaction was generated
+  occurrencesCount Int       @default(0) // How many times it has fired
+  maxOccurrences   Int? // Optional: stop after N occurrences
+
+  // Notification
+  notifyBeforeDays Int @default(0) // Notify user N days before (0 = no notification)
+
+  status RecurringStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Transactions generated from this template
+  transactions Transaction[]
+
+  @@index([userId, status]) // Main query: "show me my active recurring payments"
+  @@index([nextOccurrence, status]) // CRON job: "what needs to fire today?"
+  @@index([userId, type, status]) // Filter: recurring expenses vs incomes
+  @@map("recurring_payments")
+}
+
+enum RecurringFrequency {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum RecurringStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED // Max occurrences reached or endDate passed
+  CANCELLED
 }
