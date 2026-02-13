@@ -6,7 +6,7 @@ import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
-import cookieParser from 'cookie-parser';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { ConfigService } from '@config/config.service';
 import { AllExceptionsFilter } from '@common/filters/all-exceptions.filter';

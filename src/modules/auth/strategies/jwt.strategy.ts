@@ -1,10 +1,16 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
+import { Request } from 'express';
 import { ConfigService } from '@config/config.service';
 import { UsersService } from '@modules/users/users.service';
 import { JwtPayload } from '@modules/auth/dtos/auth-response.dto';
 import { User } from '../../../generated/prisma/client';
+
+/**
+ * Cookie name for the access token (HttpOnly, web clients)
+ */
+export const ACCESS_TOKEN_COOKIE_NAME = 'accessToken';
 
 /**
  * Authenticated user attached to request.user by Passport
@@ -19,8 +25,11 @@ export interface AuthenticatedUser extends JwtPayload {
 /**
  * JWT Strategy for validating access tokens
  *
- * This strategy extracts the JWT from the Authorization header (Bearer scheme),
- * validates it using the access token secret, and attaches the user to the request.
+ * Supports TWO extraction methods for multi-platform compatibility:
+ * 1. Authorization header (Bearer scheme) — mobile/native clients (PRIORITY)
+ * 2. HttpOnly cookie (web clients) — secure against XSS (FALLBACK)
+ *
+ * Mobile-first: Bearer header is checked first. If not present, falls back to cookie.
  */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -34,7 +43,15 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
 
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        // Priority 1: Bearer token from Authorization header (mobile/native clients)
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        // Priority 2: HttpOnly cookie (web clients)
+        (req: Request) =>
+          (req.cookies as Record<string, string | undefined>)?.[
+            ACCESS_TOKEN_COOKIE_NAME
+          ] ?? null,
+      ]),
       ignoreExpiration: false,
       secretOrKey: accessSecret,
     });

@@ -127,8 +127,9 @@ export class AuthController {
       ipAddress: this.getClientIp(req),
     });
 
-    // Set refresh token as HttpOnly cookie (web clients use this, mobile ignores it)
+    // Set tokens as HttpOnly cookies (web clients use these, mobile ignores them)
     this.authService.setRefreshTokenCookie(res, result.tokens.refreshToken);
+    this.authService.setAccessTokenCookie(res, result.tokens.accessToken);
 
     return result;
   }
@@ -177,8 +178,9 @@ export class AuthController {
       ipAddress: this.getClientIp(req),
     });
 
-    // Set refresh token as HttpOnly cookie (web clients use this, mobile ignores it)
+    // Set tokens as HttpOnly cookies (web clients use these, mobile ignores them)
     this.authService.setRefreshTokenCookie(res, result.tokens.refreshToken);
+    this.authService.setAccessTokenCookie(res, result.tokens.accessToken);
 
     return result;
   }
@@ -324,8 +326,9 @@ export class AuthController {
       ipAddress: this.getClientIp(req),
     });
 
-    // Set new refresh token as HttpOnly cookie (web clients use this, mobile ignores it)
+    // Set new tokens as HttpOnly cookies (web clients use these, mobile ignores them)
     this.authService.setRefreshTokenCookie(res, tokens.refreshToken);
+    this.authService.setAccessTokenCookie(res, tokens.accessToken);
 
     return tokens;
   }
@@ -364,8 +367,9 @@ export class AuthController {
       await this.authService.logout(refreshToken);
     }
 
-    // Always clear the cookie (no-op if not set)
+    // Always clear cookies (no-op if not set)
     this.authService.clearRefreshTokenCookie(res);
+    this.authService.clearAccessTokenCookie(res);
 
     return { message: 'Logged out successfully' };
   }
@@ -393,8 +397,9 @@ export class AuthController {
   ): Promise<MessageResponseDto> {
     const result = await this.authService.logoutAll(user.sub);
 
-    // Clear the cookie for the current browser session
+    // Clear cookies for the current browser session
     this.authService.clearRefreshTokenCookie(res);
+    this.authService.clearAccessTokenCookie(res);
 
     return { message: `Logged out from ${result.revokedCount} device(s)` };
   }

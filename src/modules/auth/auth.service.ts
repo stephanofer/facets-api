@@ -17,6 +17,7 @@ import { OtpService } from '@modules/otp/otp.service';
 import { MailService } from '@mail/mail.service';
 import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
 import { REFRESH_TOKEN_COOKIE_NAME } from '@modules/auth/strategies/jwt-refresh.strategy';
+import { ACCESS_TOKEN_COOKIE_NAME } from '@modules/auth/strategies/jwt.strategy';
 import { RegisterDto } from '@modules/auth/dtos/register.dto';
 import { LoginDto } from '@modules/auth/dtos/login.dto';
 import {
@@ -713,6 +714,57 @@ export class AuthService {
       secure: this.configService.isProduction,
       sameSite: 'strict',
       path: this.configService.cookie.refreshTokenPath,
+    });
+  }
+
+  // ==========================================================================
+  // Access Token Cookie management (for web clients)
+  // ==========================================================================
+
+  /**
+   * Get the cookie options for the access token
+   *
+   * - httpOnly: Not accessible from JavaScript (prevents XSS token theft)
+   * - secure: Only sent over HTTPS (except in development)
+   * - sameSite: 'strict' for CSRF protection
+   * - path: '/' so it's sent with every API request
+   * - maxAge: Matches the access token expiry
+   */
+  private getAccessTokenCookieOptions(): CookieOptions {
+    return {
+      httpOnly: true,
+      secure: this.configService.isProduction,
+      sameSite: 'strict',
+      path: '/',
+      maxAge: this.accessTokenExpiry * 1000, // Convert to milliseconds
+    };
+  }
+
+  /**
+   * Set the access token as an HttpOnly cookie on the response
+   *
+   * This is for web clients only. Mobile/native clients should use
+   * the access token from the response body and send it via Authorization header.
+   */
+  setAccessTokenCookie(res: Response, accessToken: string): void {
+    res.cookie(
+      ACCESS_TOKEN_COOKIE_NAME,
+      accessToken,
+      this.getAccessTokenCookieOptions(),
+    );
+  }
+
+  /**
+   * Clear the access token cookie from the response
+   *
+   * Used during logout to ensure the cookie is removed from the browser.
+   */
+  clearAccessTokenCookie(res: Response): void {
+    res.clearCookie(ACCESS_TOKEN_COOKIE_NAME, {
+      httpOnly: true,
+      secure: this.configService.isProduction,
+      sameSite: 'strict',
+      path: '/',
     });
   }
 }

@@ -9,6 +9,8 @@ import { HealthModule } from '@health/health.module';
 import { MailModule } from '@mail/mail.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { SubscriptionsModule } from '@modules/subscriptions/subscriptions.module';
+import { AccountsModule } from '@modules/accounts/accounts.module';
+import { CategoriesModule } from '@modules/categories/categories.module';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 
 @Module({
@@ -52,20 +54,25 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
     HealthModule,
     AuthModule,
     SubscriptionsModule,
+    AccountsModule,
+    CategoriesModule,
   ],
   controllers: [],
   providers: [
     // Global JWT Auth Guard - all routes protected by default
     // Use @Public() decorator for public routes
+    JwtAuthGuard,
     {
       provide: APP_GUARD,
-      useClass: JwtAuthGuard,
+      useExisting: JwtAuthGuard,
     },
     // Global rate limiting - applies to all routes
     // Use @Throttle() to override per-endpoint, @SkipThrottle() to skip
+    // Registered with useExisting so it can be overridden in E2E tests
+    ThrottlerGuard,
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useExisting: ThrottlerGuard,
     },
   ],
 })

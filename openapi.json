@@ -382,6 +382,9 @@
           },
           "409": {
             "description": "Email already exists"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
           }
         },
         "summary": "Register new user",
@@ -392,7 +395,7 @@
     },
     "/api/v1/auth/login": {
       "post": {
-        "description": "Authenticate with email and password. User must have verified email. Returns access and refresh tokens.",
+        "description": "Authenticate with email and password. User must have verified email. Returns access and refresh tokens. Web clients receive refresh token as HttpOnly cookie.",
         "operationId": "AuthController_login_v1",
         "parameters": [],
         "requestBody": {
@@ -421,6 +424,9 @@
           },
           "403": {
             "description": "Account not verified or suspended"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
           }
         },
         "summary": "Login user",
@@ -431,7 +437,7 @@
     },
     "/api/v1/auth/verify-email": {
       "post": {
-        "description": "Verify email address using the 6-digit OTP sent to email. On success, returns tokens for auto-login.",
+        "description": "Verify email address using the 6-digit OTP sent to email. On success, returns tokens for auto-login. Web clients receive refresh token as HttpOnly cookie.",
         "operationId": "AuthController_verifyEmail_v1",
         "parameters": [],
         "requestBody": {
@@ -543,48 +549,9 @@
         ]
       }
     },
-    "/api/v1/auth/verify-reset-code": {
-      "post": {
-        "description": "Verify the 6-digit OTP for password reset. Use before resetting password to validate code.",
-        "operationId": "AuthController_verifyResetCode_v1",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VerifyResetCodeDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Reset code verified successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VerifyResetCodeResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid or expired reset code"
-          },
-          "429": {
-            "description": "Too many failed attempts"
-          }
-        },
-        "summary": "Verify password reset code",
-        "tags": [
-          "Authentication"
-        ]
-      }
-    },
     "/api/v1/auth/reset-password": {
       "post": {
-        "description": "Reset password using the 6-digit OTP. All active sessions will be terminated.",
+        "description": "Reset password using the 6-digit OTP. The OTP is verified and consumed in a single step. All active sessions will be terminated.",
         "operationId": "AuthController_resetPassword_v1",
         "parameters": [],
         "requestBody": {
@@ -623,7 +590,7 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "description": "Get new access and refresh tokens. The used refresh token is revoked (rotation).",
+        "description": "Get new access and refresh tokens. The used refresh token is revoked (rotation). Web clients send refresh token via HttpOnly cookie; mobile clients send it in the request body.",
         "operationId": "AuthController_refresh_v1",
         "parameters": [],
         "requestBody": {
@@ -659,11 +626,11 @@
     },
     "/api/v1/auth/logout": {
       "post": {
-        "description": "Revoke the refresh token to logout from current device.",
+        "description": "Revoke the refresh token to logout from current device. Web clients send refresh token via HttpOnly cookie; mobile clients send it in the request body.",
         "operationId": "AuthController_logout_v1",
         "parameters": [],
         "requestBody": {
-          "required": true,
+          "required": false,
           "content": {
             "application/json": {
               "schema": {
@@ -1165,6 +1132,694 @@
           "Subscriptions"
         ]
       }
+    },
+    "/api/v1/accounts": {
+      "post": {
+        "description": "Create a new financial account (bank, card, cash, etc.). Subject to plan limits.",
+        "operationId": "AccountsController_create_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Account created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or invalid credit card fields"
+          },
+          "403": {
+            "description": "Account limit reached for current plan"
+          },
+          "409": {
+            "description": "Account name already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create account",
+        "tags": [
+          "Accounts"
+        ]
+      },
+      "get": {
+        "description": "Get all accounts for the authenticated user. By default, archived accounts are hidden.",
+        "operationId": "AccountsController_findAll_v1",
+        "parameters": [
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Filter by account type",
+            "schema": {
+              "example": "DEBIT_CARD",
+              "type": "string",
+              "enum": [
+                "CASH",
+                "DEBIT_CARD",
+                "CREDIT_CARD",
+                "SAVINGS",
+                "INVESTMENT",
+                "DIGITAL_WALLET",
+                "OTHER"
+              ]
+            }
+          },
+          {
+            "name": "includeArchived",
+            "required": false,
+            "in": "query",
+            "description": "Include archived accounts (default: false)",
+            "schema": {
+              "default": false,
+              "example": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "currencyCode",
+            "required": false,
+            "in": "query",
+            "description": "Filter by currency code",
+            "schema": {
+              "example": "USD",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of accounts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List accounts",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/v1/accounts/summary": {
+      "get": {
+        "description": "Get total balance grouped by currency across all active accounts that are included in total.",
+        "operationId": "AccountsController_getBalanceSummary_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Balance summary by currency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountSummaryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Balance summary",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/v1/accounts/{id}": {
+      "get": {
+        "description": "Get details of a specific account.",
+        "operationId": "AccountsController_findById_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account ID (CUID)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Account not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get account",
+        "tags": [
+          "Accounts"
+        ]
+      },
+      "put": {
+        "description": "Update account details. Type and currency cannot be changed after creation.",
+        "operationId": "AccountsController_update_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account ID (CUID)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Account not found"
+          },
+          "409": {
+            "description": "Account name already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update account",
+        "tags": [
+          "Accounts"
+        ]
+      },
+      "delete": {
+        "description": "Permanently delete an account. Only possible if the account has no transactions. Use archive instead for accounts with transaction history.",
+        "operationId": "AccountsController_delete_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account ID (CUID)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Account deleted successfully"
+          },
+          "404": {
+            "description": "Account not found"
+          },
+          "409": {
+            "description": "Account has transactions, archive instead"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete account",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/v1/accounts/{id}/archive": {
+      "patch": {
+        "description": "Archive an account to hide it from the UI while preserving transaction history. Archived accounts do not count towards plan limits.",
+        "operationId": "AccountsController_archive_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account ID (CUID)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account archived successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Account not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive account",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/v1/accounts/{id}/unarchive": {
+      "patch": {
+        "description": "Restore an archived account. Subject to plan limits — unarchiving may fail if you are at your account limit.",
+        "operationId": "AccountsController_unarchive_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account ID (CUID)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account unarchived successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account limit reached, cannot unarchive"
+          },
+          "404": {
+            "description": "Account not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Unarchive account",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/v1/categories": {
+      "post": {
+        "description": "Create a custom transaction category. Subject to plan limits. Supports 2-level hierarchy (parent → child).",
+        "operationId": "CategoriesController_create_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Category created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error, max depth exceeded, or parent type mismatch"
+          },
+          "403": {
+            "description": "Category limit reached or system category modification"
+          },
+          "409": {
+            "description": "Category name already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create custom category",
+        "tags": [
+          "Categories"
+        ]
+      },
+      "get": {
+        "description": "Get all categories for the authenticated user. Includes system categories (shared) and custom categories (personal). Returns tree structure by default.",
+        "operationId": "CategoriesController_findAll_v1",
+        "parameters": [
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Filter by transaction type",
+            "schema": {
+              "example": "EXPENSE",
+              "type": "string",
+              "enum": [
+                "EXPENSE",
+                "INCOME",
+                "TRANSFER"
+              ]
+            }
+          },
+          {
+            "name": "includeInactive",
+            "required": false,
+            "in": "query",
+            "description": "Include inactive categories (default: false)",
+            "schema": {
+              "default": false,
+              "example": false,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "flat",
+            "required": false,
+            "in": "query",
+            "description": "Return flat list instead of tree structure (default: false)",
+            "schema": {
+              "default": false,
+              "example": false,
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category tree (or flat list if ?flat=true)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryTreeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List categories",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/api/v1/categories/{id}": {
+      "get": {
+        "description": "Get details of a specific category including its subcategories.",
+        "operationId": "CategoriesController_findById_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Category ID (CUID)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category details with children",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryWithChildrenDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get category",
+        "tags": [
+          "Categories"
+        ]
+      },
+      "put": {
+        "description": "Update a custom category. System categories cannot be modified. Type and parent cannot be changed.",
+        "operationId": "CategoriesController_update_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Category ID (CUID)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Cannot modify system categories"
+          },
+          "404": {
+            "description": "Category not found"
+          },
+          "409": {
+            "description": "Category name already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update category",
+        "tags": [
+          "Categories"
+        ]
+      },
+      "delete": {
+        "description": "Permanently delete a custom category. System categories cannot be deleted. Categories with transactions can only be deactivated.",
+        "operationId": "CategoriesController_delete_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Category ID (CUID)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Category deleted successfully"
+          },
+          "403": {
+            "description": "Cannot delete system categories"
+          },
+          "404": {
+            "description": "Category not found"
+          },
+          "409": {
+            "description": "Category has transactions, deactivate instead"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete category",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/api/v1/categories/{id}/deactivate": {
+      "patch": {
+        "description": "Deactivate a custom category to hide it from selection lists while preserving existing transaction references.",
+        "operationId": "CategoriesController_deactivate_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Category ID (CUID)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category deactivated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Cannot deactivate system categories"
+          },
+          "404": {
+            "description": "Category not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Deactivate category",
+        "tags": [
+          "Categories"
+        ]
+      }
+    },
+    "/api/v1/categories/{id}/reactivate": {
+      "patch": {
+        "description": "Reactivate a previously deactivated custom category.",
+        "operationId": "CategoriesController_reactivate_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Category ID (CUID)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category reactivated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Cannot modify system categories"
+          },
+          "404": {
+            "description": "Category not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reactivate category",
+        "tags": [
+          "Categories"
+        ]
+      }
     }
   },
   "info": {
@@ -1457,46 +2112,6 @@
           "email"
         ]
       },
-      "VerifyResetCodeDto": {
-        "type": "object",
-        "properties": {
-          "email": {
-            "type": "string",
-            "description": "User email address",
-            "example": "user@example.com"
-          },
-          "code": {
-            "type": "string",
-            "description": "6-digit OTP code received via email",
-            "example": "123456",
-            "minLength": 6,
-            "maxLength": 6
-          }
-        },
-        "required": [
-          "email",
-          "code"
-        ]
-      },
-      "VerifyResetCodeResponseDto": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "Success message",
-            "example": "Code verified. You can now reset your password."
-          },
-          "valid": {
-            "type": "boolean",
-            "description": "Whether the code is valid",
-            "example": true
-          }
-        },
-        "required": [
-          "message",
-          "valid"
-        ]
-      },
       "ResetPasswordDto": {
         "type": "object",
         "properties": {
@@ -1531,13 +2146,10 @@
         "properties": {
           "refreshToken": {
             "type": "string",
-            "description": "Refresh token received during login or previous refresh",
+            "description": "Refresh token received during login or previous refresh. Required for mobile clients. Web clients can omit this and use the HttpOnly cookie instead.",
             "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
           }
-        },
-        "required": [
-          "refreshToken"
-        ]
+        }
       },
       "PlanFeatureDto": {
         "type": "object",
@@ -2141,6 +2753,524 @@
         "required": [
           "history"
         ]
+      },
+      "CreateAccountDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Account name",
+            "example": "My Checking Account",
+            "maxLength": 100
+          },
+          "type": {
+            "type": "string",
+            "description": "Account type",
+            "enum": [
+              "CASH",
+              "DEBIT_CARD",
+              "CREDIT_CARD",
+              "SAVINGS",
+              "INVESTMENT",
+              "DIGITAL_WALLET",
+              "OTHER"
+            ],
+            "example": "DEBIT_CARD"
+          },
+          "balance": {
+            "type": "number",
+            "description": "Initial balance (defaults to 0)",
+            "example": 1500.5,
+            "default": 0
+          },
+          "currencyCode": {
+            "type": "string",
+            "description": "ISO 4217 currency code",
+            "example": "USD",
+            "default": "USD"
+          },
+          "color": {
+            "type": "string",
+            "description": "Hex color code for UI",
+            "example": "#FF5733"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Icon identifier for the app UI",
+            "example": "credit-card"
+          },
+          "includeInTotal": {
+            "type": "boolean",
+            "description": "Include this account in the dashboard total balance",
+            "default": true
+          },
+          "creditLimit": {
+            "type": "number",
+            "description": "Credit limit (only for CREDIT_CARD type)",
+            "example": 5000
+          },
+          "statementClosingDay": {
+            "type": "number",
+            "description": "Statement closing day of month (1-31, only for CREDIT_CARD)",
+            "example": 15
+          },
+          "paymentDueDay": {
+            "type": "number",
+            "description": "Payment due day of month (1-31, only for CREDIT_CARD)",
+            "example": 5
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Display order (lower = first)",
+            "example": 0,
+            "default": 0
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ]
+      },
+      "AccountResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cm3xk7z9w0001jn08abc12345"
+          },
+          "name": {
+            "type": "string",
+            "example": "My Checking Account"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "CASH",
+              "DEBIT_CARD",
+              "CREDIT_CARD",
+              "SAVINGS",
+              "INVESTMENT",
+              "DIGITAL_WALLET",
+              "OTHER"
+            ],
+            "example": "DEBIT_CARD"
+          },
+          "balance": {
+            "type": "string",
+            "example": "1500.5000",
+            "description": "Current balance as string for precision"
+          },
+          "currencyCode": {
+            "type": "string",
+            "example": "USD"
+          },
+          "color": {
+            "type": "string",
+            "example": "#FF5733"
+          },
+          "icon": {
+            "type": "string",
+            "example": "credit-card"
+          },
+          "includeInTotal": {
+            "type": "boolean",
+            "example": true
+          },
+          "isArchived": {
+            "type": "boolean",
+            "example": false
+          },
+          "creditLimit": {
+            "type": "string",
+            "example": "5000.0000"
+          },
+          "statementClosingDay": {
+            "type": "number",
+            "example": 15
+          },
+          "paymentDueDay": {
+            "type": "number",
+            "example": 5
+          },
+          "sortOrder": {
+            "type": "number",
+            "example": 0
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2025-01-15T10:30:00.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2025-01-15T10:30:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "balance",
+          "currencyCode",
+          "includeInTotal",
+          "isArchived",
+          "sortOrder",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AccountListResponseDto": {
+        "type": "object",
+        "properties": {
+          "accounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountResponseDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 3,
+            "description": "Total number of active (non-archived) accounts"
+          }
+        },
+        "required": [
+          "accounts",
+          "total"
+        ]
+      },
+      "AccountBalanceSummaryDto": {
+        "type": "object",
+        "properties": {
+          "currencyCode": {
+            "type": "string",
+            "example": "USD"
+          },
+          "totalBalance": {
+            "type": "string",
+            "example": "5500.0000",
+            "description": "Sum of all account balances in this currency"
+          },
+          "accountCount": {
+            "type": "number",
+            "example": 2,
+            "description": "Number of accounts in this currency"
+          }
+        },
+        "required": [
+          "currencyCode",
+          "totalBalance",
+          "accountCount"
+        ]
+      },
+      "AccountSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "balances": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountBalanceSummaryDto"
+            }
+          },
+          "totalAccounts": {
+            "type": "number",
+            "example": 5,
+            "description": "Total number of active accounts"
+          }
+        },
+        "required": [
+          "balances",
+          "totalAccounts"
+        ]
+      },
+      "UpdateAccountDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Account name",
+            "example": "My Checking Account",
+            "maxLength": 100
+          },
+          "balance": {
+            "type": "number",
+            "description": "Initial balance (defaults to 0)",
+            "example": 1500.5,
+            "default": 0
+          },
+          "color": {
+            "type": "string",
+            "description": "Hex color code for UI",
+            "example": "#FF5733"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Icon identifier for the app UI",
+            "example": "credit-card"
+          },
+          "includeInTotal": {
+            "type": "boolean",
+            "description": "Include this account in the dashboard total balance",
+            "default": true
+          },
+          "creditLimit": {
+            "type": "number",
+            "description": "Credit limit (only for CREDIT_CARD type)",
+            "example": 5000
+          },
+          "statementClosingDay": {
+            "type": "number",
+            "description": "Statement closing day of month (1-31, only for CREDIT_CARD)",
+            "example": 15
+          },
+          "paymentDueDay": {
+            "type": "number",
+            "description": "Payment due day of month (1-31, only for CREDIT_CARD)",
+            "example": 5
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Display order (lower = first)",
+            "example": 0,
+            "default": 0
+          }
+        }
+      },
+      "CreateCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Category name",
+            "example": "Groceries",
+            "maxLength": 100
+          },
+          "type": {
+            "type": "string",
+            "description": "Transaction type this category applies to",
+            "enum": [
+              "EXPENSE",
+              "INCOME",
+              "TRANSFER"
+            ],
+            "example": "EXPENSE"
+          },
+          "parentId": {
+            "type": "string",
+            "description": "Parent category ID. If set, this becomes a subcategory. Max 2-level depth.",
+            "example": "cm3xk7z9w0001jn08abc12345"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Icon identifier for the app UI",
+            "example": "shopping-cart"
+          },
+          "color": {
+            "type": "string",
+            "description": "Hex color code for UI",
+            "example": "#FF6B6B"
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Display order (lower = first)",
+            "example": 0,
+            "default": 0
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ]
+      },
+      "CategoryResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cm3xk7z9w0001jn08abc12345"
+          },
+          "name": {
+            "type": "string",
+            "example": "Food & Drinks"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "EXPENSE",
+              "INCOME",
+              "TRANSFER"
+            ],
+            "example": "EXPENSE"
+          },
+          "parentId": {
+            "type": "string",
+            "example": "cm3xk7z9w0001jn08abc12345"
+          },
+          "icon": {
+            "type": "string",
+            "example": "utensils"
+          },
+          "color": {
+            "type": "string",
+            "example": "#FF6B6B"
+          },
+          "isSystem": {
+            "type": "boolean",
+            "example": false,
+            "description": "System categories cannot be edited or deleted"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "sortOrder": {
+            "type": "number",
+            "example": 0
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2025-01-15T10:30:00.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2025-01-15T10:30:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "isSystem",
+          "isActive",
+          "sortOrder",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CategoryWithChildrenDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cm3xk7z9w0001jn08abc12345"
+          },
+          "name": {
+            "type": "string",
+            "example": "Food & Drinks"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "EXPENSE",
+              "INCOME",
+              "TRANSFER"
+            ],
+            "example": "EXPENSE"
+          },
+          "parentId": {
+            "type": "string",
+            "example": "cm3xk7z9w0001jn08abc12345"
+          },
+          "icon": {
+            "type": "string",
+            "example": "utensils"
+          },
+          "color": {
+            "type": "string",
+            "example": "#FF6B6B"
+          },
+          "isSystem": {
+            "type": "boolean",
+            "example": false,
+            "description": "System categories cannot be edited or deleted"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "sortOrder": {
+            "type": "number",
+            "example": 0
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2025-01-15T10:30:00.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2025-01-15T10:30:00.000Z"
+          },
+          "children": {
+            "description": "Subcategories (second level)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "isSystem",
+          "isActive",
+          "sortOrder",
+          "createdAt",
+          "updatedAt",
+          "children"
+        ]
+      },
+      "CategoryTreeResponseDto": {
+        "type": "object",
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryWithChildrenDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 15,
+            "description": "Total number of categories (including children)"
+          }
+        },
+        "required": [
+          "categories",
+          "total"
+        ]
+      },
+      "UpdateCategoryDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Category name",
+            "example": "Groceries",
+            "maxLength": 100
+          },
+          "icon": {
+            "type": "string",
+            "description": "Icon identifier for the app UI",
+            "example": "shopping-cart"
+          },
+          "color": {
+            "type": "string",
+            "description": "Hex color code for UI",
+            "example": "#FF6B6B"
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Display order (lower = first)",
+            "example": 0,
+            "default": 0
+          }
+        }
       }
     }
   }

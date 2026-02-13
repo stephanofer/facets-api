@@ -607,4 +607,50 @@ describe('AuthService', () => {
       });
     });
   });
+
+  // ==========================================================================
+  // Access Token Cookie Management Tests
+  // ==========================================================================
+
+  describe('setAccessTokenCookie', () => {
+    it('should set HttpOnly cookie with correct options', () => {
+      const mockRes = {
+        cookie: jest.fn(),
+      } as unknown as import('express').Response;
+
+      authService.setAccessTokenCookie(mockRes, 'test-access-token');
+
+      expect(mockRes.cookie).toHaveBeenCalledWith(
+        'accessToken',
+        'test-access-token',
+        expect.objectContaining({
+          httpOnly: true,
+          secure: false, // Not production in tests
+          sameSite: 'strict',
+          path: '/',
+        }),
+      );
+
+      // Verify maxAge is set and is a positive number (1 hour in ms)
+      const cookieOptions = (mockRes.cookie as jest.Mock).mock.calls[0][2];
+      expect(cookieOptions.maxAge).toBe(1 * 60 * 60 * 1000);
+    });
+  });
+
+  describe('clearAccessTokenCookie', () => {
+    it('should clear the access token cookie with correct options', () => {
+      const mockRes = {
+        clearCookie: jest.fn(),
+      } as unknown as import('express').Response;
+
+      authService.clearAccessTokenCookie(mockRes);
+
+      expect(mockRes.clearCookie).toHaveBeenCalledWith('accessToken', {
+        httpOnly: true,
+        secure: false,
+        sameSite: 'strict',
+        path: '/',
+      });
+    });
+  });
 });
