@@ -1,98 +1,55 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+<div align="center">
+  
+# ✨ Facets API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+**The intelligent, scalable backbone for modern financial management.**
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+[![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)](https://nestjs.com/)
+[![Prisma](https://img.shields.io/badge/Prisma-2D3748?style=for-the-badge&logo=prisma&logoColor=white)](https://prisma.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgresql.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org/)
 
-## Description
+*Robust. Secure. Beautifully crafted.*
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+---
 
-## Project setup
+</div>
 
-```bash
-$ pnpm install
-```
+## 🌌 The Vision
 
-## Compile and run the project
+**Facets** is more than just a financial tracker; it's a comprehensive SaaS platform designed to bring clarity to personal and business finances. Built with a modular, enterprise-grade architecture, the Facets API powers a seamless experience for tracking wealth, managing subscriptions, planning goals, and even handling localized tax complexities.
 
-```bash
-# development
-$ pnpm run start
+We believe that financial software should be as elegant under the hood as the interfaces users interact with every day.
 
-# watch mode
-$ pnpm run start:dev
+## 🚀 Key Features
 
-# production mode
-$ pnpm run start:prod
-```
+*   **🛡️ Ironclad Authentication:** Secure, dual-transport auth system featuring JWTs, secure cookies, and One-Time Password (OTP) capabilities for maximum protection.
+*   **💳 Core Financial Engine:** Complete management of Accounts, Categories, Transactions, Debts, Loans, and financial Goals.
+*   **🔁 Subscription SaaS Model:** Built-in, fully-fledged subscription and plan management to easily handle different tiers of users.
+*   **⚙️ Deep Personalization:** User profile and preference models to tailor the experience down to the last detail.
+*   **☁️ Cloud Native Storage:** Seamless integration with S3-compatible cloud storage (R2) for secure file and document handling.
+*   **🇵🇪 Localized Intelligence:** Specialized localized features such as the Peruvian Tax Assistant, bringing real-world value to specific markets.
+*   **📊 Observability & Reliability:** Integrated Sentry monitoring, robust health checks, and a scalable background jobs processing engine.
 
-## Run tests
+## 🛠️ The Tech Stack
 
-```bash
-# unit tests
-$ pnpm run test
+This API is built using modern, type-safe, and highly scalable technologies:
 
-# e2e tests
-$ pnpm run test:e2e
+*   **Framework:** [NestJS](https://nestjs.com/) - Providing a structured, highly testable backend.
+*   **Language:** [TypeScript](https://www.typescriptlang.org/) - For end-to-end type safety.
+*   **Database ORM:** [Prisma](https://www.prisma.io/) - The next-generation Node.js and TypeScript ORM.
+*   **Database:** [PostgreSQL](https://www.postgresql.org/) - The world's most advanced open-source relational database.
+*   **Mailing:** [Mailtrap](https://mailtrap.io/) - Reliable email delivery for transactional emails.
+*   **Validation:** [Zod](https://zod.dev/) & [Class-Validator](https://github.com/typestack/class-validator) - Ensuring pristine data integrity on every request.
 
-# test coverage
-$ pnpm run test:cov
-```
+## 🎯 Designed for Growth
 
-## Deployment
+Facets API isn't just an endpoint layer; it's a foundation. With features mapped into clear modules (`Accounts`, `Auth`, `Categories`, `Subscriptions`, `Users`, `Storage`), adding new domains or scaling existing ones is natural and frictionless.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Whether you're managing a single user's micro-transactions or handling complex, recurring subscription logic for thousands, Facets is engineered to deliver without breaking a sweat.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+---
 
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+<div align="center">
+  <i>Built with passion, typed with precision.</i>
+</div>
