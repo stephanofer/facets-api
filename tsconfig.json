@@ -24,7 +24,8 @@
       "@database/*": ["src/database/*"],
       "@modules/*": ["src/modules/*"],
       "@health/*": ["src/health/*"],
-      "@mail/*": ["src/mail/*"]
+      "@mail/*": ["src/mail/*"],
+      "@storage/*": ["src/storage/*"]
     },
 
     "inlineSources": true,

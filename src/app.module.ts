@@ -7,6 +7,7 @@ import { ConfigModule } from '@config/config.module';
 import { DatabaseModule } from '@database/database.module';
 import { HealthModule } from '@health/health.module';
 import { MailModule } from '@mail/mail.module';
+import { StorageModule } from '@storage/storage.module';
 import { AuthModule } from '@modules/auth/auth.module';
 import { SubscriptionsModule } from '@modules/subscriptions/subscriptions.module';
 import { AccountsModule } from '@modules/accounts/accounts.module';
@@ -22,6 +23,7 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
     ConfigModule,
     DatabaseModule,
     MailModule,
+    StorageModule,
 
     // Multi-tier rate limiting (protects all endpoints by default)
     ThrottlerModule.forRoot({
