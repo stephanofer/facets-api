@@ -59,4 +59,8 @@ export class ConfigService {
   get cookie(): Configuration['cookie'] {
     return this.configService.get('cookie', { infer: true });
   }
+
+  get storage(): Configuration['storage'] {
+    return this.configService.get('storage', { infer: true });
+  }
 }

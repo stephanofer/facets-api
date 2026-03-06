@@ -27,6 +27,8 @@
     "sentry:sourcemaps": "sentry-cli sourcemaps inject --org stephanofer --project facets ./dist && sentry-cli sourcemaps upload --org stephanofer --project facets ./dist"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1003.0",
+    "@aws-sdk/s3-request-presigner": "^3.1003.0",
     "@nestjs/cache-manager": "^3.1.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
@@ -69,6 +71,7 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.14",
+    "@types/multer": "^2.0.0",
     "@types/node": "^22.10.7",
     "@types/passport-jwt": "^4.0.1",
     "@types/pg": "^8.16.0",

@@ -34,6 +34,13 @@ export const envSchema = z.object({
   MAILTRAP_SENDER_NAME: z.string().default('Facets'),
   MAILTRAP_SANDBOX: z.coerce.boolean().default(true),
   MAILTRAP_TEST_INBOX_ID: z.coerce.number().optional(),
+  // Storage (R2)
+  R2_ACCOUNT_ID: z.string().min(1),
+  R2_ACCESS_KEY_ID: z.string().min(1),
+  R2_SECRET_ACCESS_KEY: z.string().min(1),
+  R2_PUBLIC_BUCKET: z.string().min(1),
+  R2_PRIVATE_BUCKET: z.string().min(1),
+  R2_PUBLIC_URL: z.url(), // URL base del bucket público
 });
 
 export type Env = z.infer<typeof envSchema>;
