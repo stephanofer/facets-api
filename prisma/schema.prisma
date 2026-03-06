@@ -44,6 +44,7 @@ model User {
   goals             Goal[]
   goalContributions GoalContribution[]
   recurringPayments RecurringPayment[]
+  files             File[]
 
   @@index([email])
   @@index([status])
@@ -330,8 +331,9 @@ model UserProfile {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Personal details
-  phone     String? @db.VarChar(20) // E.164 format: +5491155557777
-  avatarUrl String? @db.VarChar(500)
+  phone        String? @db.VarChar(20) // E.164 format: +5491155557777
+  avatarFileId String? @unique
+  avatarFile   File?   @relation("ProfileAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
 
   // Localization
   countryCode  String?  @db.VarChar(2)
@@ -614,10 +616,8 @@ model Transaction {
   notes       String? // Extended notes (longer text)
   date        DateTime @db.Date // User-facing date (when it happened)
 
-  // Attachments (receipt photos, etc.) — stored as URL references
-  /// Array of attachment URLs. We store URLs, not blobs.
-  /// Future: could be a separate table if we need metadata per attachment.
-  attachments Json? // string[] of URLs
+  // Attachments (receipt photos, documents, etc.)
+  attachments File[] @relation("TransactionAttachments")
 
   // Tags for flexible user-defined filtering (comma-separated or JSON array)
   tags Json? // string[] — e.g. ["vacation", "work", "tax-deductible"]
@@ -1090,4 +1090,63 @@ enum RecurringStatus {
   PAUSED
   COMPLETED // Max occurrences reached or endDate passed
   CANCELLED
+}
+
+// =============================================================================
+// PHASE 13: File Storage
+// =============================================================================
+
+enum FilePurpose {
+  AVATAR
+  TRANSACTION_RECEIPT
+  // Agregar futuros propósitos acá
+}
+
+/// Source of truth for all files stored in R2 (Cloudflare Object Storage).
+///
+/// DESIGN DECISIONS:
+/// - Every file uploaded lives exactly once in this table, regardless of context
+///   (avatar, receipt, etc.). Context is determined by `purpose`.
+/// - `bucket` + `key` together are unique. This prevents the same physical file
+///   from being registered twice. Also enables idempotent cleanup operations.
+/// - `publicUrl` is only set for files in the public bucket. Private files use
+///   presigned URLs generated on-demand (not stored here because they expire).
+/// - Soft delete (`deletedAt`) allows recovery and defers actual R2 deletion
+///   to a background cron job, avoiding coupling HTTP requests to external calls.
+/// - `userId` is required on every file for multi-tenancy scoping and ownership checks.
+///
+/// CONTEXT RELATIONS (optional FKs, at most one will be set per file):
+/// - `transactionId` — set for TRANSACTION_RECEIPT files
+/// - `profileAvatar` — inverse side of UserProfile.avatarFileId (no FK on File side)
+model File {
+  id     String @id @default(cuid(2))
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  purpose      FilePurpose
+  bucket       String      @db.VarChar(100) // "facets-public" | "facets-private"
+  key          String      @db.VarChar(500) // path en R2: "avatars/<uuid>.webp"
+  mimeType     String      @db.VarChar(100) // detectado por magic bytes en el servidor
+  size         Int         // tamaño en bytes
+  originalName String      @db.VarChar(255) // nombre original del cliente (solo display)
+
+  publicUrl String? @db.VarChar(500) // solo si bucket público; NULL para privados
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete — R2 cleanup via cron job
+
+  // Relación con Transaction (un file pertenece a una sola transaction, o a ninguna)
+  transactionId String?
+  transaction   Transaction? @relation("TransactionAttachments", fields: [transactionId], references: [id], onDelete: SetNull)
+
+  // Relación inversa con UserProfile (un file puede ser avatar de un perfil, o de ninguno)
+  profileAvatar UserProfile? @relation("ProfileAvatar")
+
+  @@unique([bucket, key])
+  @@index([userId])
+  @@index([userId, purpose])
+  @@index([transactionId])
+  @@index([deletedAt])
+  @@map("files")
 }
