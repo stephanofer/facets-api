@@ -8,6 +8,7 @@ import { AllExceptionsFilter } from '@common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from '@common/interceptors/transform-response.interceptor';
 import { PrismaService } from '@database/prisma.service';
 import { ConfigService } from '@config/config.service';
+import { STORAGE_PROVIDER } from '@storage/interfaces/storage-provider.interface';
 
 /**
  * No-op throttler guard for E2E tests.
@@ -25,6 +26,13 @@ export async function createTestApp(): Promise<INestApplication> {
   })
     .overrideProvider(ThrottlerGuard)
     .useClass(NoopThrottlerGuard)
+    .overrideProvider(STORAGE_PROVIDER)
+    .useValue({
+      upload: async () => undefined,
+      delete: async () => undefined,
+      getPresignedUrl: async (bucket: string, key: string) =>
+        `https://cdn.e2e.test/${bucket}/${key}`,
+    })
     .compile();
 
   const app = moduleFixture.createNestApplication();
@@ -123,6 +131,8 @@ export async function cleanupTestUser(
 
   // Delete in dependency order
   await prisma.$transaction([
+    prisma.userProfile.deleteMany({ where: { userId } }),
+    prisma.file.deleteMany({ where: { userId } }),
     prisma.account.deleteMany({ where: { userId } }),
     prisma.category.deleteMany({ where: { userId, isSystem: false } }),
     prisma.usageRecord.deleteMany({ where: { userId } }),

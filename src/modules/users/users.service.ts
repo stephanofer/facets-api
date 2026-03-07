@@ -4,7 +4,11 @@ import {
   UserWithoutPassword,
   CreateUserData,
 } from '@modules/users/users.repository';
-import { User, UserStatus } from '../../generated/prisma/client';
+import {
+  File as StoredFile,
+  User,
+  UserStatus,
+} from '../../generated/prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -50,6 +54,30 @@ export class UsersService {
    */
   async updatePassword(userId: string, hashedPassword: string): Promise<User> {
     return this.usersRepository.updatePassword(userId, hashedPassword);
+  }
+
+  /**
+   * Get current avatar file for a user, if present
+   */
+  async findAvatarByUserId(userId: string): Promise<StoredFile | null> {
+    return this.usersRepository.findAvatarByUserId(userId);
+  }
+
+  /**
+   * Replace the current avatar file reference for a user
+   */
+  async replaceAvatar(
+    userId: string,
+    newAvatarFileId: string,
+  ): Promise<StoredFile> {
+    return this.usersRepository.replaceAvatar(userId, newAvatarFileId);
+  }
+
+  /**
+   * Remove the current avatar for a user
+   */
+  async removeAvatar(userId: string): Promise<void> {
+    return this.usersRepository.removeAvatar(userId);
   }
 
   /**

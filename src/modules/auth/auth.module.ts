@@ -10,6 +10,7 @@ import { UsersModule } from '@modules/users/users.module';
 import { OtpModule } from '@modules/otp/otp.module';
 import { SubscriptionsModule } from '@modules/subscriptions/subscriptions.module';
 import { MailModule } from '@mail/mail.module';
+import { StorageModule } from '@storage/storage.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { MailModule } from '@mail/mail.module';
     OtpModule,
     SubscriptionsModule,
     MailModule,
+    StorageModule,
   ],
   controllers: [AuthController],
   providers: [

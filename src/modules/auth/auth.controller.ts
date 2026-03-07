@@ -2,12 +2,16 @@ import {
   Controller,
   Post,
   Get,
+  Put,
+  Delete,
   Body,
   UseGuards,
   Req,
   Res,
   HttpCode,
   HttpStatus,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,14 +19,17 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from '@modules/auth/auth.service';
 import { RegisterDto } from '@modules/auth/dtos/register.dto';
 import { LoginDto } from '@modules/auth/dtos/login.dto';
 import { RefreshTokenDto } from '@modules/auth/dtos/refresh-token.dto';
+import { UploadAvatarDto } from '@modules/auth/dtos/upload-avatar.dto';
 import {
   VerifyEmailDto,
   ResendVerificationDto,
@@ -41,6 +48,8 @@ import {
 import { Public } from '@common/decorators/public.decorator';
 import { CurrentUser } from '@common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '@modules/auth/strategies/jwt.strategy';
+import { createFileValidators } from '@storage/config/file-purpose.config';
+import { FilePurpose } from '../../generated/prisma/client';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -424,6 +433,55 @@ export class AuthController {
   })
   async getMe(@CurrentUser() user: AuthenticatedUser): Promise<AuthUserDto> {
     return this.authService.getMe(user);
+  }
+
+  /**
+   * Upload or replace current user avatar
+   */
+  @Put('me/avatar')
+  @ApiBearerAuth()
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Upload or replace avatar',
+    description:
+      'Upload a new avatar for the authenticated user. Replaces the previous avatar if one already exists.',
+  })
+  @ApiBody({ type: UploadAvatarDto })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Avatar uploaded successfully',
+    type: AuthUserDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.UNPROCESSABLE_ENTITY,
+    description: 'Invalid file type or file too large',
+  })
+  async uploadAvatar(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile(createFileValidators(FilePurpose.AVATAR))
+    file: Express.Multer.File,
+  ): Promise<AuthUserDto> {
+    return this.authService.uploadAvatar(user.sub, file);
+  }
+
+  /**
+   * Remove current user avatar
+   */
+  @Delete('me/avatar')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Remove avatar',
+    description:
+      'Remove the current avatar for the authenticated user. Safe to call even when the user has no avatar.',
+  })
+  @ApiResponse({
+    status: HttpStatus.NO_CONTENT,
+    description: 'Avatar removed successfully',
+  })
+  async removeAvatar(@CurrentUser() user: AuthenticatedUser): Promise<void> {
+    await this.authService.removeAvatar(user.sub);
   }
 
   // ===========================================================================

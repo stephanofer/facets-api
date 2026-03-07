@@ -12,6 +12,7 @@
     "^@database/(.*)$": "<rootDir>/../src/database/$1",
     "^@modules/(.*)$": "<rootDir>/../src/modules/$1",
     "^@health/(.*)$": "<rootDir>/../src/health/$1",
-    "^@mail/(.*)$": "<rootDir>/../src/mail/$1"
+    "^@mail/(.*)$": "<rootDir>/../src/mail/$1",
+    "^@storage/(.*)$": "<rootDir>/../src/storage/$1"
   }
 }

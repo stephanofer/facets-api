@@ -721,6 +721,66 @@
         ]
       }
     },
+    "/api/v1/auth/me/avatar": {
+      "put": {
+        "description": "Upload a new avatar for the authenticated user. Replaces the previous avatar if one already exists.",
+        "operationId": "AuthController_uploadAvatar_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadAvatarDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Avatar uploaded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid file type or file too large"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Upload or replace avatar",
+        "tags": [
+          "Authentication"
+        ]
+      },
+      "delete": {
+        "description": "Remove the current avatar for the authenticated user. Safe to call even when the user has no avatar.",
+        "operationId": "AuthController_removeAvatar_v1",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "Avatar removed successfully"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove avatar",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
     "/api/v1/plans": {
       "get": {
         "description": "Get all available subscription plans with their features and pricing.",
@@ -1872,6 +1932,42 @@
           "lastName"
         ]
       },
+      "FileResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cm8storage0001jn08abc12345"
+          },
+          "url": {
+            "type": "string",
+            "example": "https://pub-xxx.r2.dev/avatars/550e8400-e29b-41d4-a716-446655440000.webp"
+          },
+          "mimeType": {
+            "type": "string",
+            "example": "image/webp"
+          },
+          "size": {
+            "type": "number",
+            "example": 45200
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "AVATAR",
+              "TRANSACTION_RECEIPT"
+            ],
+            "example": "AVATAR"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "mimeType",
+          "size",
+          "purpose"
+        ]
+      },
       "AuthPlanDto": {
         "type": "object",
         "properties": {
@@ -1935,6 +2031,14 @@
             "type": "string",
             "description": "Account creation date",
             "example": "2026-02-04T12:00:00.000Z"
+          },
+          "avatar": {
+            "description": "Current user avatar file metadata",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FileResponseDto"
+              }
+            ]
           },
           "plan": {
             "description": "Current subscription plan",
@@ -2150,6 +2254,19 @@
             "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
           }
         }
+      },
+      "UploadAvatarDto": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "Avatar image file (JPEG, PNG, or WebP, max 2MB)."
+          }
+        },
+        "required": [
+          "file"
+        ]
       },
       "PlanFeatureDto": {
         "type": "object",

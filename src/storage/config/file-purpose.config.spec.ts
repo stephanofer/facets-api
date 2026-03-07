@@ -1,5 +1,5 @@
 import {
-  FileTypeValidator,
+  FileValidator,
   MaxFileSizeValidator,
   ParseFilePipe,
 } from '@nestjs/common';
@@ -33,7 +33,7 @@ describe('file-purpose.config', () => {
       expect(pipe).toBeInstanceOf(ParseFilePipe);
       expect(validators).toHaveLength(2);
       expect(validators[0]).toBeInstanceOf(MaxFileSizeValidator);
-      expect(validators[1]).toBeInstanceOf(FileTypeValidator);
+      expect(validators[1]).toBeInstanceOf(FileValidator);
       expect(
         (
           validators[0] as MaxFileSizeValidator & {
@@ -46,18 +46,22 @@ describe('file-purpose.config', () => {
     it('should allow only the configured mime types for transaction receipts', () => {
       const pipe = createFileValidators(FilePurpose.TRANSACTION_RECEIPT);
       const validators = pipe.getValidators();
-      const fileTypeValidator = validators[1] as FileTypeValidator & {
-        validationOptions: { fileType: RegExp };
-      };
+      const mimeTypeValidator = validators[1] as FileValidator;
 
       expect(
-        fileTypeValidator.validationOptions.fileType.test('image/jpeg'),
+        mimeTypeValidator.isValid({
+          mimetype: 'image/jpeg',
+        } as Express.Multer.File),
       ).toBe(true);
       expect(
-        fileTypeValidator.validationOptions.fileType.test('application/pdf'),
+        mimeTypeValidator.isValid({
+          mimetype: 'application/pdf',
+        } as Express.Multer.File),
       ).toBe(true);
       expect(
-        fileTypeValidator.validationOptions.fileType.test('image/svg+xml'),
+        mimeTypeValidator.isValid({
+          mimetype: 'image/svg+xml',
+        } as Express.Multer.File),
       ).toBe(false);
     });
 

@@ -11,6 +11,7 @@ import * as crypto from 'crypto';
 import { Response, CookieOptions } from 'express';
 import { ConfigService } from '@config/config.service';
 import { PrismaService } from '@database/prisma.service';
+import { FileService } from '@storage/services/file.service';
 import { UsersService } from '@modules/users/users.service';
 import { RefreshTokensRepository } from '@modules/auth/refresh-tokens.repository';
 import { OtpService } from '@modules/otp/otp.service';
@@ -39,9 +40,11 @@ import {
 import { BusinessException } from '@common/exceptions/business.exception';
 import { ERROR_CODES } from '@common/constants/app.constants';
 import {
+  File as StoredFile,
   User,
   OtpType,
   UserStatus,
+  FilePurpose,
   SubscriptionStatus,
 } from '../../generated/prisma/client';
 
@@ -57,6 +60,7 @@ export class AuthService {
   private readonly refreshTokenExpirySeconds: number;
 
   constructor(
+    private readonly fileService: FileService,
     private readonly usersService: UsersService,
     private readonly refreshTokensRepository: RefreshTokensRepository,
     private readonly jwtService: JwtService,
@@ -149,7 +153,7 @@ export class AuthService {
     return {
       message:
         'Registration successful. Please check your email to verify your account.',
-      user: this.toAuthUserDto(user, {
+      user: await this.toAuthUserDto(user, {
         code: subscription.plan.code,
         name: subscription.plan.name,
       }),
@@ -197,7 +201,7 @@ export class AuthService {
 
     return {
       tokens,
-      user: this.toAuthUserDto(user, plan),
+      user: await this.toAuthUserDto(user, plan),
     };
   }
 
@@ -252,7 +256,7 @@ export class AuthService {
     return {
       message: 'Email verified successfully. You are now logged in.',
       tokens,
-      user: this.toAuthUserDto(updatedUser, plan),
+      user: await this.toAuthUserDto(updatedUser, plan),
     };
   }
 
@@ -456,8 +460,65 @@ export class AuthService {
     sub: string;
     user: User;
   }): Promise<AuthUserDto> {
-    const plan = await this.getUserPlan(authenticatedUser.sub);
-    return this.toAuthUserDto(authenticatedUser.user, plan);
+    const [plan, avatar] = await Promise.all([
+      this.getUserPlan(authenticatedUser.sub),
+      this.usersService.findAvatarByUserId(authenticatedUser.sub),
+    ]);
+    return this.toAuthUserDto(authenticatedUser.user, plan, avatar);
+  }
+
+  /**
+   * Upload or replace the current authenticated user's avatar
+   */
+  async uploadAvatar(
+    userId: string,
+    file: Express.Multer.File,
+  ): Promise<AuthUserDto> {
+    const user = await this.usersService.findById(userId);
+
+    if (!user) {
+      throw new BusinessException(
+        ERROR_CODES.USER_NOT_FOUND,
+        'User not found',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const uploadedAvatar = await this.fileService.upload(
+      file,
+      FilePurpose.AVATAR,
+      userId,
+    );
+
+    let avatar: StoredFile;
+
+    try {
+      avatar = await this.usersService.replaceAvatar(userId, uploadedAvatar.id);
+    } catch (error) {
+      await this.safeDeleteUploadedAvatar(uploadedAvatar.id, userId);
+      throw error;
+    }
+
+    const plan = await this.getUserPlan(userId);
+
+    return this.toAuthUserDto(user, plan, avatar);
+  }
+
+  /**
+   * Remove the current authenticated user's avatar
+   */
+  async removeAvatar(userId: string): Promise<void> {
+    const user = await this.usersService.findById(userId);
+
+    if (!user) {
+      throw new BusinessException(
+        ERROR_CODES.USER_NOT_FOUND,
+        'User not found',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    await this.usersService.removeAvatar(userId);
   }
 
   // ==========================================================================
@@ -592,10 +653,11 @@ export class AuthService {
   /**
    * Convert User entity to AuthUserDto (excludes sensitive fields)
    */
-  private toAuthUserDto(
+  private async toAuthUserDto(
     user: User,
     plan?: { code: string; name: string },
-  ): AuthUserDto {
+    avatar?: StoredFile | null,
+  ): Promise<AuthUserDto> {
     return {
       id: user.id,
       email: user.email,
@@ -604,8 +666,25 @@ export class AuthService {
       emailVerified: user.emailVerified,
       status: user.status,
       createdAt: user.createdAt,
+      avatar: avatar ? await this.fileService.toResponseDto(avatar) : undefined,
       plan,
     };
+  }
+
+  private async safeDeleteUploadedAvatar(
+    fileId: string,
+    userId: string,
+  ): Promise<void> {
+    try {
+      await this.fileService.delete(fileId, userId);
+    } catch (cleanupError) {
+      this.logger.error(
+        `Failed to cleanup uploaded avatar ${fileId} for user ${userId}`,
+        cleanupError instanceof Error
+          ? cleanupError.stack
+          : String(cleanupError),
+      );
+    }
   }
 
   /**

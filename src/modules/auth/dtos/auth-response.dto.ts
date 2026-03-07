@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { FileResponseDto } from '@storage/dtos/file-response.dto';
 
 /**
  * JWT Payload structure for access tokens
@@ -108,6 +109,12 @@ export class AuthUserDto {
     example: '2026-02-04T12:00:00.000Z',
   })
   createdAt: Date;
+
+  @ApiPropertyOptional({
+    type: FileResponseDto,
+    description: 'Current user avatar file metadata',
+  })
+  avatar?: FileResponseDto;
 
   @ApiPropertyOptional({
     type: AuthPlanDto,

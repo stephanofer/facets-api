@@ -11,6 +11,7 @@ import { MailService } from '@mail/mail.service';
 import { ConfigService } from '@config/config.service';
 import { PrismaService } from '@database/prisma.service';
 import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
+import { FileService } from '@storage/services/file.service';
 import { UserStatus, OtpType } from '../../generated/prisma/client';
 
 // Mock argon2
@@ -25,6 +26,7 @@ describe('AuthService', () => {
   let mailService: jest.Mocked<MailService>;
   let prismaService: jest.Mocked<PrismaService>;
   let subscriptionsService: jest.Mocked<SubscriptionsService>;
+  let fileService: jest.Mocked<FileService>;
 
   const mockUser = {
     id: 'test-user-id',
@@ -57,6 +59,22 @@ describe('AuthService', () => {
     otpId: 'otp-123',
   };
 
+  const mockAvatarFile = {
+    id: 'file-1',
+    userId: mockUser.id,
+    purpose: 'AVATAR',
+    bucket: 'facets-public',
+    key: 'avatars/file-1.png',
+    mimeType: 'image/png',
+    size: 128,
+    originalName: 'avatar.png',
+    publicUrl: 'https://cdn.facets.test/avatars/file-1.png',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+    transactionId: null,
+  };
+
   beforeEach(async () => {
     const mockUsersService = {
       create: jest.fn(),
@@ -65,6 +83,7 @@ describe('AuthService', () => {
       emailExists: jest.fn(),
       verifyEmail: jest.fn(),
       updatePassword: jest.fn(),
+      removeAvatar: jest.fn(),
       excludePassword: jest.fn(),
       canLogin: jest.fn(),
     };
@@ -115,6 +134,12 @@ describe('AuthService', () => {
       getUserSubscription: jest.fn(),
     };
 
+    const mockFileService = {
+      upload: jest.fn(),
+      delete: jest.fn(),
+      toResponseDto: jest.fn(),
+    };
+
     const mockPrismaService = {
       $transaction: jest.fn(),
     };
@@ -133,6 +158,7 @@ describe('AuthService', () => {
         { provide: OtpService, useValue: mockOtpService },
         { provide: MailService, useValue: mockMailService },
         { provide: SubscriptionsService, useValue: mockSubscriptionsService },
+        { provide: FileService, useValue: mockFileService },
       ],
     }).compile();
 
@@ -144,6 +170,15 @@ describe('AuthService', () => {
     mailService = module.get(MailService);
     prismaService = module.get(PrismaService);
     subscriptionsService = module.get(SubscriptionsService);
+    fileService = module.get(FileService);
+
+    fileService.toResponseDto.mockImplementation(async (file) => ({
+      id: file.id,
+      url: file.publicUrl ?? 'https://cdn.facets.test/fallback',
+      mimeType: file.mimeType,
+      size: file.size,
+      purpose: file.purpose,
+    }));
   });
 
   describe('register', () => {
@@ -365,6 +400,7 @@ describe('AuthService', () => {
       subscriptionsService.getUserSubscription.mockResolvedValue({
         plan: { code: 'FREE', name: 'Free' },
       } as never);
+      usersService.findAvatarByUserId = jest.fn().mockResolvedValue(null);
 
       const result = await authService.getMe({
         sub: mockUser.id,
@@ -373,6 +409,99 @@ describe('AuthService', () => {
 
       expect(result.id).toBe(mockUser.id);
       expect(result.email).toBe(mockUser.email);
+    });
+
+    it('should include avatar when user has one', async () => {
+      subscriptionsService.getUserSubscription.mockResolvedValue({
+        plan: { code: 'FREE', name: 'Free' },
+      } as never);
+      usersService.findAvatarByUserId = jest
+        .fn()
+        .mockResolvedValue(mockAvatarFile as never);
+
+      const result = await authService.getMe({
+        sub: mockUser.id,
+        user: mockUser,
+      });
+
+      expect(result.avatar).toMatchObject({
+        id: mockAvatarFile.id,
+        url: mockAvatarFile.publicUrl,
+      });
+    });
+  });
+
+  describe('uploadAvatar', () => {
+    const uploadFile = {
+      fieldname: 'file',
+      originalname: 'avatar.png',
+      encoding: '7bit',
+      mimetype: 'image/png',
+      size: 128,
+      destination: '',
+      filename: '',
+      path: '',
+      stream: undefined,
+      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
+    } as unknown as Express.Multer.File;
+
+    it('should upload and replace avatar successfully', async () => {
+      usersService.findById.mockResolvedValue(mockUser);
+      usersService.replaceAvatar = jest
+        .fn()
+        .mockResolvedValue(mockAvatarFile as never);
+      subscriptionsService.getUserSubscription.mockResolvedValue({
+        plan: { code: 'FREE', name: 'Free' },
+      } as never);
+      fileService.upload.mockResolvedValue(mockAvatarFile as never);
+
+      const result = await authService.uploadAvatar(mockUser.id, uploadFile);
+
+      expect(fileService.upload).toHaveBeenCalledWith(
+        uploadFile,
+        'AVATAR',
+        mockUser.id,
+      );
+      expect(usersService.replaceAvatar).toHaveBeenCalledWith(
+        mockUser.id,
+        mockAvatarFile.id,
+      );
+      expect(result.avatar?.id).toBe(mockAvatarFile.id);
+    });
+
+    it('should cleanup uploaded file when avatar replacement fails', async () => {
+      usersService.findById.mockResolvedValue(mockUser);
+      usersService.replaceAvatar = jest
+        .fn()
+        .mockRejectedValue(new Error('replace failed'));
+      fileService.upload.mockResolvedValue(mockAvatarFile as never);
+      fileService.delete.mockResolvedValue(mockAvatarFile as never);
+
+      await expect(
+        authService.uploadAvatar(mockUser.id, uploadFile),
+      ).rejects.toThrow('replace failed');
+
+      expect(fileService.delete).toHaveBeenCalledWith(
+        mockAvatarFile.id,
+        mockUser.id,
+      );
+    });
+  });
+
+  describe('removeAvatar', () => {
+    it('should remove avatar successfully', async () => {
+      usersService.findById.mockResolvedValue(mockUser);
+      usersService.removeAvatar = jest.fn().mockResolvedValue(undefined);
+
+      await authService.removeAvatar(mockUser.id);
+
+      expect(usersService.removeAvatar).toHaveBeenCalledWith(mockUser.id);
+    });
+
+    it('should throw when user does not exist', async () => {
+      usersService.findById.mockResolvedValue(null);
+
+      await expect(authService.removeAvatar(mockUser.id)).rejects.toThrow();
     });
   });
 

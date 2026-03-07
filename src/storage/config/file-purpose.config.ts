@@ -1,5 +1,5 @@
 import {
-  FileTypeValidator,
+  FileValidator,
   HttpStatus,
   MaxFileSizeValidator,
   ParseFilePipe,
@@ -41,19 +41,32 @@ export function getFilePurposeRule(purpose: FilePurpose): FilePurposeRule {
 
 export function createFileValidators(purpose: FilePurpose): ParseFilePipe {
   const rule = getFilePurposeRule(purpose);
-  const fileTypePattern = new RegExp(
-    `^(${rule.allowedMimeTypes.map(escapeRegExp).join('|')})$`,
-  );
 
   return new ParseFilePipe({
     validators: [
       new MaxFileSizeValidator({ maxSize: rule.maxSizeBytes }),
-      new FileTypeValidator({ fileType: fileTypePattern }),
+      new AllowedMimeTypesValidator(rule.allowedMimeTypes),
     ],
     errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
   });
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+class AllowedMimeTypesValidator extends FileValidator<{
+  allowedMimeTypes: string[];
+}> {
+  constructor(allowedMimeTypes: string[]) {
+    super({ allowedMimeTypes });
+  }
+
+  override isValid(file?: Express.Multer.File): boolean {
+    if (!file) {
+      return false;
+    }
+
+    return this.validationOptions.allowedMimeTypes.includes(file.mimetype);
+  }
+
+  override buildErrorMessage(): string {
+    return `Validation failed (allowed file types: ${this.validationOptions.allowedMimeTypes.join(', ')})`;
+  }
 }
