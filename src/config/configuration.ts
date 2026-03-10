@@ -49,6 +49,20 @@ export const configuration = () => {
       publicUrl: process.env.R2_PUBLIC_URL,
       endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
     },
+    ai: {
+      accountId: process.env.AI_GATEWAY_ACCOUNT_ID,
+      gatewayId: process.env.AI_GATEWAY_ID,
+      apiToken: process.env.AI_GATEWAY_API_TOKEN,
+      requestTimeoutMs: parseInt(
+        process.env.AI_REQUEST_TIMEOUT_MS || '30000',
+        10,
+      ),
+      metadataEnvironment:
+        process.env.AI_METADATA_ENVIRONMENT ||
+        process.env.NODE_ENV ||
+        'development',
+      baseUrl: `https://gateway.ai.cloudflare.com/v1/${process.env.AI_GATEWAY_ACCOUNT_ID}/${process.env.AI_GATEWAY_ID}/compat`,
+    },
   };
 };
 

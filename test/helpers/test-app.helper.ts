@@ -1,3 +1,9 @@
+process.env.AI_GATEWAY_ACCOUNT_ID ??= 'test-account-id';
+process.env.AI_GATEWAY_ID ??= 'test-gateway-id';
+process.env.AI_GATEWAY_API_TOKEN ??= 'test-ai-gateway-token';
+process.env.AI_REQUEST_TIMEOUT_MS ??= '30000';
+process.env.AI_METADATA_ENVIRONMENT ??= 'test';
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { HttpAdapterHost, APP_GUARD } from '@nestjs/core';
@@ -6,9 +12,17 @@ import { ThrottlerGuard } from '@nestjs/throttler';
 import { AppModule } from '../../src/app.module';
 import { AllExceptionsFilter } from '@common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from '@common/interceptors/transform-response.interceptor';
+import {
+  AI_GATEWAY_CLIENT,
+  AiGatewayClient,
+} from '@ai/interfaces/ai-gateway-client.interface';
 import { PrismaService } from '@database/prisma.service';
 import { ConfigService } from '@config/config.service';
 import { STORAGE_PROVIDER } from '@storage/interfaces/storage-provider.interface';
+
+const aiGatewayClientMock: jest.Mocked<AiGatewayClient> = {
+  executeChatCompletion: jest.fn(),
+};
 
 /**
  * No-op throttler guard for E2E tests.
@@ -21,6 +35,8 @@ class NoopThrottlerGuard {
 }
 
 export async function createTestApp(): Promise<INestApplication> {
+  aiGatewayClientMock.executeChatCompletion.mockReset();
+
   const moduleFixture: TestingModule = await Test.createTestingModule({
     imports: [AppModule],
   })
@@ -33,6 +49,8 @@ export async function createTestApp(): Promise<INestApplication> {
       getPresignedUrl: async (bucket: string, key: string) =>
         `https://cdn.e2e.test/${bucket}/${key}`,
     })
+    .overrideProvider(AI_GATEWAY_CLIENT)
+    .useValue(aiGatewayClientMock)
     .compile();
 
   const app = moduleFixture.createNestApplication();
@@ -141,9 +159,15 @@ export async function cleanupTestUser(
     prisma.subscription.deleteMany({ where: { userId } }),
     prisma.user.deleteMany({ where: { id: userId } }),
   ]);
+
+  await prisma.$disconnect();
 }
 
 export async function cleanDatabase(prisma: PrismaService): Promise<void> {
   // Add table cleaning logic as models are added
   // Example: await prisma.$executeRaw`TRUNCATE users CASCADE`;
+}
+
+export function getAiGatewayClientMock(): jest.Mocked<AiGatewayClient> {
+  return aiGatewayClientMock;
 }

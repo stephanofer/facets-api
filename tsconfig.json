@@ -19,6 +19,7 @@
     "noFallthroughCasesInSwitch": false,
 
     "paths": {
+      "@ai/*": ["src/ai/*"],
       "@common/*": ["src/common/*"],
       "@config/*": ["src/config/*"],
       "@database/*": ["src/database/*"],

@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@config/config.service';
 import { PrismaClient } from '../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -18,6 +23,7 @@ const QUERY_THRESHOLDS = {
 export class PrismaService extends PrismaClient implements OnModuleInit {
   private readonly logger = new Logger(PrismaService.name);
   private readonly isDevelopment: boolean;
+  private pool!: Pool;
 
   constructor(private readonly configService: ConfigService) {
     const pool = new Pool({
@@ -28,7 +34,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     });
 
     const adapter = new PrismaPg(pool);
-
     // Enable query logging in development
     const isDev = configService.isDevelopment;
 
@@ -46,6 +51,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
       //     ],
     });
 
+    this.pool = pool;
     this.isDevelopment = isDev;
   }
 
@@ -62,6 +68,11 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
 
     await this.$connect();
     this.logger.log('Connected to database');
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.$disconnect();
+    await this.pool.end();
   }
 
   /**

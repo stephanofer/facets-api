@@ -63,4 +63,8 @@ export class ConfigService {
   get storage(): Configuration['storage'] {
     return this.configService.get('storage', { infer: true });
   }
+
+  get ai(): Configuration['ai'] {
+    return this.configService.get('ai', { infer: true });
+  }
 }

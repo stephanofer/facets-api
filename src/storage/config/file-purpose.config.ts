@@ -4,15 +4,28 @@ import {
   MaxFileSizeValidator,
   ParseFilePipe,
 } from '@nestjs/common';
+import { detectMimeTypeFromBuffer } from '@storage/helpers/file-key.helper';
 import { FilePurpose } from '../../generated/prisma/client';
 
-export interface FilePurposeRule {
+export interface UploadPurposeRule {
   maxSizeBytes: number;
   allowedMimeTypes: string[];
+}
+
+export interface FilePurposeRule extends UploadPurposeRule {
   bucket: 'public' | 'private';
   pathPrefix: string;
   presignedUrlTtl?: number;
 }
+
+export const TRANSIENT_UPLOAD_PURPOSES = {
+  VOUCHER_ANALYSIS: 'VOUCHER_ANALYSIS',
+} as const;
+
+export type TransientUploadPurpose =
+  (typeof TRANSIENT_UPLOAD_PURPOSES)[keyof typeof TRANSIENT_UPLOAD_PURPOSES];
+
+export type UploadPurpose = FilePurpose | TransientUploadPurpose;
 
 export const FILE_PURPOSE_CONFIG: Record<FilePurpose, FilePurposeRule> = {
   [FilePurpose.AVATAR]: {
@@ -35,12 +48,32 @@ export const FILE_PURPOSE_CONFIG: Record<FilePurpose, FilePurposeRule> = {
   },
 };
 
+export const TRANSIENT_UPLOAD_PURPOSE_CONFIG: Record<
+  TransientUploadPurpose,
+  UploadPurposeRule
+> = {
+  [TRANSIENT_UPLOAD_PURPOSES.VOUCHER_ANALYSIS]: {
+    maxSizeBytes: 5 * 1024 * 1024,
+    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  },
+};
+
 export function getFilePurposeRule(purpose: FilePurpose): FilePurposeRule {
   return FILE_PURPOSE_CONFIG[purpose];
 }
 
-export function createFileValidators(purpose: FilePurpose): ParseFilePipe {
-  const rule = getFilePurposeRule(purpose);
+export function getUploadPurposeRule(
+  purpose: UploadPurpose,
+): UploadPurposeRule {
+  if (purpose in FILE_PURPOSE_CONFIG) {
+    return FILE_PURPOSE_CONFIG[purpose as FilePurpose];
+  }
+
+  return TRANSIENT_UPLOAD_PURPOSE_CONFIG[purpose as TransientUploadPurpose];
+}
+
+export function createFileValidators(purpose: UploadPurpose): ParseFilePipe {
+  const rule = getUploadPurposeRule(purpose);
 
   return new ParseFilePipe({
     validators: [
@@ -49,6 +82,22 @@ export function createFileValidators(purpose: FilePurpose): ParseFilePipe {
     ],
     errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
   });
+}
+
+export function detectAndValidateUploadMimeType(
+  purpose: UploadPurpose,
+  buffer: Buffer,
+): string {
+  const detectedMimeType = detectMimeTypeFromBuffer(buffer);
+  const rule = getUploadPurposeRule(purpose);
+
+  if (!rule.allowedMimeTypes.includes(detectedMimeType)) {
+    throw new Error(
+      `Validation failed (allowed file types: ${rule.allowedMimeTypes.join(', ')})`,
+    );
+  }
+
+  return detectedMimeType;
 }
 
 class AllowedMimeTypesValidator extends FileValidator<{

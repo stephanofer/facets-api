@@ -5,6 +5,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@config/config.module';
 import { DatabaseModule } from '@database/database.module';
+import { AiModule } from '@ai/ai.module';
 import { HealthModule } from '@health/health.module';
 import { MailModule } from '@mail/mail.module';
 import { StorageModule } from '@storage/storage.module';
@@ -12,6 +13,7 @@ import { AuthModule } from '@modules/auth/auth.module';
 import { SubscriptionsModule } from '@modules/subscriptions/subscriptions.module';
 import { AccountsModule } from '@modules/accounts/accounts.module';
 import { CategoriesModule } from '@modules/categories/categories.module';
+import { VoucherAnalyzerModule } from '@modules/voucher-analyzer/voucher-analyzer.module';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 
 @Module({
@@ -24,6 +26,7 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
     DatabaseModule,
     MailModule,
     StorageModule,
+    AiModule,
 
     // Multi-tier rate limiting (protects all endpoints by default)
     ThrottlerModule.forRoot({
@@ -58,6 +61,7 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
     SubscriptionsModule,
     AccountsModule,
     CategoriesModule,
+    VoucherAnalyzerModule,
   ],
   controllers: [],
   providers: [

@@ -41,6 +41,13 @@ export const envSchema = z.object({
   R2_PUBLIC_BUCKET: z.string().min(1),
   R2_PRIVATE_BUCKET: z.string().min(1),
   R2_PUBLIC_URL: z.url(), // URL base del bucket público
+
+  // AI Gateway
+  AI_GATEWAY_ACCOUNT_ID: z.string().min(1),
+  AI_GATEWAY_ID: z.string().min(1),
+  AI_GATEWAY_API_TOKEN: z.string().min(1),
+  AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().positive().default(30000),
+  AI_METADATA_ENVIRONMENT: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

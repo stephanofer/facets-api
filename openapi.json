@@ -1880,6 +1880,50 @@
           "Categories"
         ]
       }
+    },
+    "/api/v1/voucher-analyzer": {
+      "post": {
+        "description": "Analyze an uploaded voucher image and return structured extraction data or a NOT_VOUCHER outcome.",
+        "operationId": "VoucherAnalyzerController_analyze_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalyzeVoucherUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Voucher analysis completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoucherAnalysisResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid file type or invalid file content"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Analyze voucher image",
+        "tags": [
+          "Voucher Analyzer"
+        ]
+      }
     }
   },
   "info": {
@@ -3388,6 +3432,144 @@
             "default": 0
           }
         }
+      },
+      "AnalyzeVoucherUploadDto": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "Voucher image file (JPEG, PNG, or WebP, max 5MB)."
+          }
+        },
+        "required": [
+          "file"
+        ]
+      },
+      "VoucherDocumentDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "voucher",
+              "unknown"
+            ],
+            "example": "voucher"
+          },
+          "confidence": {
+            "type": "number",
+            "description": "Confidence score between 0 and 1 for top-level classification.",
+            "example": 0.93
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "VoucherExtractedFieldsDto": {
+        "type": "object",
+        "properties": {
+          "merchantName": {
+            "type": "object",
+            "example": "Supermercado X",
+            "nullable": true
+          },
+          "issuedAt": {
+            "type": "object",
+            "example": "2026-03-09",
+            "nullable": true
+          },
+          "totalAmount": {
+            "type": "object",
+            "example": "123.45",
+            "nullable": true
+          },
+          "currency": {
+            "type": "object",
+            "example": "ARS",
+            "nullable": true
+          },
+          "taxAmount": {
+            "type": "object",
+            "example": "21.43",
+            "nullable": true
+          },
+          "paymentMethod": {
+            "type": "object",
+            "example": "debit_card",
+            "nullable": true
+          }
+        }
+      },
+      "VoucherExtractionDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "object",
+            "description": "Human-readable voucher text when derivable from the model output. Null when only structured fields are available or no reliable text was extracted.",
+            "nullable": true,
+            "example": "Supermercado X\nTOTAL 123.45"
+          },
+          "fields": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VoucherExtractedFieldsDto"
+              }
+            ]
+          }
+        }
+      },
+      "VoucherDiagnosticsDto": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Requested model or route used by the capability.",
+            "example": "workers-ai/@cf/meta/llama-4-scout-17b-16e-instruct"
+          },
+          "warnings": {
+            "description": "Non-fatal warnings returned by the analysis pipeline.",
+            "example": [],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "model",
+          "warnings"
+        ]
+      },
+      "VoucherAnalysisResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "VOUCHER",
+              "NOT_VOUCHER"
+            ],
+            "example": "VOUCHER"
+          },
+          "document": {
+            "$ref": "#/components/schemas/VoucherDocumentDto"
+          },
+          "extraction": {
+            "$ref": "#/components/schemas/VoucherExtractionDto"
+          },
+          "diagnostics": {
+            "$ref": "#/components/schemas/VoucherDiagnosticsDto"
+          }
+        },
+        "required": [
+          "status",
+          "document",
+          "extraction",
+          "diagnostics"
+        ]
       }
     }
   }
