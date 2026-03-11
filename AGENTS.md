@@ -12,11 +12,11 @@ We have a pricing system for our SaaS with a free tier and 2 additional plans
 
 When performing these actions, ALWAYS invoke the corresponding skill FIRST:
 
-| Action                                                               | Skill            |
-| -------------------------------------------------------------------- | ---------------- |
-| Work with NestJS modules, controllers, services, guards, interceptors | `nestjs-expert`  |
-| Work with Prisma schema, migrations, queries, relations             | `prisma-expert`  |
-| Audit security                                                       | `security-audit` |
+| Action                                                                | Skill              |
+| --------------------------------------------------------------------- | ------------------ |
+| Work with NestJS modules, controllers, services, guards, interceptors | `nestjs-expert`    |
+| Work with Prisma schema, migrations, queries, relations               | `prisma-expert`    |
+| Audit security                                                        | `security-auditor` |
 
 ### Design Philosophy
 
@@ -27,7 +27,6 @@ When performing these actions, ALWAYS invoke the corresponding skill FIRST:
 | **Consistency**            | Same patterns everywhere, predictable codebase      |
 | **Cost-Efficient**         | Optimize for PostgreSQL, minimize external services |
 | **Scalable by Default**    | Multi-tenant ready, feature-flag friendly           |
-
 
 ## Non-negotiables
 
@@ -47,21 +46,22 @@ When performing these actions, ALWAYS invoke the corresponding skill FIRST:
 
 ## Tech Stack
 
-| Component         | Location            | Technology                  |
-| ----------------- | ------------------- | --------------------------- |
-| API               | `src/`              | NestJS 11, Prisma ORM 7     |
-| Database          | `prisma/`           | PostgreSQL                  |
-| Unit Tests        | `src/**/*.spec.ts`  | Jest                        |
-| E2E Tests         | `test/`             | @nestjs/testing, Supertest  |
-| Error Monitoring  | `Sentry`            | Sentry SDK                  |
-| Documentation     | `Swagger`           | Swagger                     |
-| Email Service     | `Mailtrap`          | Mailtrap SDK                |
+| Component        | Location           | Technology                 |
+| ---------------- | ------------------ | -------------------------- |
+| API              | `src/`             | NestJS 11, Prisma ORM 7    |
+| Database         | `prisma/`          | PostgreSQL                 |
+| Unit Tests       | `src/**/*.spec.ts` | Jest                       |
+| E2E Tests        | `test/`            | @nestjs/testing, Supertest |
+| Error Monitoring | `Sentry`           | Sentry SDK                 |
+| Documentation    | `Swagger`          | Swagger                    |
+| Email Service    | `Mailtrap`         | Mailtrap SDK               |
 
 ## Directory Structure
 
 ```
 src/
 ├── main.ts                     # Bootstrap + global pipes/filters/interceptors
+├── instrument.ts               # Sentry/source-map instrumentation bootstrap
 ├── app.module.ts               # Root module (imports only)
 │
 ├── common/                     # Shared utilities (GLOBAL)
@@ -76,66 +76,75 @@ src/
 │   │   └── id-param.dto.ts
 │   ├── filters/                # Exception filters
 │   │   └── all-exceptions.filter.ts
+│   ├── exceptions/             # Shared business exceptions
+│   │   └── business.exception.ts
 │   ├── guards/                 # Auth guards
 │   │   ├── jwt-auth.guard.ts
+│   │   └── feature.guard.ts
 │   ├── interceptors/           # Response transform, logging
 │   │   ├── transform-response.interceptor.ts
 │   │   ├── logging.interceptor.ts
-│   │   └── timeout.interceptor.ts
+│   │   ├── timeout.interceptor.ts
+│   │   └── timing.interceptor.ts
 │   ├── interfaces/             # Shared interfaces
 │   │   └── api-response.interface.ts
 │   ├── pipes/                  # Custom validation pipes
 │   │   └── parse-cuid.pipe.ts
 │   └── utils/                  # Pure utility functions
-│       └── date.utils.ts
+│       ├── date.utils.ts
+│       └── pagination.utils.ts
 │
 ├── config/                     # Configuration module
 │   ├── config.module.ts
 │   ├── config.service.ts
 │   ├── env.validation.ts       # Zod schema for env validation
+│   ├── env.validation.spec.ts
 │   └── configuration.ts        # Config factory
 │
 ├── database/                   # Prisma module
 │   ├── database.module.ts
-│   ├── prisma.service.ts
-│   └── prisma.extension.ts     # Prisma Client extensions (soft delete, etc.)
+│   └── prisma.service.ts
 │
 ├── health/                     # Health checks
 │   ├── health.module.ts
-│   └── health.controller.ts
+│   ├── health.controller.ts
+│   └── prisma-health.indicator.ts
+│
+├── ai/                         # AI orchestration and provider integrations
+├── mail/                       # Transactional email module
+├── storage/                    # File storage providers and services
 │
 └── modules/                    # Feature modules
+    ├── accounts/
+    ├── categories/
     ├── auth/
     │   ├── auth.module.ts
     │   ├── auth.controller.ts
     │   ├── auth.service.ts
+    │   ├── refresh-tokens.repository.ts
     │   ├── strategies/
     │   │   ├── jwt.strategy.ts
     │   │   └── jwt-refresh.strategy.ts
     │   ├── dtos/
     │   │   ├── login.dto.ts
     │   │   ├── register.dto.ts
-    │   │   └── tokens.dto.ts
+    │   │   ├── refresh-token.dto.ts
+    │   │   ├── auth-response.dto.ts
+    │   │   ├── upload-avatar.dto.ts
+    │   │   └── verification.dto.ts
     │   └── auth.service.spec.ts
     │
+    ├── otp/
+    ├── receipt-extraction/
+    ├── storage-debug/
+    ├── subscriptions/
+    ├── transactions/
     ├── users/
     │   ├── users.module.ts
-    │   ├── users.controller.ts
     │   ├── users.service.ts
     │   ├── users.repository.ts      # Data access layer
-    │   ├── dtos/
-    │   │   ├── create-user.dto.ts
-    │   │   └── update-user.dto.ts
-    │   ├── users.service.spec.ts
-    │   └── users.controller.spec.ts
-    │
-    ├── accounts/                    # Bank accounts, cards, cash
-    ├── transactions/                # Expenses & Incomes
-    ├── categories/                  # Transaction categories
-    ├── debts/                       # Debt tracking
-    ├── loans/                       # Loan management
-    ├── goals/                       # Financial goals
-    └── recurring/                   # Recurring payments
+    ├── voucher-analyzer/
+    └── workspaces/
 
 prisma/
 ├── schema.prisma               # Single schema file
@@ -203,7 +212,6 @@ Filtering, sorting, pagination:
 | PUT    | Full replace     | Yes        | 200      |
 | DELETE | Remove resource  | Yes        | 204      |
 
-
 ## Response Standardization
 
 ### Success Response Format
@@ -243,7 +251,6 @@ Filtering, sorting, pagination:
 // No body
 ```
 
-
 ### Error Response Format
 
 ```typescript
@@ -266,7 +273,6 @@ Filtering, sorting, pagination:
   }
 }
 ```
-
 
 ### Custom Exceptions
 
@@ -291,7 +297,6 @@ throw new BusinessException(
 );
 ```
 
-
 ### Multi-Tenancy
 
 All resources are scoped by `userId`. The `@CurrentUser()` decorator extracts the user from JWT:
@@ -303,7 +308,6 @@ findAll(@CurrentUser() user: JwtPayload) {
 }
 ```
 
-
 ### Layer Responsibilities
 
 | Layer          | File Pattern      | Responsibility                      |
@@ -311,8 +315,6 @@ findAll(@CurrentUser() user: JwtPayload) {
 | **Controller** | `*.controller.ts` | HTTP handling, validation, response |
 | **Service**    | `*.service.ts`    | Business logic, orchestration       |
 | **Repository** | `*.repository.ts` | Data access, Prisma queries         |
-
-
 
 ### Repository Pattern
 
@@ -351,7 +353,6 @@ export class UsersRepository {
 }
 ```
 
-
 ### Test Pyramid
 
 ```
@@ -370,15 +371,12 @@ export class UsersRepository {
       └───────────────────────┘
 ```
 
-
-
-
 ### File Naming
 
-| Type | Location             | Naming                  |
-| ---- | -------------------- | ----------------------- |
-| Unit | `src/**/*.spec.ts`   | `users.service.spec.ts` |
-| E2E  | `test/*.e2e-spec.ts` | `auth.e2e-spec.ts`      |
+| Type | Location             | Naming                     |
+| ---- | -------------------- | -------------------------- |
+| Unit | `src/**/*.spec.ts`   | `accounts.service.spec.ts` |
+| E2E  | `test/*.e2e-spec.ts` | `auth.e2e-spec.ts`         |
 
 ### Path Aliases
 
@@ -387,13 +385,15 @@ export class UsersRepository {
 {
   "compilerOptions": {
     "paths": {
+      "@ai/*": ["src/ai/*"],
       "@common/*": ["src/common/*"],
       "@config/*": ["src/config/*"],
       "@database/*": ["src/database/*"],
       "@modules/*": ["src/modules/*"],
-      "@health/*": ["src/health/*"]
+      "@health/*": ["src/health/*"],
+      "@mail/*": ["src/mail/*"],
+      "@storage/*": ["src/storage/*"]
     }
   }
 }
 ```
-
