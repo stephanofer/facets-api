@@ -144,7 +144,6 @@ src/
     │   ├── users.service.ts
     │   ├── users.repository.ts      # Data access layer
     ├── voucher-analyzer/
-    └── workspaces/
 
 prisma/
 ├── schema.prisma               # Single schema file
