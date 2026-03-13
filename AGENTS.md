@@ -186,7 +186,7 @@ Resources (nouns, plural, kebab-case):
   DELETE /api/v1/users/:id             # Delete user
 
 Nested resources:
-  GET    /api/v1/users/:userId/accounts
+  GET    /api/v1/workspaces/current/accounts
   GET    /api/v1/accounts/:accountId/transactions
 
 Actions (verbs, when CRUD doesn't fit):
@@ -298,12 +298,28 @@ throw new BusinessException(
 
 ### Multi-Tenancy
 
-All resources are scoped by `userId`. The `@CurrentUser()` decorator extracts the user from JWT:
+Business resources are scoped by `workspaceId`, not `userId`.
+The authenticated principal must carry workspace context, and repository queries must scope by workspace in the predicate.
+
+Authorization is ALWAYS double-check: required workspace role + repository predicate scoped by `workspaceId`.
+Do not treat `@CurrentUser()` as tenant context; use `@CurrentPrincipal()` for business routes and only extract the raw user when the operation is truly identity-scoped.
+
+Workspace-scoped concerns:
+
+- shared settings (`WorkspaceSettings`)
+- subscriptions, usage records, and plan history
+- accounts, categories, files, and other business aggregates
+
+User-scoped concerns:
+
+- identity/authentication lifecycle
+- refresh tokens / OTPs
+- profile avatar linkage and personal preferences
 
 ```typescript
 @Get('accounts')
-findAll(@CurrentUser() user: JwtPayload) {
-  return this.accountsService.findAllByUser(user.sub);
+findAll(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
+  return this.accountsService.findAll(principal.workspaceId);
 }
 ```
 

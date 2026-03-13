@@ -3,6 +3,7 @@ import { PrismaService } from '@database/prisma.service';
 import { RefreshToken } from '../../generated/prisma/client';
 
 export interface CreateRefreshTokenData {
+  id?: string;
   token: string; // hashed token
   userId: string;
   expiresAt: Date;
@@ -20,6 +21,7 @@ export class RefreshTokensRepository {
   async create(data: CreateRefreshTokenData): Promise<RefreshToken> {
     return this.prisma.refreshToken.create({
       data: {
+        id: data.id,
         token: data.token,
         userId: data.userId,
         expiresAt: data.expiresAt,

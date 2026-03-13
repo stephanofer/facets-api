@@ -1,79 +1,66 @@
-import { Injectable, HttpStatus, Logger } from '@nestjs/common';
-import { PrismaService } from '@database/prisma.service';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import {
-  PlansRepository,
-  PlanWithFeatures,
-} from '@modules/subscriptions/repositories/plans.repository';
-import {
-  SubscriptionsRepository,
-  SubscriptionWithPlan,
-} from '@modules/subscriptions/repositories/subscriptions.repository';
-import { PlanChangeLogRepository } from '@modules/subscriptions/repositories/plan-change-log.repository';
+  SUBSCRIPTION_CONSTANTS,
+  ERROR_CODES,
+} from '@common/constants/app.constants';
+import { BusinessException } from '@common/exceptions/business.exception';
 import { MailService } from '@mail/mail.service';
 import {
-  PLAN_CODES,
-  FeatureCode,
   FEATURES,
+  FeatureCode,
+  PLAN_CODES,
 } from '@modules/subscriptions/constants/features.constant';
 import {
+  CancelResponseDto,
+  CancelScheduledChangeResponseDto,
+  DowngradeResponseDto,
+  PlanChangeLogDto,
   PlanChangePreviewDto,
+  ReactivateResponseDto,
   ResourceOverageDto,
   UpgradeResponseDto,
-  DowngradeResponseDto,
-  CancelResponseDto,
-  ReactivateResponseDto,
-  CancelScheduledChangeResponseDto,
-  PlanChangeLogDto,
 } from '@modules/subscriptions/dtos/plan-management.dto';
 import {
-  toPlanDto,
-  toDecimalNumber,
   SubscriptionDto,
+  toDecimalNumber,
+  toPlanDto,
 } from '@modules/subscriptions/dtos/subscription.dto';
-import { BusinessException } from '@common/exceptions/business.exception';
+import { PlanChangeLogRepository } from '@modules/subscriptions/repositories/plan-change-log.repository';
 import {
-  ERROR_CODES,
-  SUBSCRIPTION_CONSTANTS,
-} from '@common/constants/app.constants';
+  PlanWithFeatures,
+  PlansRepository,
+} from '@modules/subscriptions/repositories/plans.repository';
 import {
-  PlanChangeType,
+  SubscriptionWithPlan,
+  SubscriptionsRepository,
+} from '@modules/subscriptions/repositories/subscriptions.repository';
+import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
+import {
   FeatureLimitType,
   FeatureType,
+  PlanChangeType,
+  WorkspaceRole,
 } from '../../generated/prisma/client';
 
-/**
- * Service for managing plan upgrades, downgrades, cancellations, and reactivations.
- *
- * Key business rules:
- * - UPGRADE: Applied immediately (user pays more)
- * - DOWNGRADE: Scheduled for end of billing period (user already paid)
- * - CANCEL: Scheduled for end of billing period (user already paid)
- */
 @Injectable()
 export class PlanManagementService {
   private readonly logger = new Logger(PlanManagementService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
     private readonly plansRepository: PlansRepository,
     private readonly subscriptionsRepository: SubscriptionsRepository,
     private readonly planChangeLogRepository: PlanChangeLogRepository,
     private readonly mailService: MailService,
   ) {}
 
-  // ==========================================================================
-  // Preview Plan Change
-  // ==========================================================================
-
-  /**
-   * Preview the effects of changing to a different plan
-   */
   async previewPlanChange(
-    userId: string,
+    principal: AuthenticatedPrincipal,
     targetPlanCode: string,
   ): Promise<PlanChangePreviewDto> {
+    const workspaceId = this.assertBillingAdmin(principal);
     const subscription =
-      await this.subscriptionsRepository.findByUserId(userId);
+      await this.subscriptionsRepository.findByWorkspaceId(workspaceId);
+
     if (!subscription) {
       throw new BusinessException(
         ERROR_CODES.NO_SUBSCRIPTION,
@@ -91,7 +78,6 @@ export class PlanManagementService {
       );
     }
 
-    // Check if already on this plan
     if (subscription.plan.code === targetPlanCode) {
       throw new BusinessException(
         ERROR_CODES.ALREADY_ON_PLAN,
@@ -103,22 +89,15 @@ export class PlanManagementService {
     const currentPlan = subscription.plan;
     const isUpgrade = targetPlan.sortOrder > currentPlan.sortOrder;
 
-    // For downgrades, check for resource overages
-    const overages: ResourceOverageDto[] = [];
-    if (!isUpgrade) {
-      const detectedOverages = await this.detectResourceOverages(
-        userId,
-        targetPlan,
-      );
-      overages.push(...detectedOverages);
-    }
+    const overages = isUpgrade
+      ? []
+      : await this.detectResourceOverages(workspaceId, targetPlan);
 
     const hasOverages = overages.length > 0;
     const effectiveAt = isUpgrade
       ? new Date()
       : (subscription.currentPeriodEnd ?? new Date());
 
-    // Calculate grace period end if there are overages
     let gracePeriodEnd: Date | undefined;
     if (hasOverages) {
       gracePeriodEnd = new Date(effectiveAt);
@@ -127,7 +106,6 @@ export class PlanManagementService {
       );
     }
 
-    // Calculate proration (simplified - in production would integrate with payment provider)
     const prorationAmount = isUpgrade
       ? this.calculateProration(subscription, targetPlan)
       : undefined;
@@ -145,21 +123,14 @@ export class PlanManagementService {
     };
   }
 
-  // ==========================================================================
-  // Upgrade Plan
-  // ==========================================================================
-
-  /**
-   * Upgrade to a higher plan (immediate effect)
-   */
   async upgradePlan(
-    userId: string,
+    principal: AuthenticatedPrincipal,
     targetPlanCode: string,
-    userEmail: string,
-    userName?: string,
   ): Promise<UpgradeResponseDto> {
+    const workspaceId = this.assertBillingAdmin(principal);
     const subscription =
-      await this.subscriptionsRepository.findByUserId(userId);
+      await this.subscriptionsRepository.findByWorkspaceId(workspaceId);
+
     if (!subscription) {
       throw new BusinessException(
         ERROR_CODES.NO_SUBSCRIPTION,
@@ -177,7 +148,6 @@ export class PlanManagementService {
       );
     }
 
-    // Validate this is actually an upgrade
     if (subscription.plan.code === targetPlanCode) {
       throw new BusinessException(
         ERROR_CODES.ALREADY_ON_PLAN,
@@ -194,25 +164,21 @@ export class PlanManagementService {
       );
     }
 
-    // Calculate proration
     const prorationAmount = this.calculateProration(subscription, targetPlan);
-
-    // Calculate new period end (for paid plans, 30 days from now)
     const currentPeriodEnd =
       targetPlan.code === PLAN_CODES.FREE
         ? null
         : this.calculateNextPeriodEnd();
 
-    // Apply upgrade immediately
     const updatedSubscription = await this.subscriptionsRepository.applyUpgrade(
-      userId,
+      workspaceId,
       targetPlan.id,
       currentPeriodEnd,
     );
 
-    // Log the change
     await this.planChangeLogRepository.create({
-      userId,
+      workspaceId,
+      requestedByUserId: principal.user.id,
       fromPlanId: subscription.plan.id,
       toPlanId: targetPlan.id,
       changeType: PlanChangeType.UPGRADE,
@@ -220,10 +186,9 @@ export class PlanManagementService {
       prorationAmount,
     });
 
-    // Send confirmation email
     try {
-      await this.mailService.sendTemplate('plan-upgraded', userEmail, {
-        userName: userName ?? 'there',
+      await this.mailService.sendTemplate('plan-upgraded', principal.email, {
+        userName: this.getActorDisplayName(principal),
         previousPlanName: subscription.plan.name,
         newPlanName: targetPlan.name,
         newPlanPrice: this.formatPrice(targetPlan),
@@ -231,7 +196,7 @@ export class PlanManagementService {
       });
     } catch (error) {
       this.logger.error(
-        `Failed to send upgrade email to ${userEmail}`,
+        `Failed to send upgrade email to ${principal.email}`,
         error instanceof Error ? error.stack : undefined,
       );
     }
@@ -243,21 +208,14 @@ export class PlanManagementService {
     };
   }
 
-  // ==========================================================================
-  // Downgrade Plan
-  // ==========================================================================
-
-  /**
-   * Downgrade to a lower plan (scheduled for end of billing period)
-   */
   async downgradePlan(
-    userId: string,
+    principal: AuthenticatedPrincipal,
     targetPlanCode: string,
-    userEmail: string,
-    userName?: string,
   ): Promise<DowngradeResponseDto> {
+    const workspaceId = this.assertBillingAdmin(principal);
     const subscription =
-      await this.subscriptionsRepository.findByUserId(userId);
+      await this.subscriptionsRepository.findByWorkspaceId(workspaceId);
+
     if (!subscription) {
       throw new BusinessException(
         ERROR_CODES.NO_SUBSCRIPTION,
@@ -275,7 +233,6 @@ export class PlanManagementService {
       );
     }
 
-    // Validate this is actually a downgrade
     if (subscription.plan.code === targetPlanCode) {
       throw new BusinessException(
         ERROR_CODES.ALREADY_ON_PLAN,
@@ -292,14 +249,10 @@ export class PlanManagementService {
       );
     }
 
-    // Detect overages for the target plan
-    const overages = await this.detectResourceOverages(userId, targetPlan);
+    const overages = await this.detectResourceOverages(workspaceId, targetPlan);
     const hasOverages = overages.length > 0;
-
-    // Determine when the downgrade will take effect
     const scheduledChangeAt = subscription.currentPeriodEnd ?? new Date();
 
-    // Calculate grace period if there are overages
     let gracePeriodEnd: Date | undefined;
     let graceOverages: Record<string, number> | undefined;
 
@@ -309,25 +262,23 @@ export class PlanManagementService {
         gracePeriodEnd.getDate() + SUBSCRIPTION_CONSTANTS.GRACE_PERIOD_DAYS,
       );
 
-      // Store overages for tracking
       graceOverages = {};
       for (const overage of overages) {
         graceOverages[overage.featureCode] = overage.overage;
       }
     }
 
-    // Schedule the downgrade
     await this.subscriptionsRepository.scheduleDowngrade(
-      userId,
+      workspaceId,
       targetPlan.id,
       scheduledChangeAt,
       graceOverages,
       gracePeriodEnd,
     );
 
-    // Log the scheduled change
     await this.planChangeLogRepository.create({
-      userId,
+      workspaceId,
+      requestedByUserId: principal.user.id,
       fromPlanId: subscription.plan.id,
       toPlanId: targetPlan.id,
       changeType: PlanChangeType.DOWNGRADE_SCHEDULED,
@@ -335,13 +286,12 @@ export class PlanManagementService {
       metadata: hasOverages ? { overages } : undefined,
     });
 
-    // Send confirmation email
     try {
       await this.mailService.sendTemplate(
         'plan-downgrade-scheduled',
-        userEmail,
+        principal.email,
         {
-          userName: userName ?? 'there',
+          userName: this.getActorDisplayName(principal),
           currentPlanName: subscription.plan.name,
           newPlanName: targetPlan.name,
           effectiveDate: this.formatDate(scheduledChangeAt),
@@ -356,14 +306,13 @@ export class PlanManagementService {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to send downgrade email to ${userEmail}`,
+        `Failed to send downgrade email to ${principal.email}`,
         error instanceof Error ? error.stack : undefined,
       );
     }
 
-    // Reload subscription to include current state
     const updatedSubscription =
-      await this.subscriptionsRepository.findByUserId(userId);
+      await this.subscriptionsRepository.findByWorkspaceId(workspaceId);
 
     return {
       message: `Downgrade to ${targetPlan.name} plan scheduled for ${this.formatDate(scheduledChangeAt)}`,
@@ -375,21 +324,14 @@ export class PlanManagementService {
     };
   }
 
-  // ==========================================================================
-  // Cancel Subscription
-  // ==========================================================================
-
-  /**
-   * Cancel subscription (scheduled for end of billing period, reverts to FREE)
-   */
   async cancelSubscription(
-    userId: string,
+    principal: AuthenticatedPrincipal,
     reason: string | undefined,
-    userEmail: string,
-    userName?: string,
   ): Promise<CancelResponseDto> {
+    const workspaceId = this.assertBillingAdmin(principal);
     const subscription =
-      await this.subscriptionsRepository.findByUserId(userId);
+      await this.subscriptionsRepository.findByWorkspaceId(workspaceId);
+
     if (!subscription) {
       throw new BusinessException(
         ERROR_CODES.NO_SUBSCRIPTION,
@@ -398,7 +340,6 @@ export class PlanManagementService {
       );
     }
 
-    // Cannot cancel FREE plan
     if (subscription.plan.code === PLAN_CODES.FREE) {
       throw new BusinessException(
         ERROR_CODES.CANNOT_CANCEL_FREE_PLAN,
@@ -407,7 +348,6 @@ export class PlanManagementService {
       );
     }
 
-    // Check if already cancelled
     if (subscription.cancelledAt) {
       throw new BusinessException(
         ERROR_CODES.SUBSCRIPTION_ALREADY_CANCELLED,
@@ -416,7 +356,6 @@ export class PlanManagementService {
       );
     }
 
-    // Get the FREE plan for downgrade
     const freePlan = await this.plansRepository.findByCode(PLAN_CODES.FREE);
     if (!freePlan) {
       throw new BusinessException(
@@ -426,19 +365,18 @@ export class PlanManagementService {
       );
     }
 
-    // Schedule cancellation for end of billing period
     const effectiveAt = subscription.currentPeriodEnd ?? new Date();
 
     await this.subscriptionsRepository.scheduleCancellation(
-      userId,
+      workspaceId,
       freePlan.id,
       effectiveAt,
       reason,
     );
 
-    // Log the cancellation
     await this.planChangeLogRepository.create({
-      userId,
+      workspaceId,
+      requestedByUserId: principal.user.id,
       fromPlanId: subscription.plan.id,
       toPlanId: freePlan.id,
       changeType: PlanChangeType.CANCELLATION,
@@ -446,16 +384,19 @@ export class PlanManagementService {
       reason,
     });
 
-    // Send confirmation email
     try {
-      await this.mailService.sendTemplate('subscription-cancelled', userEmail, {
-        userName: userName ?? 'there',
-        currentPlanName: subscription.plan.name,
-        effectiveDate: this.formatDate(effectiveAt),
-      });
+      await this.mailService.sendTemplate(
+        'subscription-cancelled',
+        principal.email,
+        {
+          userName: this.getActorDisplayName(principal),
+          currentPlanName: subscription.plan.name,
+          effectiveDate: this.formatDate(effectiveAt),
+        },
+      );
     } catch (error) {
       this.logger.error(
-        `Failed to send cancellation email to ${userEmail}`,
+        `Failed to send cancellation email to ${principal.email}`,
         error instanceof Error ? error.stack : undefined,
       );
     }
@@ -467,16 +408,13 @@ export class PlanManagementService {
     };
   }
 
-  // ==========================================================================
-  // Reactivate Subscription
-  // ==========================================================================
-
-  /**
-   * Reactivate a cancelled subscription (remove scheduled cancellation)
-   */
-  async reactivateSubscription(userId: string): Promise<ReactivateResponseDto> {
+  async reactivateSubscription(
+    principal: AuthenticatedPrincipal,
+  ): Promise<ReactivateResponseDto> {
+    const workspaceId = this.assertBillingAdmin(principal);
     const subscription =
-      await this.subscriptionsRepository.findByUserId(userId);
+      await this.subscriptionsRepository.findByWorkspaceId(workspaceId);
+
     if (!subscription) {
       throw new BusinessException(
         ERROR_CODES.NO_SUBSCRIPTION,
@@ -485,7 +423,6 @@ export class PlanManagementService {
       );
     }
 
-    // Check if there's a pending cancellation
     if (!subscription.cancelledAt) {
       throw new BusinessException(
         ERROR_CODES.NO_PENDING_CANCELLATION,
@@ -494,13 +431,12 @@ export class PlanManagementService {
       );
     }
 
-    // Reactivate
     const updatedSubscription =
-      await this.subscriptionsRepository.reactivate(userId);
+      await this.subscriptionsRepository.reactivate(workspaceId);
 
-    // Log the reactivation
     await this.planChangeLogRepository.create({
-      userId,
+      workspaceId,
+      requestedByUserId: principal.user.id,
       fromPlanId: subscription.plan.id,
       toPlanId: subscription.plan.id,
       changeType: PlanChangeType.REACTIVATION,
@@ -513,18 +449,15 @@ export class PlanManagementService {
     };
   }
 
-  // ==========================================================================
-  // Cancel Scheduled Change
-  // ==========================================================================
-
-  /**
-   * Cancel a scheduled downgrade (not cancellation - use reactivate for that)
-   */
   async cancelScheduledChange(
-    userId: string,
+    principal: AuthenticatedPrincipal,
   ): Promise<CancelScheduledChangeResponseDto> {
+    const workspaceId = this.assertBillingAdmin(principal);
     const subscription =
-      await this.subscriptionsRepository.findByUserIdWithScheduledPlan(userId);
+      await this.subscriptionsRepository.findByWorkspaceIdWithScheduledPlan(
+        workspaceId,
+      );
+
     if (!subscription) {
       throw new BusinessException(
         ERROR_CODES.NO_SUBSCRIPTION,
@@ -533,7 +466,6 @@ export class PlanManagementService {
       );
     }
 
-    // Check if there's a scheduled change
     if (!subscription.scheduledPlanId) {
       throw new BusinessException(
         ERROR_CODES.NO_SCHEDULED_CHANGE,
@@ -542,7 +474,6 @@ export class PlanManagementService {
       );
     }
 
-    // If it's a cancellation, redirect to reactivate
     if (subscription.cancelledAt) {
       throw new BusinessException(
         ERROR_CODES.SUBSCRIPTION_ALREADY_CANCELLED,
@@ -551,9 +482,8 @@ export class PlanManagementService {
       );
     }
 
-    // Cancel the scheduled change
     const updatedSubscription =
-      await this.subscriptionsRepository.cancelScheduledChange(userId);
+      await this.subscriptionsRepository.cancelScheduledChange(workspaceId);
 
     return {
       message: 'Scheduled change cancelled successfully',
@@ -561,18 +491,15 @@ export class PlanManagementService {
     };
   }
 
-  // ==========================================================================
-  // Get Plan Change History
-  // ==========================================================================
-
-  /**
-   * Get plan change history for a user
-   */
   async getPlanChangeHistory(
-    userId: string,
+    principal: AuthenticatedPrincipal,
     limit: number = 20,
   ): Promise<PlanChangeLogDto[]> {
-    const logs = await this.planChangeLogRepository.findByUserId(userId, limit);
+    const workspaceId = this.assertBillingAdmin(principal);
+    const logs = await this.planChangeLogRepository.findByWorkspaceId(
+      workspaceId,
+      limit,
+    );
 
     return logs.map((log) => ({
       id: log.id,
@@ -591,20 +518,31 @@ export class PlanManagementService {
     }));
   }
 
-  // ==========================================================================
-  // Helper Methods
-  // ==========================================================================
+  private assertBillingAdmin(principal: AuthenticatedPrincipal): string {
+    if (
+      principal.workspaceRole !== WorkspaceRole.ADMIN ||
+      principal.membership.role !== WorkspaceRole.ADMIN
+    ) {
+      throw new BusinessException(
+        ERROR_CODES.FORBIDDEN,
+        'Only workspace admins can manage billing and plan changes',
+        HttpStatus.FORBIDDEN,
+      );
+    }
 
-  /**
-   * Detect resources that would exceed limits on a target plan
-   */
+    return principal.workspaceId;
+  }
+
+  private getActorDisplayName(principal: AuthenticatedPrincipal): string {
+    return principal.user.firstName || principal.email || 'there';
+  }
+
   private async detectResourceOverages(
-    userId: string,
+    workspaceId: string,
     targetPlan: PlanWithFeatures,
   ): Promise<ResourceOverageDto[]> {
     const overages: ResourceOverageDto[] = [];
 
-    // Get current resource counts for each RESOURCE feature
     const resourceFeatures = targetPlan.planFeatures.filter(
       (f) =>
         f.featureType === FeatureType.RESOURCE &&
@@ -613,7 +551,7 @@ export class PlanManagementService {
 
     for (const feature of resourceFeatures) {
       const currentCount = await this.getResourceCount(
-        userId,
+        workspaceId,
         feature.featureCode as FeatureCode,
       );
 
@@ -631,56 +569,26 @@ export class PlanManagementService {
     return overages;
   }
 
-  /**
-   * Get current count of resources for a feature
-   *
-   * NOTE: This method returns 0 for all resource features until the corresponding
-   * feature modules (accounts, goals, debts, loans, categories, recurring) are implemented.
-   * Once those modules exist, this method should be updated to query the actual counts.
-   *
-   * TODO: Implement actual resource counting when feature modules are built:
-   * - ACCOUNTS: prisma.account.count({ where: { userId, deletedAt: null } })
-   * - GOALS: prisma.goal.count({ where: { userId, deletedAt: null } })
-   * - DEBTS: prisma.debt.count({ where: { userId, deletedAt: null } })
-   * - LOANS: prisma.loan.count({ where: { userId, deletedAt: null } })
-   * - CUSTOM_CATEGORIES: prisma.category.count({ where: { userId, isCustom: true, deletedAt: null } })
-   * - RECURRING_PAYMENTS: prisma.recurringPayment.count({ where: { userId, deletedAt: null } })
-   */
-  // eslint-disable-next-line @typescript-eslint/require-await
   private async getResourceCount(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _userId: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _workspaceId: string,
     _featureCode: FeatureCode,
   ): Promise<number> {
-    // Return 0 until feature modules are implemented
-    // This allows plan management to work without blocking on feature development
     return 0;
   }
 
-  /**
-   * Check if a feature has a grace period (vs soft limit)
-   *
-   * Features with grace period: User gets X days to reduce resources before losing access
-   * Features with soft limit: User can't create new, but keeps existing
-   */
   private featureHasGracePeriod(featureCode: string): boolean {
-    // Goals and categories get grace period, others are soft limited
     const gracePeriodFeatures: readonly string[] = [
       FEATURES.GOALS,
       FEATURES.CUSTOM_CATEGORIES,
     ];
+
     return gracePeriodFeatures.includes(featureCode);
   }
 
-  /**
-   * Calculate proration amount for an upgrade
-   */
   private calculateProration(
     subscription: SubscriptionWithPlan,
     targetPlan: PlanWithFeatures,
   ): number {
-    // If no period end, no proration needed
     if (!subscription.currentPeriodEnd) {
       return 0;
     }
@@ -689,7 +597,6 @@ export class PlanManagementService {
     const periodEnd = subscription.currentPeriodEnd;
     const periodStart = subscription.currentPeriodStart;
 
-    // Calculate days remaining in current period
     const totalDays = Math.ceil(
       (periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24),
     );
@@ -701,42 +608,30 @@ export class PlanManagementService {
       return 0;
     }
 
-    // Calculate credit for unused time on current plan
     const currentMonthlyPrice =
       toDecimalNumber(subscription.plan.priceMonthly) ?? 0;
     const dailyRateCurrent = currentMonthlyPrice / 30;
     const creditAmount = dailyRateCurrent * daysRemaining;
 
-    // Calculate charge for remaining time on new plan
     const newMonthlyPrice = toDecimalNumber(targetPlan.priceMonthly) ?? 0;
     const dailyRateNew = newMonthlyPrice / 30;
     const chargeAmount = dailyRateNew * daysRemaining;
 
-    // Return the difference (positive = credit, negative = charge)
     return Math.round((creditAmount - chargeAmount) * 100) / 100;
   }
 
-  /**
-   * Calculate the next billing period end date
-   */
   private calculateNextPeriodEnd(): Date {
     const date = new Date();
     date.setDate(date.getDate() + SUBSCRIPTION_CONSTANTS.BILLING_PERIOD_DAYS);
     return date;
   }
 
-  /**
-   * Format plan price for display
-   */
   private formatPrice(plan: PlanWithFeatures): string {
     const price = toDecimalNumber(plan.priceMonthly) ?? 0;
     if (price === 0) return 'Free';
     return `$${price.toFixed(2)}/${plan.priceCurrency === 'USD' ? 'month' : plan.priceCurrency}`;
   }
 
-  /**
-   * Format date for display
-   */
   private formatDate(date: Date): string {
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
@@ -745,9 +640,6 @@ export class PlanManagementService {
     });
   }
 
-  /**
-   * Format feature code to human-readable name
-   */
   private formatFeatureName(featureCode: string): string {
     return featureCode
       .split('_')
@@ -755,9 +647,6 @@ export class PlanManagementService {
       .join(' ');
   }
 
-  /**
-   * Convert subscription entity to DTO
-   */
   private toSubscriptionDto(
     subscription: SubscriptionWithPlan,
   ): SubscriptionDto {

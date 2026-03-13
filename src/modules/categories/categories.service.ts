@@ -31,16 +31,17 @@ export class CategoriesService {
    * 1. Feature limit (custom_categories per plan)
    * 2. Parent exists and type matches (if parentId provided)
    * 3. Max 2-level depth
-   * 4. No duplicate name for user+type+parent
+   * 4. No duplicate name for workspace+type+parent
    */
   async create(
-    userId: string,
+    workspaceId: string,
     dto: CreateCategoryDto,
   ): Promise<CategoryResponseDto> {
     // Check feature limit
-    const currentCount = await this.categoriesRepository.countCustom(userId);
-    const access = await this.subscriptionsService.checkFeatureAccess(
-      userId,
+    const currentCount =
+      await this.categoriesRepository.countCustom(workspaceId);
+    const access = await this.subscriptionsService.checkWorkspaceFeatureAccess(
+      workspaceId,
       FEATURES.CUSTOM_CATEGORIES,
       currentCount,
     );
@@ -55,12 +56,12 @@ export class CategoriesService {
 
     // Validate parent if provided
     if (dto.parentId) {
-      await this.validateParent(dto.parentId, dto.type, userId);
+      await this.validateParent(dto.parentId, dto.type, workspaceId);
     }
 
     // Check duplicate name
     const nameExists = await this.categoriesRepository.nameExists(
-      userId,
+      workspaceId,
       dto.name,
       dto.type,
       dto.parentId ?? null,
@@ -74,7 +75,7 @@ export class CategoriesService {
     }
 
     const category = await this.categoriesRepository.create({
-      userId,
+      workspaceId,
       name: dto.name,
       type: dto.type,
       parentId: dto.parentId ?? null,
@@ -89,17 +90,17 @@ export class CategoriesService {
   }
 
   /**
-   * Get all categories for a user (system + custom)
+   * Get all categories for a workspace (system + custom)
    *
    * Returns a tree structure by default, or flat list if requested.
    */
   async findAll(
-    userId: string,
+    workspaceId: string,
     query: QueryCategoryDto,
   ): Promise<CategoryTreeResponseDto> {
     if (query.flat) {
       const categories = await this.categoriesRepository.findAllFlat({
-        userId,
+        workspaceId,
         type: query.type,
         includeInactive: query.includeInactive ?? false,
       });
@@ -113,8 +114,8 @@ export class CategoriesService {
       };
     }
 
-    const tree = await this.categoriesRepository.findAllForUser({
-      userId,
+    const tree = await this.categoriesRepository.findAllVisible({
+      workspaceId,
       type: query.type,
       includeInactive: query.includeInactive ?? false,
     });
@@ -134,13 +135,10 @@ export class CategoriesService {
    * Get a single category by ID
    */
   async findById(
-    userId: string,
+    workspaceId: string,
     categoryId: string,
   ): Promise<CategoryWithChildrenDto> {
-    const category = await this.findCategoryOrThrow(categoryId);
-
-    // Verify ownership: must be system OR owned by user
-    this.verifyAccess(category, userId);
+    const category = await this.findCategoryOrThrow(categoryId, workspaceId);
 
     return this.toTreeDto(category);
   }
@@ -151,11 +149,11 @@ export class CategoriesService {
    * System categories CANNOT be modified.
    */
   async update(
-    userId: string,
+    workspaceId: string,
     categoryId: string,
     dto: UpdateCategoryDto,
   ): Promise<CategoryResponseDto> {
-    const category = await this.findCategoryOrThrow(categoryId);
+    const category = await this.findCategoryOrThrow(categoryId, workspaceId);
 
     // Cannot edit system categories
     if (category.isSystem) {
@@ -167,12 +165,12 @@ export class CategoriesService {
     }
 
     // Verify ownership
-    this.verifyOwnership(category, userId);
+    this.verifyOwnership(category, workspaceId);
 
     // Check duplicate name (if name is being changed)
     if (dto.name && dto.name !== category.name) {
       const nameExists = await this.categoriesRepository.nameExists(
-        userId,
+        workspaceId,
         dto.name,
         category.type,
         category.parentId,
@@ -187,12 +185,16 @@ export class CategoriesService {
       }
     }
 
-    const updated = await this.categoriesRepository.update(categoryId, {
-      ...(dto.name !== undefined && { name: dto.name }),
-      ...(dto.icon !== undefined && { icon: dto.icon }),
-      ...(dto.color !== undefined && { color: dto.color }),
-      ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
-    });
+    const updated = await this.categoriesRepository.update(
+      categoryId,
+      workspaceId,
+      {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.icon !== undefined && { icon: dto.icon }),
+        ...(dto.color !== undefined && { color: dto.color }),
+        ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
+      },
+    );
 
     return this.toResponseDto(updated);
   }
@@ -203,8 +205,8 @@ export class CategoriesService {
    * System categories CANNOT be deleted.
    * Categories with transactions can only be deactivated.
    */
-  async delete(userId: string, categoryId: string): Promise<void> {
-    const category = await this.findCategoryOrThrow(categoryId);
+  async delete(workspaceId: string, categoryId: string): Promise<void> {
+    const category = await this.findCategoryOrThrow(categoryId, workspaceId);
 
     if (category.isSystem) {
       throw new BusinessException(
@@ -214,10 +216,12 @@ export class CategoriesService {
       );
     }
 
-    this.verifyOwnership(category, userId);
+    this.verifyOwnership(category, workspaceId);
 
-    const hasTransactions =
-      await this.categoriesRepository.hasTransactions(categoryId);
+    const hasTransactions = await this.categoriesRepository.hasTransactions(
+      categoryId,
+      workspaceId,
+    );
     if (hasTransactions) {
       throw new BusinessException(
         ERROR_CODES.CATEGORY_HAS_TRANSACTIONS,
@@ -226,17 +230,17 @@ export class CategoriesService {
       );
     }
 
-    await this.categoriesRepository.delete(categoryId);
+    await this.categoriesRepository.delete(categoryId, workspaceId);
   }
 
   /**
    * Deactivate a custom category (soft delete)
    */
   async deactivate(
-    userId: string,
+    workspaceId: string,
     categoryId: string,
   ): Promise<CategoryResponseDto> {
-    const category = await this.findCategoryOrThrow(categoryId);
+    const category = await this.findCategoryOrThrow(categoryId, workspaceId);
 
     if (category.isSystem) {
       throw new BusinessException(
@@ -246,10 +250,11 @@ export class CategoriesService {
       );
     }
 
-    this.verifyOwnership(category, userId);
+    this.verifyOwnership(category, workspaceId);
 
     const updated = await this.categoriesRepository.setActive(
       categoryId,
+      workspaceId,
       false,
     );
     return this.toResponseDto(updated);
@@ -259,10 +264,10 @@ export class CategoriesService {
    * Reactivate a custom category
    */
   async reactivate(
-    userId: string,
+    workspaceId: string,
     categoryId: string,
   ): Promise<CategoryResponseDto> {
-    const category = await this.findCategoryOrThrow(categoryId);
+    const category = await this.findCategoryOrThrow(categoryId, workspaceId);
 
     if (category.isSystem) {
       throw new BusinessException(
@@ -272,7 +277,7 @@ export class CategoriesService {
       );
     }
 
-    this.verifyOwnership(category, userId);
+    this.verifyOwnership(category, workspaceId);
 
     if (category.isActive) {
       throw new BusinessException(
@@ -282,15 +287,19 @@ export class CategoriesService {
       );
     }
 
-    const updated = await this.categoriesRepository.setActive(categoryId, true);
+    const updated = await this.categoriesRepository.setActive(
+      categoryId,
+      workspaceId,
+      true,
+    );
     return this.toResponseDto(updated);
   }
 
   /**
-   * Count custom categories for a user (used by FeatureGuard/SubscriptionsService)
+   * Count custom categories for a workspace (used by FeatureGuard/SubscriptionsService)
    */
-  async countCustom(userId: string): Promise<number> {
-    return this.categoriesRepository.countCustom(userId);
+  async countCustom(workspaceId: string): Promise<number> {
+    return this.categoriesRepository.countCustom(workspaceId);
   }
 
   // ==========================================================================
@@ -302,8 +311,12 @@ export class CategoriesService {
    */
   private async findCategoryOrThrow(
     categoryId: string,
+    workspaceId: string,
   ): Promise<CategoryWithChildren> {
-    const category = await this.categoriesRepository.findById(categoryId);
+    const category = await this.categoriesRepository.findById(
+      categoryId,
+      workspaceId,
+    );
 
     if (!category) {
       throw new BusinessException(
@@ -317,23 +330,10 @@ export class CategoriesService {
   }
 
   /**
-   * Verify user can VIEW a category (system or owned)
+   * Verify workspace OWNS a custom category
    */
-  private verifyAccess(category: Category, userId: string): void {
-    if (!category.isSystem && category.userId !== userId) {
-      throw new BusinessException(
-        ERROR_CODES.CATEGORY_NOT_FOUND,
-        'Category not found',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-  }
-
-  /**
-   * Verify user OWNS a custom category
-   */
-  private verifyOwnership(category: Category, userId: string): void {
-    if (category.userId !== userId) {
+  private verifyOwnership(category: Category, workspaceId: string): void {
+    if (category.workspaceId !== workspaceId) {
       throw new BusinessException(
         ERROR_CODES.CATEGORY_NOT_FOUND,
         'Category not found',
@@ -348,20 +348,14 @@ export class CategoriesService {
   private async validateParent(
     parentId: string,
     childType: string,
-    userId: string,
+    workspaceId: string,
   ): Promise<void> {
-    const parent = await this.categoriesRepository.findById(parentId);
+    const parent = await this.categoriesRepository.findById(
+      parentId,
+      workspaceId,
+    );
 
     if (!parent) {
-      throw new BusinessException(
-        ERROR_CODES.CATEGORY_NOT_FOUND,
-        'Parent category not found',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-
-    // Parent must be accessible (system or owned by user)
-    if (!parent.isSystem && parent.userId !== userId) {
       throw new BusinessException(
         ERROR_CODES.CATEGORY_NOT_FOUND,
         'Parent category not found',
@@ -379,7 +373,10 @@ export class CategoriesService {
     }
 
     // Enforce 2-level max depth
-    const depth = await this.categoriesRepository.getParentDepth(parentId);
+    const depth = await this.categoriesRepository.getParentDepth(
+      parentId,
+      workspaceId,
+    );
     if (depth >= 2) {
       throw new BusinessException(
         ERROR_CODES.CATEGORY_MAX_DEPTH,

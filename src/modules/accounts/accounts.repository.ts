@@ -3,10 +3,21 @@ import { PrismaService } from '@database/prisma.service';
 import { Account, AccountType, Prisma } from '../../generated/prisma/client';
 
 export interface AccountQueryFilters {
-  userId: string;
+  workspaceId: string;
   type?: AccountType;
   includeArchived?: boolean;
   currencyCode?: string;
+}
+
+export interface AccountActorCreateData
+  extends Prisma.AccountUncheckedCreateInput {
+  createdByUserId?: string;
+  updatedByUserId?: string;
+}
+
+export interface AccountActorUpdateData
+  extends Prisma.AccountUncheckedUpdateInput {
+  updatedByUserId?: string;
 }
 
 @Injectable()
@@ -16,25 +27,27 @@ export class AccountsRepository {
   /**
    * Create a new account
    */
-  async create(data: Prisma.AccountUncheckedCreateInput): Promise<Account> {
-    return this.prisma.account.create({ data });
-  }
-
-  /**
-   * Find account by ID (owned by user)
-   */
-  async findById(id: string, userId: string): Promise<Account | null> {
-    return this.prisma.account.findFirst({
-      where: { id, userId },
+  async create(data: AccountActorCreateData): Promise<Account> {
+    return this.prisma.account.create({
+      data: data as Prisma.AccountUncheckedCreateInput,
     });
   }
 
   /**
-   * Find all accounts for a user with filters
+   * Find account by ID within a workspace
+   */
+  async findById(id: string, workspaceId: string): Promise<Account | null> {
+    return this.prisma.account.findFirst({
+      where: { id, workspaceId },
+    });
+  }
+
+  /**
+   * Find all accounts for a workspace with filters
    */
   async findAll(filters: AccountQueryFilters): Promise<Account[]> {
     const where: Prisma.AccountWhereInput = {
-      userId: filters.userId,
+      workspaceId: filters.workspaceId,
     };
 
     if (!filters.includeArchived) {
@@ -60,20 +73,27 @@ export class AccountsRepository {
    */
   async update(
     id: string,
-    userId: string,
-    data: Prisma.AccountUncheckedUpdateInput,
+    workspaceId: string,
+    data: AccountActorUpdateData,
   ): Promise<Account> {
-    return this.prisma.account.update({
-      where: { id },
-      data: { ...data, userId },
-    });
+    const [, account] = await this.prisma.$transaction([
+      this.prisma.account.updateMany({
+        where: { id, workspaceId },
+        data: data as Prisma.AccountUncheckedUpdateInput,
+      }),
+      this.prisma.account.findFirstOrThrow({
+        where: { id, workspaceId },
+      }),
+    ]);
+
+    return account;
   }
 
   /**
    * Hard delete an account (only if it has no transactions)
    */
-  async delete(id: string): Promise<void> {
-    await this.prisma.account.delete({ where: { id } });
+  async delete(id: string, workspaceId: string): Promise<void> {
+    await this.prisma.account.deleteMany({ where: { id, workspaceId } });
   }
 
   /**
@@ -81,31 +101,43 @@ export class AccountsRepository {
    */
   async setArchived(
     id: string,
-    userId: string,
+    workspaceId: string,
     isArchived: boolean,
+    updatedByUserId?: string,
   ): Promise<Account> {
-    return this.prisma.account.update({
-      where: { id },
-      data: { isArchived, userId },
-    });
+    const [, account] = await this.prisma.$transaction([
+      this.prisma.account.updateMany({
+        where: { id, workspaceId },
+        data: {
+          isArchived,
+          ...(updatedByUserId ? { updatedByUserId } : {}),
+        } as Prisma.AccountUncheckedUpdateInput,
+      }),
+      this.prisma.account.findFirstOrThrow({
+        where: { id, workspaceId },
+      }),
+    ]);
+
+    return account;
   }
 
   /**
-   * Count active (non-archived) accounts for a user
+   * Count active (non-archived) accounts for a workspace
    * Used by FeatureGuard for RESOURCE limit checks
    */
-  async countActive(userId: string): Promise<number> {
+  async countActive(workspaceId: string): Promise<number> {
     return this.prisma.account.count({
-      where: { userId, isArchived: false },
+      where: { workspaceId, isArchived: false },
     });
   }
 
   /**
    * Check if an account has any transactions
    */
-  async hasTransactions(id: string): Promise<boolean> {
+  async hasTransactions(id: string, workspaceId: string): Promise<boolean> {
     const count = await this.prisma.transaction.count({
       where: {
+        workspaceId,
         OR: [{ accountId: id }, { transferToAccountId: id }],
       },
     });
@@ -113,15 +145,15 @@ export class AccountsRepository {
   }
 
   /**
-   * Check if account name already exists for user (case-insensitive)
+   * Check if account name already exists for workspace (case-insensitive)
    */
   async nameExists(
-    userId: string,
+    workspaceId: string,
     name: string,
     excludeId?: string,
   ): Promise<boolean> {
     const where: Prisma.AccountWhereInput = {
-      userId,
+      workspaceId,
       name: { equals: name, mode: 'insensitive' },
     };
 
@@ -136,7 +168,7 @@ export class AccountsRepository {
   /**
    * Get balance summary grouped by currency
    */
-  async getBalanceSummary(userId: string): Promise<
+  async getBalanceSummary(workspaceId: string): Promise<
     {
       currencyCode: string;
       _sum: { balance: Prisma.Decimal | null };
@@ -145,7 +177,7 @@ export class AccountsRepository {
   > {
     const result = await this.prisma.account.groupBy({
       by: ['currencyCode'],
-      where: { userId, isArchived: false, includeInTotal: true },
+      where: { workspaceId, isArchived: false, includeInTotal: true },
       _sum: { balance: true },
       _count: true,
     });

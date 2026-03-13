@@ -3,6 +3,7 @@ import { AiExecutionResult } from '@ai/interfaces/ai-execution-result.interface'
 export interface AiExecutionContext {
   capability: string;
   userId: string;
+  workspaceId?: string;
   module: string;
   requestId?: string;
   environment: string;

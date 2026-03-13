@@ -34,7 +34,7 @@ describe('VoucherAnalyzerController', () => {
     );
   });
 
-  it('should delegate analysis to the service with user and request ids', async () => {
+  it('should delegate analysis to the service with workspace-aware principal context and request id', async () => {
     service.analyze.mockResolvedValue({
       status: 'NOT_VOUCHER',
       document: { type: 'unknown', confidence: 0.75 },
@@ -46,13 +46,27 @@ describe('VoucherAnalyzerController', () => {
     });
 
     const result = await controller.analyze(
-      { sub: 'user-1', email: 'test@test.com', user: {} as never },
+      {
+        sub: 'user-1',
+        email: 'test@test.com',
+        workspaceId: 'workspace-1',
+        actorUserId: 'user-1',
+        membershipId: 'membership-1',
+        workspaceRole: 'ADMIN',
+        platformRole: 'USER',
+        user: {} as never,
+        workspace: {} as never,
+        membership: {} as never,
+      } as never,
       { buffer: Buffer.from([0xff, 0xd8, 0xff, 0xdb]) } as Express.Multer.File,
       { id: 'req-1' } as never,
     );
 
     expect(service.analyze).toHaveBeenCalledWith(
-      'user-1',
+      {
+        sub: 'user-1',
+        workspaceId: 'workspace-1',
+      },
       expect.any(Object),
       'req-1',
     );

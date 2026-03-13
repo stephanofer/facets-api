@@ -11,7 +11,7 @@ export interface CategoryWithChildren extends Category {
 }
 
 export interface CategoryQueryFilters {
-  userId: string;
+  workspaceId: string;
   type?: TransactionType;
   includeInactive?: boolean;
 }
@@ -21,39 +21,48 @@ export class CategoriesRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Create a custom category for a user
+   * Create a custom category for a workspace
    */
   async create(data: Prisma.CategoryUncheckedCreateInput): Promise<Category> {
     return this.prisma.category.create({ data });
   }
 
   /**
-   * Find a category by ID
-   * Can be a system category (userId=null) or a user's custom category
+   * Find a category by ID within the current workspace visibility scope
    */
-  async findById(id: string): Promise<CategoryWithChildren | null> {
-    return this.prisma.category.findUnique({
-      where: { id },
-      include: { children: true },
+  async findById(
+    id: string,
+    workspaceId: string,
+  ): Promise<CategoryWithChildren | null> {
+    return this.prisma.category.findFirst({
+      where: {
+        id,
+        OR: this.buildVisibilityOr(workspaceId),
+      },
+      include: {
+        children: {
+          where: {
+            OR: this.buildVisibilityOr(workspaceId),
+          },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        },
+      },
     });
   }
 
   /**
-   * Find all categories visible to a user (system + custom) as a tree
+   * Find all categories visible to a workspace (system + custom) as a tree
    *
    * Returns parent categories with their children included.
-   * System categories (userId=null) are always returned.
-   * Custom categories are filtered by userId.
+   * System categories are always returned.
+   * Custom categories are filtered by workspaceId.
    */
-  async findAllForUser(
+  async findAllVisible(
     filters: CategoryQueryFilters,
   ): Promise<CategoryWithChildren[]> {
     const where: Prisma.CategoryWhereInput = {
       parentId: null, // Only top-level parents
-      OR: [
-        { isSystem: true }, // System categories visible to all
-        { userId: filters.userId }, // User's custom categories
-      ],
+      OR: this.buildVisibilityOr(filters.workspaceId),
     };
 
     if (filters.type) {
@@ -66,7 +75,7 @@ export class CategoriesRepository {
 
     // Build children filter
     const childrenWhere: Prisma.CategoryWhereInput = {
-      OR: [{ isSystem: true }, { userId: filters.userId }],
+      OR: this.buildVisibilityOr(filters.workspaceId),
     };
 
     if (!filters.includeInactive) {
@@ -86,11 +95,11 @@ export class CategoriesRepository {
   }
 
   /**
-   * Find all categories flat (no tree) for a user
+   * Find all categories flat (no tree) for a workspace
    */
   async findAllFlat(filters: CategoryQueryFilters): Promise<Category[]> {
     const where: Prisma.CategoryWhereInput = {
-      OR: [{ isSystem: true }, { userId: filters.userId }],
+      OR: this.buildVisibilityOr(filters.workspaceId),
     };
 
     if (filters.type) {
@@ -112,64 +121,85 @@ export class CategoriesRepository {
    */
   async update(
     id: string,
+    workspaceId: string,
     data: Prisma.CategoryUncheckedUpdateInput,
   ): Promise<Category> {
-    return this.prisma.category.update({
-      where: { id },
-      data,
-    });
+    const [, category] = await this.prisma.$transaction([
+      this.prisma.category.updateMany({
+        where: { id, workspaceId, isSystem: false },
+        data,
+      }),
+      this.prisma.category.findFirstOrThrow({
+        where: { id, workspaceId, isSystem: false },
+      }),
+    ]);
+
+    return category;
   }
 
   /**
    * Delete a category
    */
-  async delete(id: string): Promise<void> {
-    await this.prisma.category.delete({ where: { id } });
+  async delete(id: string, workspaceId: string): Promise<void> {
+    await this.prisma.category.deleteMany({
+      where: { id, workspaceId, isSystem: false },
+    });
   }
 
   /**
    * Soft-disable a category (set isActive=false)
    */
-  async setActive(id: string, isActive: boolean): Promise<Category> {
-    return this.prisma.category.update({
-      where: { id },
-      data: { isActive },
-    });
+  async setActive(
+    id: string,
+    workspaceId: string,
+    isActive: boolean,
+  ): Promise<Category> {
+    const [, category] = await this.prisma.$transaction([
+      this.prisma.category.updateMany({
+        where: { id, workspaceId, isSystem: false },
+        data: { isActive },
+      }),
+      this.prisma.category.findFirstOrThrow({
+        where: { id, workspaceId, isSystem: false },
+      }),
+    ]);
+
+    return category;
   }
 
   /**
-   * Count custom (non-system) categories for a user
+   * Count custom (non-system) categories for a workspace
    * Used for RESOURCE feature limit checks
    */
-  async countCustom(userId: string): Promise<number> {
+  async countCustom(workspaceId: string): Promise<number> {
     return this.prisma.category.count({
-      where: { userId, isSystem: false },
+      where: { workspaceId, isSystem: false },
     });
   }
 
   /**
    * Check if a category has transactions referencing it
    */
-  async hasTransactions(id: string): Promise<boolean> {
+  async hasTransactions(id: string, workspaceId: string): Promise<boolean> {
     const count = await this.prisma.transaction.count({
-      where: { categoryId: id },
+      where: { categoryId: id, workspaceId },
     });
     return count > 0;
   }
 
   /**
-   * Check if a custom category name already exists for user+type+parent
-   * Respects the unique constraint: @@unique([userId, name, type, parentId])
+   * Check if a custom category name already exists for workspace+type+parent
    */
   async nameExists(
-    userId: string,
+    workspaceId: string,
     name: string,
     type: TransactionType,
     parentId: string | null,
     excludeId?: string,
   ): Promise<boolean> {
     const where: Prisma.CategoryWhereInput = {
-      userId,
+      workspaceId,
+      isSystem: false,
       name: { equals: name, mode: 'insensitive' },
       type,
       parentId: parentId ?? null,
@@ -187,14 +217,21 @@ export class CategoriesRepository {
    * Check if a category is a parent (has no parentId) and
    * if it itself has a parent (to enforce 2-level max)
    */
-  async getParentDepth(parentId: string): Promise<number> {
-    const parent = await this.prisma.category.findUnique({
-      where: { id: parentId },
+  async getParentDepth(parentId: string, workspaceId: string): Promise<number> {
+    const parent = await this.prisma.category.findFirst({
+      where: {
+        id: parentId,
+        OR: this.buildVisibilityOr(workspaceId),
+      },
       select: { parentId: true },
     });
 
     if (!parent) return -1; // Not found
     if (parent.parentId) return 2; // Parent itself is a child → would be 3rd level
     return 1; // Parent is top-level → child would be 2nd level (OK)
+  }
+
+  private buildVisibilityOr(workspaceId: string): Prisma.CategoryWhereInput[] {
+    return [{ isSystem: true }, { workspaceId }];
   }
 }

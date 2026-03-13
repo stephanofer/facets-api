@@ -14,7 +14,11 @@ import { SubscriptionsModule } from '@modules/subscriptions/subscriptions.module
 import { AccountsModule } from '@modules/accounts/accounts.module';
 import { CategoriesModule } from '@modules/categories/categories.module';
 import { VoucherAnalyzerModule } from '@modules/voucher-analyzer/voucher-analyzer.module';
+import { WorkspacesModule } from '@modules/workspaces/workspaces.module';
+import { ActiveMembershipGuard } from '@common/guards/active-membership.guard';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
+import { PlatformRoleGuard } from '@common/guards/platform-role.guard';
+import { WorkspaceRoleGuard } from '@common/guards/workspace-role.guard';
 
 @Module({
   imports: [
@@ -59,6 +63,7 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
     HealthModule,
     AuthModule,
     SubscriptionsModule,
+    WorkspacesModule,
     AccountsModule,
     CategoriesModule,
     VoucherAnalyzerModule,
@@ -68,9 +73,24 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
     // Global JWT Auth Guard - all routes protected by default
     // Use @Public() decorator for public routes
     JwtAuthGuard,
+    PlatformRoleGuard,
+    ActiveMembershipGuard,
+    WorkspaceRoleGuard,
     {
       provide: APP_GUARD,
       useExisting: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useExisting: PlatformRoleGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useExisting: ActiveMembershipGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useExisting: WorkspaceRoleGuard,
     },
     // Global rate limiting - applies to all routes
     // Use @Throttle() to override per-endpoint, @SkipThrottle() to skip

@@ -45,6 +45,12 @@ export class AccountResponseDto {
   @ApiProperty({ example: 0 })
   sortOrder: number;
 
+  @ApiPropertyOptional({ example: 'cm3xk7z9w0001jn08user12345' })
+  createdByUserId?: string;
+
+  @ApiPropertyOptional({ example: 'cm3xk7z9w0001jn08user12345' })
+  updatedByUserId?: string;
+
   @ApiProperty({ example: '2025-01-15T10:30:00.000Z' })
   createdAt: Date;
 

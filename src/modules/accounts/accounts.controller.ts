@@ -28,12 +28,14 @@ import {
   AccountListResponseDto,
   AccountSummaryResponseDto,
 } from '@modules/accounts/dtos/account-response.dto';
-import { CurrentUser } from '@common/decorators/current-user.decorator';
+import { CurrentPrincipal } from '@common/decorators/current-principal.decorator';
 import { RequireFeature } from '@common/decorators/feature.decorator';
+import { RequireWorkspaceRole } from '@common/decorators/workspace-role.decorator';
 import { FeatureGuard } from '@common/guards/feature.guard';
 import { ParseCuidPipe } from '@common/pipes/parse-cuid.pipe';
-import { AuthenticatedUser } from '@modules/auth/strategies/jwt.strategy';
 import { FEATURES } from '@modules/subscriptions/constants/features.constant';
+import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
+import { WorkspaceRole } from '../../generated/prisma/client';
 
 @ApiTags('Accounts')
 @ApiBearerAuth()
@@ -47,6 +49,7 @@ export class AccountsController {
   @Post()
   @UseGuards(FeatureGuard)
   @RequireFeature(FEATURES.ACCOUNTS)
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN, WorkspaceRole.MEMBER)
   @ApiOperation({
     summary: 'Create account',
     description:
@@ -70,20 +73,29 @@ export class AccountsController {
     description: 'Validation error or invalid credit card fields',
   })
   async create(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Body() dto: CreateAccountDto,
   ): Promise<AccountResponseDto> {
-    return this.accountsService.create(user.sub, dto);
+    return this.accountsService.create(
+      principal.workspaceId,
+      principal.actorUserId,
+      dto,
+    );
   }
 
   /**
    * List all accounts
    */
   @Get()
+  @RequireWorkspaceRole(
+    WorkspaceRole.ADMIN,
+    WorkspaceRole.MEMBER,
+    WorkspaceRole.GUEST,
+  )
   @ApiOperation({
     summary: 'List accounts',
     description:
-      'Get all accounts for the authenticated user. By default, archived accounts are hidden.',
+      'Get all accounts for the authenticated workspace. By default, archived accounts are hidden.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -91,16 +103,21 @@ export class AccountsController {
     type: AccountListResponseDto,
   })
   async findAll(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Query() query: QueryAccountDto,
   ): Promise<AccountListResponseDto> {
-    return this.accountsService.findAll(user.sub, query);
+    return this.accountsService.findAll(principal.workspaceId, query);
   }
 
   /**
    * Get balance summary
    */
   @Get('summary')
+  @RequireWorkspaceRole(
+    WorkspaceRole.ADMIN,
+    WorkspaceRole.MEMBER,
+    WorkspaceRole.GUEST,
+  )
   @ApiOperation({
     summary: 'Balance summary',
     description:
@@ -112,15 +129,20 @@ export class AccountsController {
     type: AccountSummaryResponseDto,
   })
   async getBalanceSummary(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ): Promise<AccountSummaryResponseDto> {
-    return this.accountsService.getBalanceSummary(user.sub);
+    return this.accountsService.getBalanceSummary(principal.workspaceId);
   }
 
   /**
    * Get a single account
    */
   @Get(':id')
+  @RequireWorkspaceRole(
+    WorkspaceRole.ADMIN,
+    WorkspaceRole.MEMBER,
+    WorkspaceRole.GUEST,
+  )
   @ApiOperation({
     summary: 'Get account',
     description: 'Get details of a specific account.',
@@ -136,16 +158,17 @@ export class AccountsController {
     description: 'Account not found',
   })
   async findById(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Param('id', ParseCuidPipe) id: string,
   ): Promise<AccountResponseDto> {
-    return this.accountsService.findById(user.sub, id);
+    return this.accountsService.findById(principal.workspaceId, id);
   }
 
   /**
    * Update an account
    */
   @Put(':id')
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN, WorkspaceRole.MEMBER)
   @ApiOperation({
     summary: 'Update account',
     description:
@@ -166,17 +189,23 @@ export class AccountsController {
     description: 'Account name already exists',
   })
   async update(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Param('id', ParseCuidPipe) id: string,
     @Body() dto: UpdateAccountDto,
   ): Promise<AccountResponseDto> {
-    return this.accountsService.update(user.sub, id, dto);
+    return this.accountsService.update(
+      principal.workspaceId,
+      principal.actorUserId,
+      id,
+      dto,
+    );
   }
 
   /**
    * Delete an account (only if no transactions)
    */
   @Delete(':id')
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN, WorkspaceRole.MEMBER)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Delete account',
@@ -197,16 +226,17 @@ export class AccountsController {
     description: 'Account has transactions, archive instead',
   })
   async delete(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Param('id', ParseCuidPipe) id: string,
   ): Promise<void> {
-    return this.accountsService.delete(user.sub, id);
+    return this.accountsService.delete(principal.workspaceId, id);
   }
 
   /**
    * Archive an account
    */
   @Patch(':id/archive')
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN, WorkspaceRole.MEMBER)
   @ApiOperation({
     summary: 'Archive account',
     description:
@@ -223,16 +253,21 @@ export class AccountsController {
     description: 'Account not found',
   })
   async archive(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Param('id', ParseCuidPipe) id: string,
   ): Promise<AccountResponseDto> {
-    return this.accountsService.archive(user.sub, id);
+    return this.accountsService.archive(
+      principal.workspaceId,
+      principal.actorUserId,
+      id,
+    );
   }
 
   /**
    * Unarchive an account
    */
   @Patch(':id/unarchive')
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN, WorkspaceRole.MEMBER)
   @ApiOperation({
     summary: 'Unarchive account',
     description:
@@ -253,9 +288,13 @@ export class AccountsController {
     description: 'Account limit reached, cannot unarchive',
   })
   async unarchive(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Param('id', ParseCuidPipe) id: string,
   ): Promise<AccountResponseDto> {
-    return this.accountsService.unarchive(user.sub, id);
+    return this.accountsService.unarchive(
+      principal.workspaceId,
+      principal.actorUserId,
+      id,
+    );
   }
 }

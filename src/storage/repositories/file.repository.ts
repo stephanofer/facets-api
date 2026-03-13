@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
-import { File, Prisma } from '../../generated/prisma/client';
+import { File, FilePurpose, Prisma } from '../../generated/prisma/client';
 
 const DEFAULT_CLEANUP_BATCH_SIZE = 100;
 
@@ -21,9 +21,61 @@ export class FileRepository {
     });
   }
 
+  findActiveAvatarById(
+    id: string,
+    uploadedByUserId: string,
+  ): Promise<File | null> {
+    return this.prisma.file.findFirst({
+      where: {
+        id,
+        purpose: FilePurpose.AVATAR,
+        uploadedByUserId,
+        deletedAt: null,
+      },
+    });
+  }
+
+  findActiveWorkspaceFileById(
+    id: string,
+    workspaceId: string,
+  ): Promise<File | null> {
+    return this.prisma.file.findFirst({
+      where: {
+        id,
+        workspaceId,
+        deletedAt: null,
+      },
+    });
+  }
+
   markDeleted(id: string): Promise<File> {
     return this.prisma.file.update({
       where: { id },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+  }
+
+  async markDeletedAvatar(id: string, uploadedByUserId: string): Promise<File> {
+    const file = await this.findActiveAvatarById(id, uploadedByUserId);
+
+    return this.prisma.file.update({
+      where: { id: file?.id ?? id },
+      data: {
+        deletedAt: new Date(),
+      },
+    });
+  }
+
+  async markDeletedWorkspaceFile(
+    id: string,
+    workspaceId: string,
+  ): Promise<File> {
+    const file = await this.findActiveWorkspaceFileById(id, workspaceId);
+
+    return this.prisma.file.update({
+      where: { id: file?.id ?? id },
       data: {
         deletedAt: new Date(),
       },

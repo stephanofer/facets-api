@@ -72,6 +72,7 @@ export class VoucherAnalyzerCapability implements AiCapabilityDefinition<
     return {
       capability: context.capability,
       userId: context.userId,
+      workspaceId: context.workspaceId ?? 'unknown',
       module: context.module,
       environment: context.environment,
       requestId: context.requestId ?? 'unknown',

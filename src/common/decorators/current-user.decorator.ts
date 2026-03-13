@@ -1,17 +1,22 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { AuthenticatedUser } from '@modules/auth/strategies/jwt.strategy';
+import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
+import { User } from '../../generated/prisma/client';
+
+type CurrentUserData = keyof User;
 
 export const CurrentUser = createParamDecorator(
   (
-    data: keyof AuthenticatedUser | undefined,
+    data: CurrentUserData | undefined,
     ctx: ExecutionContext,
-  ):
-    | AuthenticatedUser
-    | AuthenticatedUser[keyof AuthenticatedUser]
-    | undefined => {
+  ): User | User[keyof User] | undefined => {
     const request = ctx.switchToHttp().getRequest();
-    const user = request.user as AuthenticatedUser;
+    const principal = request.user as AuthenticatedPrincipal | undefined;
+    const user = principal?.user;
 
-    return data ? user?.[data] : user;
+    if (!data) {
+      return user;
+    }
+
+    return user?.[data];
   },
 );

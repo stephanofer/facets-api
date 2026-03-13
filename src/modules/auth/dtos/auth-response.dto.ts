@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { FileResponseDto } from '@storage/dtos/file-response.dto';
+import {
+  PlatformRole,
+  WorkspaceMembershipStatus,
+  WorkspaceRole,
+  WorkspaceStatus,
+  WorkspaceType,
+} from '../../../generated/prisma/client';
 
 /**
  * JWT Payload structure for access tokens
@@ -9,6 +16,14 @@ export interface JwtPayload {
   sub: string;
   /** User's email */
   email: string;
+  /** Active workspace identifier */
+  workspaceId: string;
+  /** Active membership identifier */
+  membershipId: string;
+  /** Active workspace role */
+  workspaceRole: WorkspaceRole;
+  /** Global platform role */
+  platformRole: PlatformRole;
   /** Issued at timestamp */
   iat?: number;
   /** Expiration timestamp */
@@ -61,6 +76,56 @@ export class AuthPlanDto {
     example: 'Free',
   })
   name: string;
+}
+
+export class AuthWorkspaceDto {
+  @ApiProperty({
+    description: 'Workspace unique identifier',
+    example: 'cwksp_123456789',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Workspace display name',
+    example: 'John Workspace',
+  })
+  name: string;
+
+  @ApiProperty({
+    description: 'Workspace type',
+    enum: WorkspaceType,
+    example: WorkspaceType.PERSONAL,
+  })
+  type: WorkspaceType;
+
+  @ApiProperty({
+    description: 'Workspace status',
+    enum: WorkspaceStatus,
+    example: WorkspaceStatus.ACTIVE,
+  })
+  status: WorkspaceStatus;
+}
+
+export class AuthMembershipDto {
+  @ApiProperty({
+    description: 'Workspace membership unique identifier',
+    example: 'cmbr_123456789',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'Role inside the current workspace',
+    enum: WorkspaceRole,
+    example: WorkspaceRole.ADMIN,
+  })
+  role: WorkspaceRole;
+
+  @ApiProperty({
+    description: 'Membership status inside the current workspace',
+    enum: WorkspaceMembershipStatus,
+    example: WorkspaceMembershipStatus.ACTIVE,
+  })
+  status: WorkspaceMembershipStatus;
 }
 
 /**
@@ -118,9 +183,28 @@ export class AuthUserDto {
 
   @ApiPropertyOptional({
     type: AuthPlanDto,
-    description: 'Current subscription plan',
+    description: 'Current workspace subscription plan',
   })
   plan?: AuthPlanDto;
+
+  @ApiProperty({
+    type: AuthWorkspaceDto,
+    description: 'Current active workspace summary',
+  })
+  workspace: AuthWorkspaceDto;
+
+  @ApiProperty({
+    type: AuthMembershipDto,
+    description: 'Current active workspace membership summary',
+  })
+  membership: AuthMembershipDto;
+
+  @ApiProperty({
+    description: 'Global platform role',
+    enum: PlatformRole,
+    example: PlatformRole.USER,
+  })
+  platformRole: PlatformRole;
 }
 
 /**

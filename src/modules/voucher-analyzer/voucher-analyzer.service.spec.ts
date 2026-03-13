@@ -60,9 +60,12 @@ describe('VoucherAnalyzerService', () => {
       },
     });
 
-    const result = await service.analyze('user-1', {
-      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]),
-    } as Express.Multer.File);
+    const result = await service.analyze(
+      { sub: 'user-1', workspaceId: 'workspace-1' },
+      {
+        buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]),
+      } as Express.Multer.File,
+    );
 
     expect(result).toEqual({
       status: 'VOUCHER',
@@ -106,9 +109,12 @@ describe('VoucherAnalyzerService', () => {
       },
     });
 
-    const result = await service.analyze('user-1', {
-      buffer: Buffer.from([0xff, 0xd8, 0xff, 0xdb]),
-    } as Express.Multer.File);
+    const result = await service.analyze(
+      { sub: 'user-1', workspaceId: 'workspace-1' },
+      {
+        buffer: Buffer.from([0xff, 0xd8, 0xff, 0xdb]),
+      } as Express.Multer.File,
+    );
 
     expect(result.status).toBe('NOT_VOUCHER');
     expect(result.extraction.fields).toBeNull();
@@ -119,7 +125,7 @@ describe('VoucherAnalyzerService', () => {
 
   it('should reject disguised files before AI execution', async () => {
     await expect(
-      service.analyze('user-1', {
+      service.analyze({ sub: 'user-1', workspaceId: 'workspace-1' }, {
         buffer: Buffer.from('%PDF-1.7'),
       } as Express.Multer.File),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
@@ -152,9 +158,12 @@ describe('VoucherAnalyzerService', () => {
       },
     });
 
-    const result = await service.analyze('user-1', {
-      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]),
-    } as Express.Multer.File);
+    const result = await service.analyze(
+      { sub: 'user-1', workspaceId: 'workspace-1' },
+      {
+        buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]),
+      } as Express.Multer.File,
+    );
 
     expect(result).toMatchObject({
       status: 'VOUCHER',
@@ -214,9 +223,12 @@ describe('VoucherAnalyzerService', () => {
       },
     });
 
-    const result = await service.analyze('user-1', {
-      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]),
-    } as Express.Multer.File);
+    const result = await service.analyze(
+      { sub: 'user-1', workspaceId: 'workspace-1' },
+      {
+        buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]),
+      } as Express.Multer.File,
+    );
 
     expect(result).toEqual({
       status: 'VOUCHER',
@@ -277,9 +289,12 @@ describe('VoucherAnalyzerService', () => {
       },
     });
 
-    const result = await service.analyze('user-1', {
-      buffer: Buffer.from([0xff, 0xd8, 0xff, 0xdb]),
-    } as Express.Multer.File);
+    const result = await service.analyze(
+      { sub: 'user-1', workspaceId: 'workspace-1' },
+      {
+        buffer: Buffer.from([0xff, 0xd8, 0xff, 0xdb]),
+      } as Express.Multer.File,
+    );
 
     expect(result.extraction).toEqual({
       text: null,

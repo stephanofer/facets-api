@@ -17,11 +17,11 @@ import {
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
-import { CurrentUser } from '@common/decorators/current-user.decorator';
-import { AuthenticatedUser } from '@modules/auth/strategies/jwt.strategy';
+import { CurrentPrincipal } from '@common/decorators/current-principal.decorator';
 import { AnalyzeVoucherUploadDto } from '@modules/voucher-analyzer/dtos/analyze-voucher-upload.dto';
 import { VoucherAnalysisResponseDto } from '@modules/voucher-analyzer/dtos/voucher-analysis-response.dto';
 import { VoucherAnalyzerService } from '@modules/voucher-analyzer/voucher-analyzer.service';
+import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
 import {
   createFileValidators,
   TRANSIENT_UPLOAD_PURPOSES,
@@ -59,13 +59,20 @@ export class VoucherAnalyzerController {
     description: 'Not authenticated',
   })
   async analyze(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @UploadedFile(
       createFileValidators(TRANSIENT_UPLOAD_PURPOSES.VOUCHER_ANALYSIS),
     )
     file: Express.Multer.File,
     @Req() request: Request & { id?: string },
   ): Promise<VoucherAnalysisResponseDto> {
-    return this.voucherAnalyzerService.analyze(user.sub, file, request.id);
+    return this.voucherAnalyzerService.analyze(
+      {
+        sub: principal.sub,
+        workspaceId: principal.workspaceId,
+      },
+      file,
+      request.id,
+    );
   }
 }

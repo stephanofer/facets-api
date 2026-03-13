@@ -78,7 +78,7 @@ export class SubscriptionsCronService {
   private async processScheduledChange(
     subscription: SubscriptionWithScheduledPlan,
   ): Promise<void> {
-    const { userId, plan: currentPlan, scheduledPlan } = subscription;
+    const { workspaceId, plan: currentPlan, scheduledPlan } = subscription;
 
     if (!scheduledPlan) {
       this.logger.warn(
@@ -88,7 +88,7 @@ export class SubscriptionsCronService {
     }
 
     this.logger.log(
-      `Applying scheduled change for user ${userId}: ${currentPlan.code} -> ${scheduledPlan.code}`,
+      `Applying scheduled change for workspace ${workspaceId}: ${currentPlan.code} -> ${scheduledPlan.code}`,
     );
 
     try {
@@ -102,7 +102,10 @@ export class SubscriptionsCronService {
       const currentPeriodEnd = this.calculateNewPeriodEnd(scheduledPlan.code);
 
       // Check for resource overages that need grace period
-      const graceOverages = await this.detectOverages(userId, scheduledPlan);
+      const graceOverages = await this.detectOverages(
+        workspaceId,
+        scheduledPlan,
+      );
       const gracePeriodEnd =
         Object.keys(graceOverages).length > 0
           ? this.calculateGracePeriodEnd()
@@ -110,7 +113,7 @@ export class SubscriptionsCronService {
 
       // Apply the change
       await this.subscriptionsRepository.applyScheduledChange(
-        userId,
+        workspaceId,
         scheduledPlan.id,
         currentPeriodEnd,
         Object.keys(graceOverages).length > 0 ? graceOverages : undefined,
@@ -119,7 +122,7 @@ export class SubscriptionsCronService {
 
       // Log the change
       await this.planChangeLogRepository.create({
-        userId,
+        workspaceId,
         fromPlanId: currentPlan.id,
         toPlanId: scheduledPlan.id,
         changeType,
@@ -130,11 +133,20 @@ export class SubscriptionsCronService {
         },
       });
 
-      // Fetch user for email
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { email: true, firstName: true },
+      const adminMembership = await this.prisma.workspaceMembership.findFirst({
+        where: {
+          workspaceId,
+          role: 'ADMIN',
+          status: 'ACTIVE',
+        },
+        include: {
+          user: {
+            select: { email: true, firstName: true },
+          },
+        },
       });
+
+      const user = adminMembership?.user;
 
       if (user) {
         // Send appropriate notification email
@@ -156,10 +168,12 @@ export class SubscriptionsCronService {
         }
       }
 
-      this.logger.log(`Successfully applied ${changeType} for user ${userId}`);
+      this.logger.log(
+        `Successfully applied ${changeType} for workspace ${workspaceId}`,
+      );
     } catch (error) {
       this.logger.error(
-        `Failed to apply scheduled change for user ${userId}`,
+        `Failed to apply scheduled change for workspace ${workspaceId}`,
         error,
       );
     }
@@ -208,7 +222,6 @@ export class SubscriptionsCronService {
         graceOverages: { not: Prisma.AnyNull },
       },
       include: {
-        user: { select: { email: true, firstName: true } },
         plan: true,
       },
     });
@@ -223,16 +236,27 @@ export class SubscriptionsCronService {
     );
 
     for (const subscription of subscriptions) {
-      if (!subscription.user) continue;
+      const adminMembership = await this.prisma.workspaceMembership.findFirst({
+        where: {
+          workspaceId: subscription.workspaceId,
+          role: 'ADMIN',
+          status: 'ACTIVE',
+        },
+        include: {
+          user: { select: { email: true, firstName: true } },
+        },
+      });
+
+      if (!adminMembership?.user) continue;
 
       try {
         const overages = this.parseOverages(subscription.graceOverages);
 
         await this.mailService.sendTemplate(
           'grace-period-warning',
-          subscription.user.email,
+          adminMembership.user.email,
           {
-            userName: subscription.user.firstName,
+            userName: adminMembership.user.firstName,
             gracePeriodEnd: this.formatDate(subscription.gracePeriodEnd!),
             daysRemaining: warningDays,
             overages: overages,
@@ -240,11 +264,11 @@ export class SubscriptionsCronService {
         );
 
         this.logger.debug(
-          `Sent grace period warning to ${subscription.user.email}`,
+          `Sent grace period warning to ${adminMembership.user.email}`,
         );
       } catch (error) {
         this.logger.error(
-          `Failed to send grace period warning to ${subscription.user.email}`,
+          `Failed to send grace period warning to ${adminMembership.user.email}`,
           error,
         );
       }
@@ -278,14 +302,23 @@ export class SubscriptionsCronService {
 
         // Clear the grace period
         await this.subscriptionsRepository.clearGracePeriod(
-          subscription.userId,
+          subscription.workspaceId,
         );
 
-        // Fetch user for notification
-        const user = await this.prisma.user.findUnique({
-          where: { id: subscription.userId },
-          select: { email: true, firstName: true },
-        });
+        const adminMembership = await this.prisma.workspaceMembership.findFirst(
+          {
+            where: {
+              workspaceId: subscription.workspaceId,
+              role: 'ADMIN',
+              status: 'ACTIVE',
+            },
+            include: {
+              user: { select: { email: true, firstName: true } },
+            },
+          },
+        );
+
+        const user = adminMembership?.user;
 
         if (user) {
           await this.mailService.sendTemplate(
@@ -299,11 +332,11 @@ export class SubscriptionsCronService {
         }
 
         this.logger.log(
-          `Cleared expired grace period for user ${subscription.userId}`,
+          `Cleared expired grace period for workspace ${subscription.workspaceId}`,
         );
       } catch (error) {
         this.logger.error(
-          `Failed to handle expired grace period for user ${subscription.userId}`,
+          `Failed to handle expired grace period for workspace ${subscription.workspaceId}`,
           error,
         );
       }
@@ -349,7 +382,7 @@ export class SubscriptionsCronService {
   // eslint-disable-next-line @typescript-eslint/require-await
   private async detectOverages(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _userId: string,
+    _workspaceId: string,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _targetPlan: {
       planFeatures: Array<{ featureCode: string; limitValue: number }>;

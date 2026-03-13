@@ -46,8 +46,8 @@ import {
   VerifyEmailResponseDto,
 } from '@modules/auth/dtos/auth-response.dto';
 import { Public } from '@common/decorators/public.decorator';
-import { CurrentUser } from '@common/decorators/current-user.decorator';
-import { AuthenticatedUser } from '@modules/auth/strategies/jwt.strategy';
+import { CurrentPrincipal } from '@common/decorators/current-principal.decorator';
+import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
 import { createFileValidators } from '@storage/config/file-purpose.config';
 import { FilePurpose } from '../../generated/prisma/client';
 
@@ -68,7 +68,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Register new user',
     description:
-      'Create a new user account. A verification OTP will be sent to the provided email.',
+      'Create a new user account and atomically bootstrap a personal workspace, admin membership, workspace settings, and free workspace subscription. A verification OTP will be sent to the provided email.',
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -107,7 +107,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Login user',
     description:
-      'Authenticate with email and password. User must have verified email. Returns access and refresh tokens. Web clients receive refresh token as HttpOnly cookie.',
+      'Authenticate with email and password. User must have verified email and at least one active workspace membership. Returns workspace-aware access and refresh tokens. Web clients receive refresh token as HttpOnly cookie.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -162,7 +162,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Verify email with OTP',
     description:
-      'Verify email address using the 6-digit OTP sent to email. On success, returns tokens for auto-login. Web clients receive refresh token as HttpOnly cookie.',
+      'Verify email address using the 6-digit OTP sent to email. On success, returns workspace-aware tokens for auto-login. Web clients receive refresh token as HttpOnly cookie.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -313,7 +313,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Refresh tokens',
     description:
-      'Get new access and refresh tokens. The used refresh token is revoked (rotation). Web clients send refresh token via HttpOnly cookie; mobile clients send it in the request body.',
+      'Get new access and refresh tokens while preserving active workspace context. The used refresh token is revoked (rotation). Web clients send refresh token via HttpOnly cookie; mobile clients send it in the request body.',
   })
   @ApiBody({ type: RefreshTokenDto })
   @ApiResponse({
@@ -401,10 +401,10 @@ export class AuthController {
     type: MessageResponseDto,
   })
   async logoutAll(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Res({ passthrough: true }) res: Response,
   ): Promise<MessageResponseDto> {
-    const result = await this.authService.logoutAll(user.sub);
+    const result = await this.authService.logoutAll(principal.sub);
 
     // Clear cookies for the current browser session
     this.authService.clearRefreshTokenCookie(res);
@@ -420,7 +420,8 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get current user',
-    description: 'Get the profile of the currently authenticated user.',
+    description:
+      'Get the profile of the currently authenticated user together with active workspace and membership context.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -431,8 +432,10 @@ export class AuthController {
     status: HttpStatus.UNAUTHORIZED,
     description: 'Not authenticated',
   })
-  async getMe(@CurrentUser() user: AuthenticatedUser): Promise<AuthUserDto> {
-    return this.authService.getMe(user);
+  async getMe(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ): Promise<AuthUserDto> {
+    return this.authService.getMe(principal);
   }
 
   /**
@@ -458,11 +461,11 @@ export class AuthController {
     description: 'Invalid file type or file too large',
   })
   async uploadAvatar(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @UploadedFile(createFileValidators(FilePurpose.AVATAR))
     file: Express.Multer.File,
   ): Promise<AuthUserDto> {
-    return this.authService.uploadAvatar(user.sub, file);
+    return this.authService.uploadAvatar(principal, file);
   }
 
   /**
@@ -480,8 +483,10 @@ export class AuthController {
     status: HttpStatus.NO_CONTENT,
     description: 'Avatar removed successfully',
   })
-  async removeAvatar(@CurrentUser() user: AuthenticatedUser): Promise<void> {
-    await this.authService.removeAvatar(user.sub);
+  async removeAvatar(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+  ): Promise<void> {
+    await this.authService.removeAvatar(principal.sub);
   }
 
   // ===========================================================================

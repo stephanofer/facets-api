@@ -23,6 +23,7 @@ describe('AiService', () => {
     buildMetadata: jest.fn().mockReturnValue({
       capability: 'voucher-analyzer',
       userId: 'user-1',
+      workspaceId: 'workspace-1',
       module: 'voucher-analyzer',
       environment: 'test',
       requestId: 'req-1',
@@ -81,6 +82,7 @@ describe('AiService', () => {
       {
         capability: 'voucher-analyzer',
         userId: 'user-1',
+        workspaceId: 'workspace-1',
         module: 'voucher-analyzer',
         requestId: 'req-1',
         environment: 'test',
@@ -92,9 +94,9 @@ describe('AiService', () => {
         metadata: {
           capability: 'voucher-analyzer',
           userId: 'user-1',
+          workspaceId: 'workspace-1',
           module: 'voucher-analyzer',
           environment: 'test',
-          requestId: 'req-1',
         },
       }),
     );
@@ -124,6 +126,7 @@ describe('AiService', () => {
       {
         capability: 'voucher-analyzer',
         userId: 'user-1',
+        workspaceId: 'workspace-1',
         module: 'voucher-analyzer',
         requestId: 'req-1',
         environment: 'test',
@@ -147,6 +150,7 @@ describe('AiService', () => {
         {
           capability: 'unknown',
           userId: 'user-1',
+          workspaceId: 'workspace-1',
           module: 'voucher-analyzer',
           environment: 'test',
         },
@@ -168,6 +172,7 @@ describe('AiService', () => {
         {
           capability: 'voucher-analyzer',
           userId: 'user-1',
+          workspaceId: 'workspace-1',
           module: 'voucher-analyzer',
           environment: 'test',
         },
@@ -204,6 +209,7 @@ describe('AiService', () => {
         {
           capability: 'voucher-analyzer',
           userId: 'user-1',
+          workspaceId: 'workspace-1',
           module: 'voucher-analyzer',
           environment: 'test',
         },

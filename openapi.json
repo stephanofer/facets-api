@@ -353,7 +353,7 @@
     },
     "/api/v1/auth/register": {
       "post": {
-        "description": "Create a new user account. A verification OTP will be sent to the provided email.",
+        "description": "Create a new user account and atomically bootstrap a personal workspace, admin membership, workspace settings, and free workspace subscription. A verification OTP will be sent to the provided email.",
         "operationId": "AuthController_register_v1",
         "parameters": [],
         "requestBody": {
@@ -395,7 +395,7 @@
     },
     "/api/v1/auth/login": {
       "post": {
-        "description": "Authenticate with email and password. User must have verified email. Returns access and refresh tokens. Web clients receive refresh token as HttpOnly cookie.",
+        "description": "Authenticate with email and password. User must have verified email and at least one active workspace membership. Returns workspace-aware access and refresh tokens. Web clients receive refresh token as HttpOnly cookie.",
         "operationId": "AuthController_login_v1",
         "parameters": [],
         "requestBody": {
@@ -437,7 +437,7 @@
     },
     "/api/v1/auth/verify-email": {
       "post": {
-        "description": "Verify email address using the 6-digit OTP sent to email. On success, returns tokens for auto-login. Web clients receive refresh token as HttpOnly cookie.",
+        "description": "Verify email address using the 6-digit OTP sent to email. On success, returns workspace-aware tokens for auto-login. Web clients receive refresh token as HttpOnly cookie.",
         "operationId": "AuthController_verifyEmail_v1",
         "parameters": [],
         "requestBody": {
@@ -590,7 +590,7 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
-        "description": "Get new access and refresh tokens. The used refresh token is revoked (rotation). Web clients send refresh token via HttpOnly cookie; mobile clients send it in the request body.",
+        "description": "Get new access and refresh tokens while preserving active workspace context. The used refresh token is revoked (rotation). Web clients send refresh token via HttpOnly cookie; mobile clients send it in the request body.",
         "operationId": "AuthController_refresh_v1",
         "parameters": [],
         "requestBody": {
@@ -692,7 +692,7 @@
     },
     "/api/v1/auth/me": {
       "get": {
-        "description": "Get the profile of the currently authenticated user.",
+        "description": "Get the profile of the currently authenticated user together with active workspace and membership context.",
         "operationId": "AuthController_getMe_v1",
         "parameters": [],
         "responses": {
@@ -843,7 +843,7 @@
     },
     "/api/v1/subscriptions/current": {
       "get": {
-        "description": "Get the current user's subscription details including plan and status.",
+        "description": "Get the current workspace subscription details including plan and status.",
         "operationId": "SubscriptionsController_getCurrentSubscription_v1",
         "parameters": [],
         "responses": {
@@ -856,12 +856,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "No active subscription found"
           }
         },
         "security": [
@@ -877,7 +871,7 @@
     },
     "/api/v1/subscriptions/usage": {
       "get": {
-        "description": "Get the current usage for all features in the user's plan. Shows current count, limits, and percentage used.",
+        "description": "Get the current usage for all features in the active workspace plan.",
         "operationId": "SubscriptionsController_getUsage_v1",
         "parameters": [],
         "responses": {
@@ -890,12 +884,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "No active subscription found"
           }
         },
         "security": [
@@ -911,7 +899,7 @@
     },
     "/api/v1/subscriptions/preview": {
       "get": {
-        "description": "Preview the effects of changing to a different plan. Shows pricing, overages, and effective dates.",
+        "description": "Preview the effects of changing to a different plan for the active workspace.",
         "operationId": "SubscriptionsController_previewPlanChange_v1",
         "parameters": [
           {
@@ -935,12 +923,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Already on this plan"
-          },
-          "404": {
-            "description": "Subscription or plan not found"
           }
         },
         "security": [
@@ -956,7 +938,7 @@
     },
     "/api/v1/subscriptions/upgrade": {
       "post": {
-        "description": "Upgrade to a higher tier plan. The change takes effect immediately and proration is applied.",
+        "description": "Upgrade the active workspace to a higher tier plan. The change takes effect immediately.",
         "operationId": "SubscriptionsController_upgradePlan_v1",
         "parameters": [],
         "requestBody": {
@@ -979,12 +961,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Invalid upgrade (same plan or lower tier)"
-          },
-          "404": {
-            "description": "Subscription or plan not found"
           }
         },
         "security": [
@@ -1000,7 +976,7 @@
     },
     "/api/v1/subscriptions/downgrade": {
       "post": {
-        "description": "Downgrade to a lower tier plan. The change is scheduled for the end of the current billing period.",
+        "description": "Downgrade the active workspace to a lower tier plan. The change is scheduled for the end of the current billing period.",
         "operationId": "SubscriptionsController_downgradePlan_v1",
         "parameters": [],
         "requestBody": {
@@ -1023,12 +999,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Invalid downgrade (same plan or higher tier)"
-          },
-          "404": {
-            "description": "Subscription or plan not found"
           }
         },
         "security": [
@@ -1044,7 +1014,7 @@
     },
     "/api/v1/subscriptions/cancel": {
       "post": {
-        "description": "Cancel the subscription. The user will be downgraded to the Free plan at the end of the billing period.",
+        "description": "Cancel the active workspace subscription. It will downgrade to Free at the end of the billing period.",
         "operationId": "SubscriptionsController_cancelSubscription_v1",
         "parameters": [],
         "requestBody": {
@@ -1067,12 +1037,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "Cannot cancel free plan or already cancelled"
-          },
-          "404": {
-            "description": "No active subscription found"
           }
         },
         "security": [
@@ -1088,7 +1052,7 @@
     },
     "/api/v1/subscriptions/reactivate": {
       "post": {
-        "description": "Reactivate a cancelled subscription before the cancellation takes effect.",
+        "description": "Reactivate a cancelled active workspace subscription before cancellation takes effect.",
         "operationId": "SubscriptionsController_reactivateSubscription_v1",
         "parameters": [],
         "responses": {
@@ -1101,12 +1065,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "No pending cancellation to reactivate"
-          },
-          "404": {
-            "description": "No active subscription found"
           }
         },
         "security": [
@@ -1122,7 +1080,7 @@
     },
     "/api/v1/subscriptions/scheduled": {
       "delete": {
-        "description": "Cancel a scheduled downgrade or cancellation. The subscription will remain on the current plan.",
+        "description": "Cancel a scheduled downgrade or cancellation for the active workspace.",
         "operationId": "SubscriptionsController_cancelScheduledChange_v1",
         "parameters": [],
         "responses": {
@@ -1135,12 +1093,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "No scheduled change to cancel"
-          },
-          "404": {
-            "description": "No active subscription found"
           }
         },
         "security": [
@@ -1156,7 +1108,7 @@
     },
     "/api/v1/subscriptions/history": {
       "get": {
-        "description": "Get a list of all plan changes for the current user.",
+        "description": "Get a list of all plan changes for the active workspace.",
         "operationId": "SubscriptionsController_getPlanChangeHistory_v1",
         "parameters": [
           {
@@ -1190,6 +1142,101 @@
         "summary": "Get plan change history",
         "tags": [
           "Subscriptions"
+        ]
+      }
+    },
+    "/api/v1/workspaces/current": {
+      "get": {
+        "description": "Return the active workspace summary, membership context, and shared workspace settings. This route is intentionally workspace-scoped and does NOT expose personal user preferences.",
+        "operationId": "WorkspacesController_getCurrentWorkspace_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current workspace summary and shared settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentWorkspaceResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get current workspace",
+        "tags": [
+          "Workspaces"
+        ]
+      }
+    },
+    "/api/v1/workspaces/current/settings": {
+      "get": {
+        "description": "Return only shared workspace settings for the active workspace. Personal preferences remain user-scoped in UserPreference and are NOT read or mutated by this surface.",
+        "operationId": "WorkspacesController_getCurrentWorkspaceSettings_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current shared workspace settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSettingsResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get current workspace settings",
+        "tags": [
+          "Workspaces"
+        ]
+      },
+      "patch": {
+        "description": "Update shared workspace settings for the active workspace. Only workspace admins can mutate this surface. Personal user preferences must stay in user-scoped preference flows, not here.",
+        "operationId": "WorkspacesController_updateCurrentWorkspaceSettings_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkspaceSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workspace settings updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentWorkspaceResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only workspace admins can update shared workspace settings"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update current workspace settings",
+        "tags": [
+          "Workspaces"
         ]
       }
     },
@@ -1240,7 +1287,7 @@
         ]
       },
       "get": {
-        "description": "Get all accounts for the authenticated user. By default, archived accounts are hidden.",
+        "description": "Get all accounts for the authenticated workspace. By default, archived accounts are hidden.",
         "operationId": "AccountsController_findAll_v1",
         "parameters": [
           {
@@ -1595,7 +1642,7 @@
         ]
       },
       "get": {
-        "description": "Get all categories for the authenticated user. Includes system categories (shared) and custom categories (personal). Returns tree structure by default.",
+        "description": "Get all categories for the authenticated workspace. Includes system categories (shared) and workspace custom categories. Returns tree structure by default.",
         "operationId": "CategoriesController_findAll_v1",
         "parameters": [
           {
@@ -2031,6 +2078,83 @@
           "name"
         ]
       },
+      "AuthWorkspaceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Workspace unique identifier",
+            "example": "cwksp_123456789"
+          },
+          "name": {
+            "type": "string",
+            "description": "Workspace display name",
+            "example": "John Workspace"
+          },
+          "type": {
+            "type": "string",
+            "description": "Workspace type",
+            "enum": [
+              "PERSONAL",
+              "FAMILY",
+              "GROUP"
+            ],
+            "example": "PERSONAL"
+          },
+          "status": {
+            "type": "string",
+            "description": "Workspace status",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED",
+              "ARCHIVED"
+            ],
+            "example": "ACTIVE"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "status"
+        ]
+      },
+      "AuthMembershipDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Workspace membership unique identifier",
+            "example": "cmbr_123456789"
+          },
+          "role": {
+            "type": "string",
+            "description": "Role inside the current workspace",
+            "enum": [
+              "ADMIN",
+              "MEMBER",
+              "GUEST"
+            ],
+            "example": "ADMIN"
+          },
+          "status": {
+            "type": "string",
+            "description": "Membership status inside the current workspace",
+            "enum": [
+              "ACTIVE",
+              "INVITED",
+              "SUSPENDED",
+              "REMOVED"
+            ],
+            "example": "ACTIVE"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "status"
+        ]
+      },
       "AuthUserDto": {
         "type": "object",
         "properties": {
@@ -2085,12 +2209,37 @@
             ]
           },
           "plan": {
-            "description": "Current subscription plan",
+            "description": "Current workspace subscription plan",
             "allOf": [
               {
                 "$ref": "#/components/schemas/AuthPlanDto"
               }
             ]
+          },
+          "workspace": {
+            "description": "Current active workspace summary",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuthWorkspaceDto"
+              }
+            ]
+          },
+          "membership": {
+            "description": "Current active workspace membership summary",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuthMembershipDto"
+              }
+            ]
+          },
+          "platformRole": {
+            "type": "string",
+            "description": "Global platform role",
+            "enum": [
+              "USER",
+              "SUPER_ADMIN"
+            ],
+            "example": "USER"
           }
         },
         "required": [
@@ -2100,7 +2249,10 @@
           "lastName",
           "emailVerified",
           "status",
-          "createdAt"
+          "createdAt",
+          "workspace",
+          "membership",
+          "platformRole"
         ]
       },
       "RegisterResponseDto": {
@@ -2915,6 +3067,226 @@
           "history"
         ]
       },
+      "WorkspaceSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cwksp_123456789"
+          },
+          "name": {
+            "type": "string",
+            "example": "John Workspace"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "PERSONAL",
+              "FAMILY",
+              "GROUP"
+            ],
+            "example": "PERSONAL"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED",
+              "ARCHIVED"
+            ],
+            "example": "ACTIVE"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-03-12T00:00:00.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-03-12T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "WorkspaceMembershipSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cmship_123456789"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "MEMBER",
+              "GUEST"
+            ],
+            "example": "ADMIN"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INVITED",
+              "SUSPENDED",
+              "REMOVED"
+            ],
+            "example": "ACTIVE"
+          },
+          "joinedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-03-12T00:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "status",
+          "joinedAt"
+        ]
+      },
+      "WorkspaceSettingsDto": {
+        "type": "object",
+        "properties": {
+          "baseCurrencyCode": {
+            "type": "string",
+            "example": "USD"
+          },
+          "baseLanguage": {
+            "type": "string",
+            "example": "en"
+          },
+          "dateFormat": {
+            "type": "string",
+            "example": "DD/MM/YYYY"
+          },
+          "monthStartDay": {
+            "type": "number",
+            "example": 1
+          },
+          "weekStartDay": {
+            "type": "number",
+            "example": 1
+          },
+          "timezone": {
+            "type": "string",
+            "example": "UTC"
+          },
+          "locale": {
+            "type": "string",
+            "example": "en-US"
+          },
+          "displayLabel": {
+            "type": "string",
+            "example": "John Workspace"
+          }
+        },
+        "required": [
+          "baseCurrencyCode",
+          "baseLanguage",
+          "dateFormat",
+          "monthStartDay",
+          "weekStartDay",
+          "timezone",
+          "locale",
+          "displayLabel"
+        ]
+      },
+      "CurrentWorkspaceResponseDto": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceSummaryDto"
+          },
+          "membership": {
+            "$ref": "#/components/schemas/WorkspaceMembershipSummaryDto"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/WorkspaceSettingsDto"
+          }
+        },
+        "required": [
+          "workspace",
+          "membership",
+          "settings"
+        ]
+      },
+      "WorkspaceSettingsResponseDto": {
+        "type": "object",
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/WorkspaceSettingsDto"
+          }
+        },
+        "required": [
+          "settings"
+        ]
+      },
+      "UpdateWorkspaceSettingsDto": {
+        "type": "object",
+        "properties": {
+          "baseCurrencyCode": {
+            "type": "string",
+            "description": "Workspace base currency code shared by all members",
+            "example": "ARS"
+          },
+          "baseLanguage": {
+            "type": "string",
+            "description": "Workspace base language shared by all members",
+            "example": "es"
+          },
+          "dateFormat": {
+            "type": "string",
+            "description": "Workspace-wide default date format",
+            "example": "YYYY-MM-DD"
+          },
+          "monthStartDay": {
+            "type": "number",
+            "description": "Day of month that starts the financial month",
+            "example": 5
+          },
+          "weekStartDay": {
+            "type": "number",
+            "description": "Day of week that starts the calendar week (1-7)",
+            "example": 1
+          },
+          "timezone": {
+            "type": "string",
+            "description": "Workspace default timezone",
+            "example": "America/Argentina/Buenos_Aires"
+          },
+          "locale": {
+            "type": "string",
+            "description": "Workspace default locale",
+            "example": "es-AR"
+          },
+          "displayLabel": {
+            "type": "string",
+            "description": "Representative label shown for the workspace across the product",
+            "example": "Casa"
+          },
+          "workspaceType": {
+            "type": "string",
+            "description": "Workspace type used for shared workspace semantics",
+            "enum": [
+              "PERSONAL",
+              "FAMILY",
+              "GROUP"
+            ],
+            "example": "FAMILY"
+          }
+        }
+      },
       "CreateAccountDto": {
         "type": "object",
         "properties": {
@@ -3056,6 +3428,14 @@
           "sortOrder": {
             "type": "number",
             "example": 0
+          },
+          "createdByUserId": {
+            "type": "string",
+            "example": "cm3xk7z9w0001jn08user12345"
+          },
+          "updatedByUserId": {
+            "type": "string",
+            "example": "cm3xk7z9w0001jn08user12345"
           },
           "createdAt": {
             "format": "date-time",

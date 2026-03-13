@@ -1,5 +1,5 @@
-// User fixture factory
-// Will be implemented when User model is created
+// Identity-scoped fixture factory for auth registration/login payloads.
+// Tenant context is bootstrapped separately as workspace + membership.
 
 export interface CreateUserFixture {
   email?: string;

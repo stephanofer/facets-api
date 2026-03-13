@@ -31,13 +31,14 @@ export class AccountsService {
    * 4. Credit card field validation
    */
   async create(
-    userId: string,
+    workspaceId: string,
+    actorUserId: string,
     dto: CreateAccountDto,
   ): Promise<AccountResponseDto> {
     // Check feature limit
-    const currentCount = await this.accountsRepository.countActive(userId);
-    const access = await this.subscriptionsService.checkFeatureAccess(
-      userId,
+    const currentCount = await this.accountsRepository.countActive(workspaceId);
+    const access = await this.subscriptionsService.checkWorkspaceFeatureAccess(
+      workspaceId,
       FEATURES.ACCOUNTS,
       currentCount,
     );
@@ -66,7 +67,7 @@ export class AccountsService {
 
     // Check duplicate name
     const nameExists = await this.accountsRepository.nameExists(
-      userId,
+      workspaceId,
       dto.name,
     );
     if (nameExists) {
@@ -81,7 +82,9 @@ export class AccountsService {
     this.validateCreditCardFields(dto.type, dto);
 
     const account = await this.accountsRepository.create({
-      userId,
+      workspaceId,
+      createdByUserId: actorUserId,
+      updatedByUserId: actorUserId,
       name: dto.name,
       type: dto.type,
       balance: dto.balance ?? 0,
@@ -102,14 +105,14 @@ export class AccountsService {
   }
 
   /**
-   * Get all accounts for a user with optional filters
+   * Get all accounts for a workspace with optional filters
    */
   async findAll(
-    userId: string,
+    workspaceId: string,
     query: QueryAccountDto,
   ): Promise<AccountListResponseDto> {
     const accounts = await this.accountsRepository.findAll({
-      userId,
+      workspaceId,
       type: query.type,
       includeArchived: query.includeArchived ?? false,
       currencyCode: query.currencyCode,
@@ -125,10 +128,10 @@ export class AccountsService {
    * Get a single account by ID
    */
   async findById(
-    userId: string,
+    workspaceId: string,
     accountId: string,
   ): Promise<AccountResponseDto> {
-    const account = await this.findAccountOrThrow(accountId, userId);
+    const account = await this.findAccountOrThrow(accountId, workspaceId);
     return this.toResponseDto(account);
   }
 
@@ -136,16 +139,17 @@ export class AccountsService {
    * Update an account
    */
   async update(
-    userId: string,
+    workspaceId: string,
+    actorUserId: string,
     accountId: string,
     dto: UpdateAccountDto,
   ): Promise<AccountResponseDto> {
-    const account = await this.findAccountOrThrow(accountId, userId);
+    const account = await this.findAccountOrThrow(accountId, workspaceId);
 
     // Check duplicate name (if name is being changed)
     if (dto.name && dto.name !== account.name) {
       const nameExists = await this.accountsRepository.nameExists(
-        userId,
+        workspaceId,
         dto.name,
         accountId,
       );
@@ -168,23 +172,28 @@ export class AccountsService {
       dto.paymentDueDay = undefined;
     }
 
-    const updated = await this.accountsRepository.update(accountId, userId, {
-      ...(dto.name !== undefined && { name: dto.name }),
-      ...(dto.balance !== undefined && { balance: dto.balance }),
-      ...(dto.color !== undefined && { color: dto.color }),
-      ...(dto.icon !== undefined && { icon: dto.icon }),
-      ...(dto.includeInTotal !== undefined && {
-        includeInTotal: dto.includeInTotal,
-      }),
-      ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
-      ...(dto.creditLimit !== undefined && { creditLimit: dto.creditLimit }),
-      ...(dto.statementClosingDay !== undefined && {
-        statementClosingDay: dto.statementClosingDay,
-      }),
-      ...(dto.paymentDueDay !== undefined && {
-        paymentDueDay: dto.paymentDueDay,
-      }),
-    });
+    const updated = await this.accountsRepository.update(
+      accountId,
+      workspaceId,
+      {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.balance !== undefined && { balance: dto.balance }),
+        ...(dto.color !== undefined && { color: dto.color }),
+        ...(dto.icon !== undefined && { icon: dto.icon }),
+        ...(dto.includeInTotal !== undefined && {
+          includeInTotal: dto.includeInTotal,
+        }),
+        ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
+        ...(dto.creditLimit !== undefined && { creditLimit: dto.creditLimit }),
+        ...(dto.statementClosingDay !== undefined && {
+          statementClosingDay: dto.statementClosingDay,
+        }),
+        ...(dto.paymentDueDay !== undefined && {
+          paymentDueDay: dto.paymentDueDay,
+        }),
+        updatedByUserId: actorUserId,
+      },
+    );
 
     return this.toResponseDto(updated);
   }
@@ -195,11 +204,13 @@ export class AccountsService {
    * Only allowed if the account has NO transactions.
    * If it has transactions, the user should archive it instead.
    */
-  async delete(userId: string, accountId: string): Promise<void> {
-    await this.findAccountOrThrow(accountId, userId);
+  async delete(workspaceId: string, accountId: string): Promise<void> {
+    await this.findAccountOrThrow(accountId, workspaceId);
 
-    const hasTransactions =
-      await this.accountsRepository.hasTransactions(accountId);
+    const hasTransactions = await this.accountsRepository.hasTransactions(
+      accountId,
+      workspaceId,
+    );
     if (hasTransactions) {
       throw new BusinessException(
         ERROR_CODES.ACCOUNT_HAS_TRANSACTIONS,
@@ -208,22 +219,24 @@ export class AccountsService {
       );
     }
 
-    await this.accountsRepository.delete(accountId);
+    await this.accountsRepository.delete(accountId, workspaceId);
   }
 
   /**
    * Archive an account (soft delete — hide from UI, keep transactions)
    */
   async archive(
-    userId: string,
+    workspaceId: string,
+    actorUserId: string,
     accountId: string,
   ): Promise<AccountResponseDto> {
-    await this.findAccountOrThrow(accountId, userId);
+    await this.findAccountOrThrow(accountId, workspaceId);
 
     const updated = await this.accountsRepository.setArchived(
       accountId,
-      userId,
+      workspaceId,
       true,
+      actorUserId,
     );
     return this.toResponseDto(updated);
   }
@@ -235,10 +248,11 @@ export class AccountsService {
    * don't count towards the limit.
    */
   async unarchive(
-    userId: string,
+    workspaceId: string,
+    actorUserId: string,
     accountId: string,
   ): Promise<AccountResponseDto> {
-    const account = await this.findAccountOrThrow(accountId, userId);
+    const account = await this.findAccountOrThrow(accountId, workspaceId);
 
     if (!account.isArchived) {
       throw new BusinessException(
@@ -249,9 +263,9 @@ export class AccountsService {
     }
 
     // Check feature limit before restoring
-    const currentCount = await this.accountsRepository.countActive(userId);
-    const access = await this.subscriptionsService.checkFeatureAccess(
-      userId,
+    const currentCount = await this.accountsRepository.countActive(workspaceId);
+    const access = await this.subscriptionsService.checkWorkspaceFeatureAccess(
+      workspaceId,
       FEATURES.ACCOUNTS,
       currentCount,
     );
@@ -266,8 +280,9 @@ export class AccountsService {
 
     const updated = await this.accountsRepository.setArchived(
       accountId,
-      userId,
+      workspaceId,
       false,
+      actorUserId,
     );
     return this.toResponseDto(updated);
   }
@@ -275,9 +290,12 @@ export class AccountsService {
   /**
    * Get balance summary grouped by currency
    */
-  async getBalanceSummary(userId: string): Promise<AccountSummaryResponseDto> {
-    const summary = await this.accountsRepository.getBalanceSummary(userId);
-    const activeCount = await this.accountsRepository.countActive(userId);
+  async getBalanceSummary(
+    workspaceId: string,
+  ): Promise<AccountSummaryResponseDto> {
+    const summary =
+      await this.accountsRepository.getBalanceSummary(workspaceId);
+    const activeCount = await this.accountsRepository.countActive(workspaceId);
 
     return {
       balances: summary.map((s) => ({
@@ -290,10 +308,10 @@ export class AccountsService {
   }
 
   /**
-   * Count active accounts for a user (used by FeatureGuard/SubscriptionsService)
+   * Count active accounts for a workspace (used by FeatureGuard/SubscriptionsService)
    */
-  async countActive(userId: string): Promise<number> {
-    return this.accountsRepository.countActive(userId);
+  async countActive(workspaceId: string): Promise<number> {
+    return this.accountsRepository.countActive(workspaceId);
   }
 
   // ==========================================================================
@@ -305,9 +323,12 @@ export class AccountsService {
    */
   private async findAccountOrThrow(
     accountId: string,
-    userId: string,
+    workspaceId: string,
   ): Promise<Account> {
-    const account = await this.accountsRepository.findById(accountId, userId);
+    const account = await this.accountsRepository.findById(
+      accountId,
+      workspaceId,
+    );
 
     if (!account) {
       throw new BusinessException(
@@ -370,6 +391,12 @@ export class AccountsService {
       statementClosingDay: account.statementClosingDay ?? undefined,
       paymentDueDay: account.paymentDueDay ?? undefined,
       sortOrder: account.sortOrder,
+      createdByUserId:
+        (account as Account & { createdByUserId?: string | null })
+          .createdByUserId ?? undefined,
+      updatedByUserId:
+        (account as Account & { updatedByUserId?: string | null })
+          .updatedByUserId ?? undefined,
       createdAt: account.createdAt,
       updatedAt: account.updatedAt,
     };

@@ -1,51 +1,60 @@
 import {
+  ConflictException,
+  HttpStatus,
   Injectable,
   Logger,
   UnauthorizedException,
-  ConflictException,
-  HttpStatus,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import * as crypto from 'crypto';
-import { Response, CookieOptions } from 'express';
-import { ConfigService } from '@config/config.service';
-import { PrismaService } from '@database/prisma.service';
-import { FileService } from '@storage/services/file.service';
-import { UsersService } from '@modules/users/users.service';
+import { CookieOptions, Response } from 'express';
+import { ERROR_CODES } from '@common/constants/app.constants';
+import { BusinessException } from '@common/exceptions/business.exception';
 import { RefreshTokensRepository } from '@modules/auth/refresh-tokens.repository';
-import { OtpService } from '@modules/otp/otp.service';
-import { MailService } from '@mail/mail.service';
-import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
-import { REFRESH_TOKEN_COOKIE_NAME } from '@modules/auth/strategies/jwt-refresh.strategy';
-import { ACCESS_TOKEN_COOKIE_NAME } from '@modules/auth/strategies/jwt.strategy';
-import { RegisterDto } from '@modules/auth/dtos/register.dto';
-import { LoginDto } from '@modules/auth/dtos/login.dto';
+import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
 import {
-  VerifyEmailDto,
-  ResendVerificationDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
-} from '@modules/auth/dtos/verification.dto';
-import {
-  JwtPayload,
-  RefreshTokenPayload,
-  TokensResponseDto,
   AuthUserDto,
+  JwtPayload,
   LoginResponseDto,
-  RegisterResponseDto,
   MessageResponseDto,
+  RefreshTokenPayload,
+  RegisterResponseDto,
+  TokensResponseDto,
   VerifyEmailResponseDto,
 } from '@modules/auth/dtos/auth-response.dto';
-import { BusinessException } from '@common/exceptions/business.exception';
-import { ERROR_CODES } from '@common/constants/app.constants';
+import { LoginDto } from '@modules/auth/dtos/login.dto';
+import { RegisterDto } from '@modules/auth/dtos/register.dto';
+import {
+  ForgotPasswordDto,
+  ResendVerificationDto,
+  ResetPasswordDto,
+  VerifyEmailDto,
+} from '@modules/auth/dtos/verification.dto';
+import { ACCESS_TOKEN_COOKIE_NAME } from '@modules/auth/strategies/jwt.strategy';
+import { REFRESH_TOKEN_COOKIE_NAME } from '@modules/auth/strategies/jwt-refresh.strategy';
+import { UsersService } from '@modules/users/users.service';
+import { OtpService } from '@modules/otp/otp.service';
+import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
+import { ConfigService } from '@config/config.service';
+import { PrismaService } from '@database/prisma.service';
+import { MailService } from '@mail/mail.service';
+import { FileService } from '@storage/services/file.service';
 import {
   File as StoredFile,
-  User,
-  OtpType,
-  UserStatus,
   FilePurpose,
+  OtpType,
+  PlatformRole,
+  Prisma,
   SubscriptionStatus,
+  User,
+  UserStatus,
+  Workspace,
+  WorkspaceMembership,
+  WorkspaceMembershipStatus,
+  WorkspaceRole,
+  WorkspaceStatus,
+  WorkspaceType,
 } from '../../generated/prisma/client';
 
 interface RequestMetadata {
@@ -53,10 +62,19 @@ interface RequestMetadata {
   ipAddress?: string;
 }
 
+interface WorkspaceSessionContext {
+  workspace: Workspace;
+  membership: WorkspaceMembership;
+  plan?: {
+    code: string;
+    name: string;
+  };
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  private readonly accessTokenExpiry: number; // in seconds
+  private readonly accessTokenExpiry: number;
   private readonly refreshTokenExpirySeconds: number;
 
   constructor(
@@ -70,23 +88,15 @@ export class AuthService {
     private readonly mailService: MailService,
     private readonly subscriptionsService: SubscriptionsService,
   ) {
-    // Parse access token expiry to seconds (e.g., '1h' -> 3600)
     this.accessTokenExpiry = this.parseExpiryToSeconds(
       this.configService.jwt.accessExpires || '1h',
     );
-    // Parse refresh token expiry to seconds (e.g., '7d' -> 604800)
     this.refreshTokenExpirySeconds = this.parseExpiryToSeconds(
       this.configService.jwt.refreshExpires || '7d',
     );
   }
 
-  /**
-   * Register a new user
-   *
-   * Creates user with PENDING_VERIFICATION status and sends verification OTP email.
-   */
   async register(dto: RegisterDto): Promise<RegisterResponseDto> {
-    // Check if email already exists
     const emailExists = await this.usersService.emailExists(dto.email);
     if (emailExists) {
       throw new ConflictException({
@@ -95,23 +105,10 @@ export class AuthService {
       });
     }
 
-    // Hash password with Argon2id (more secure, faster than bcrypt)
     const hashedPassword = await argon2.hash(dto.password);
 
-    // Create user + subscription atomically in a single transaction
-    const { user, subscription } = await this.prisma.$transaction(
+    const { user, context } = await this.prisma.$transaction(
       async (tx) => {
-        const newUser = await tx.user.create({
-          data: {
-            email: dto.email.toLowerCase(),
-            password: hashedPassword,
-            firstName: dto.firstName,
-            lastName: dto.lastName,
-            status: UserStatus.PENDING_VERIFICATION,
-            emailVerified: false,
-          },
-        });
-
         const defaultPlan = await tx.plan.findFirst({
           where: { isDefault: true, isActive: true },
           include: { planFeatures: true },
@@ -125,24 +122,71 @@ export class AuthService {
           );
         }
 
-        const newSubscription = await tx.subscription.create({
+        const workspaceName = this.buildDefaultWorkspaceName(dto);
+
+        const workspace = await tx.workspace.create({
           data: {
-            userId: newUser.id,
-            planId: defaultPlan.id,
-            status: SubscriptionStatus.ACTIVE,
-            currentPeriodStart: new Date(),
-            currentPeriodEnd: null, // Free plan has no end date
-          },
-          include: {
-            plan: { include: { planFeatures: true } },
+            name: workspaceName,
+            type: WorkspaceType.PERSONAL,
+            status: WorkspaceStatus.ACTIVE,
           },
         });
 
-        return { user: newUser, subscription: newSubscription };
+        const user = await tx.user.create({
+          data: {
+            email: dto.email.toLowerCase(),
+            password: hashedPassword,
+            firstName: dto.firstName,
+            lastName: dto.lastName,
+            status: UserStatus.PENDING_VERIFICATION,
+            emailVerified: false,
+            platformRole: PlatformRole.USER,
+          },
+        });
+
+        const membership = await tx.workspaceMembership.create({
+          data: {
+            workspaceId: workspace.id,
+            userId: user.id,
+            role: WorkspaceRole.ADMIN,
+            status: WorkspaceMembershipStatus.ACTIVE,
+          },
+        });
+
+        await tx.workspaceSettings.create({
+          data: {
+            workspaceId: workspace.id,
+            displayLabel: workspaceName,
+          },
+        });
+
+        await tx.subscription.create({
+          data: {
+            workspaceId: workspace.id,
+            planId: defaultPlan.id,
+            status: SubscriptionStatus.ACTIVE,
+            currentPeriodStart: new Date(),
+            currentPeriodEnd: null,
+          },
+        });
+
+        return {
+          user,
+          context: {
+            workspace,
+            membership,
+            plan: {
+              code: defaultPlan.code,
+              name: defaultPlan.name,
+            },
+          },
+        };
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       },
     );
 
-    // Generate OTP and send verification email (fire-and-forget, don't block response)
     this.sendVerificationEmail(user).catch((error) => {
       this.logger.error(
         `Failed to send verification email to ${user.email}`,
@@ -150,26 +194,19 @@ export class AuthService {
       );
     });
 
+    const principal = this.buildAuthenticatedPrincipal(user, context);
+
     return {
       message:
         'Registration successful. Please check your email to verify your account.',
-      user: await this.toAuthUserDto(user, {
-        code: subscription.plan.code,
-        name: subscription.plan.name,
-      }),
+      user: await this.toAuthUserDto(principal, context.plan),
     };
   }
 
-  /**
-   * Login a user with email and password
-   *
-   * Validates credentials and user status, then generates tokens.
-   */
   async login(
     dto: LoginDto,
     metadata?: RequestMetadata,
   ): Promise<LoginResponseDto> {
-    // Find user by email
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
       throw new UnauthorizedException({
@@ -178,7 +215,6 @@ export class AuthService {
       });
     }
 
-    // Verify password
     const isPasswordValid = await argon2.verify(user.password, dto.password);
     if (!isPasswordValid) {
       throw new UnauthorizedException({
@@ -187,34 +223,25 @@ export class AuthService {
       });
     }
 
-    // Check if user can login (status check)
     const loginStatus = this.usersService.canLogin(user);
     if (!loginStatus.allowed) {
       this.throwStatusError(loginStatus.reason!);
     }
 
-    // Generate tokens and get plan in parallel (independent operations)
-    const [tokens, plan] = await Promise.all([
-      this.generateTokens(user, metadata),
-      this.getUserPlan(user.id),
-    ]);
+    const context = await this.resolveLoginWorkspaceContext(user.id);
+    const principal = this.buildAuthenticatedPrincipal(user, context);
+    const tokens = await this.generateTokens(principal, metadata);
 
     return {
       tokens,
-      user: await this.toAuthUserDto(user, plan),
+      user: await this.toAuthUserDto(principal, context.plan),
     };
   }
 
-  /**
-   * Verify email with OTP code
-   *
-   * Validates the OTP, marks user as verified, sends welcome email, and returns tokens for auto-login.
-   */
   async verifyEmail(
     dto: VerifyEmailDto,
     metadata?: RequestMetadata,
   ): Promise<VerifyEmailResponseDto> {
-    // Find user by email
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
       throw new BusinessException(
@@ -224,7 +251,6 @@ export class AuthService {
       );
     }
 
-    // Check if already verified
     if (user.emailVerified) {
       throw new BusinessException(
         ERROR_CODES.EMAIL_ALREADY_VERIFIED,
@@ -233,13 +259,10 @@ export class AuthService {
       );
     }
 
-    // Verify OTP
     await this.otpService.verify(dto.code, user.id, OtpType.EMAIL_VERIFICATION);
 
-    // Mark user as verified
     const updatedUser = await this.usersService.verifyEmail(user.id);
 
-    // Send welcome email (fire-and-forget, don't block the response)
     this.sendWelcomeEmail(updatedUser).catch((error) => {
       this.logger.error(
         `Failed to send welcome email to ${updatedUser.email}`,
@@ -247,38 +270,28 @@ export class AuthService {
       );
     });
 
-    // Generate tokens and get plan in parallel (independent operations)
-    const [tokens, plan] = await Promise.all([
-      this.generateTokens(updatedUser, metadata),
-      this.getUserPlan(updatedUser.id),
-    ]);
+    const context = await this.resolveLoginWorkspaceContext(updatedUser.id);
+    const principal = this.buildAuthenticatedPrincipal(updatedUser, context);
+    const tokens = await this.generateTokens(principal, metadata);
 
     return {
       message: 'Email verified successfully. You are now logged in.',
       tokens,
-      user: await this.toAuthUserDto(updatedUser, plan),
+      user: await this.toAuthUserDto(principal, context.plan),
     };
   }
 
-  /**
-   * Resend verification email
-   *
-   * Generates a new OTP and sends verification email.
-   */
   async resendVerification(
     dto: ResendVerificationDto,
   ): Promise<MessageResponseDto> {
-    // Find user by email
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
-      // Return success message even if user not found (avoid email enumeration)
       return {
         message:
           'If an account exists with this email, a verification code has been sent.',
       };
     }
 
-    // Check if already verified
     if (user.emailVerified) {
       throw new BusinessException(
         ERROR_CODES.EMAIL_ALREADY_VERIFIED,
@@ -287,7 +300,6 @@ export class AuthService {
       );
     }
 
-    // Generate new OTP and send email (fire-and-forget, don't block response)
     this.sendVerificationEmail(user).catch((error) => {
       this.logger.error(
         `Failed to send verification email to ${user.email}`,
@@ -301,32 +313,18 @@ export class AuthService {
     };
   }
 
-  /**
-   * Initiate password reset (forgot password)
-   *
-   * Generates OTP and sends password reset email.
-   * Always returns success to prevent email enumeration.
-   */
   async forgotPassword(dto: ForgotPasswordDto): Promise<MessageResponseDto> {
-    // Find user by email
     const user = await this.usersService.findByEmail(dto.email);
 
-    // Always return success to prevent email enumeration
     const successMessage = {
       message:
         'If an account exists with this email, a password reset code has been sent.',
     };
 
-    if (!user) {
+    if (!user || user.status === UserStatus.DELETED) {
       return successMessage;
     }
 
-    // Don't send reset email for deleted accounts
-    if (user.status === UserStatus.DELETED) {
-      return successMessage;
-    }
-
-    // Generate OTP and send password reset email (fire-and-forget, don't block response)
     this.sendPasswordResetEmail(user).catch((error) => {
       this.logger.error(
         `Failed to send password reset email to ${user.email}`,
@@ -337,13 +335,7 @@ export class AuthService {
     return successMessage;
   }
 
-  /**
-   * Reset password with verified OTP
-   *
-   * Verifies the OTP, consumes it, updates the password, and revokes all sessions.
-   */
   async resetPassword(dto: ResetPasswordDto): Promise<MessageResponseDto> {
-    // Find user by email
     const user = await this.usersService.findByEmail(dto.email);
     if (!user) {
       throw new BusinessException(
@@ -353,13 +345,10 @@ export class AuthService {
       );
     }
 
-    // Verify OTP
     await this.otpService.verify(dto.code, user.id, OtpType.PASSWORD_RESET);
 
-    // Hash new password
     const hashedPassword = await argon2.hash(dto.newPassword);
 
-    // Update password and revoke all tokens in parallel (independent operations)
     await Promise.all([
       this.usersService.updatePassword(user.id, hashedPassword),
       this.refreshTokensRepository.revokeAllForUser(user.id),
@@ -371,17 +360,10 @@ export class AuthService {
     };
   }
 
-  /**
-   * Refresh access token using a valid refresh token
-   *
-   * Implements token rotation: the used refresh token is revoked
-   * and a new one is issued.
-   */
   async refreshTokens(
     payload: RefreshTokenPayload & { refreshToken: string },
     metadata?: RequestMetadata,
   ): Promise<TokensResponseDto> {
-    // Find the refresh token in database
     const storedToken = await this.refreshTokensRepository.findById(
       payload.tokenId,
     );
@@ -393,7 +375,6 @@ export class AuthService {
       });
     }
 
-    // Check if token is still valid (not revoked, not expired)
     if (!this.refreshTokensRepository.isTokenValid(storedToken)) {
       throw new UnauthorizedException({
         code: ERROR_CODES.REFRESH_TOKEN_REVOKED,
@@ -401,10 +382,8 @@ export class AuthService {
       });
     }
 
-    // Verify token hash matches (extra security)
     const tokenHash = this.hashToken(payload.refreshToken);
-    if (storedToken.token !== tokenHash) {
-      // Token mismatch - possible token theft, revoke all user tokens
+    if (storedToken.token !== tokenHash || storedToken.userId !== payload.sub) {
       await this.refreshTokensRepository.revokeAllForUser(storedToken.userId);
       throw new UnauthorizedException({
         code: ERROR_CODES.REFRESH_TOKEN_INVALID,
@@ -412,10 +391,14 @@ export class AuthService {
       });
     }
 
-    // Revoke current token and fetch user in parallel (independent operations)
-    const [, user] = await Promise.all([
+    const [, user, context] = await Promise.all([
       this.refreshTokensRepository.revoke(storedToken.id),
       this.usersService.findById(storedToken.userId),
+      this.resolveRefreshWorkspaceContext(
+        storedToken.userId,
+        payload.membershipId,
+        payload.workspaceId,
+      ),
     ]);
 
     if (!user) {
@@ -425,56 +408,40 @@ export class AuthService {
       });
     }
 
-    // Check user status
     const loginStatus = this.usersService.canLogin(user);
     if (!loginStatus.allowed) {
       this.throwStatusError(loginStatus.reason!);
     }
 
-    // Generate new tokens
-    return this.generateTokens(user, metadata);
+    const principal = this.buildAuthenticatedPrincipal(user, context);
+
+    return this.generateTokens(principal, metadata);
   }
 
-  /**
-   * Logout - revoke the specific refresh token
-   */
   async logout(refreshToken: string): Promise<void> {
     const tokenHash = this.hashToken(refreshToken);
     await this.refreshTokensRepository.revokeByToken(tokenHash);
   }
 
-  /**
-   * Logout from all devices - revoke all refresh tokens for user
-   */
   async logoutAll(userId: string): Promise<{ revokedCount: number }> {
     const result = await this.refreshTokensRepository.revokeAllForUser(userId);
     return { revokedCount: result.count };
   }
 
-  /**
-   * Get current user (for /auth/me endpoint)
-   *
-   * Uses the user already loaded by JwtStrategy to avoid a redundant DB query.
-   */
-  async getMe(authenticatedUser: {
-    sub: string;
-    user: User;
-  }): Promise<AuthUserDto> {
+  async getMe(principal: AuthenticatedPrincipal): Promise<AuthUserDto> {
     const [plan, avatar] = await Promise.all([
-      this.getUserPlan(authenticatedUser.sub),
-      this.usersService.findAvatarByUserId(authenticatedUser.sub),
+      this.getWorkspacePlan(principal.workspaceId),
+      this.usersService.findAvatarByUserId(principal.sub),
     ]);
-    return this.toAuthUserDto(authenticatedUser.user, plan, avatar);
+
+    return this.toAuthUserDto(principal, plan, avatar);
   }
 
-  /**
-   * Upload or replace the current authenticated user's avatar
-   */
   async uploadAvatar(
-    userId: string,
+    principal: AuthenticatedPrincipal,
     file: Express.Multer.File,
   ): Promise<AuthUserDto> {
-    const user = await this.usersService.findById(userId);
+    const user = await this.usersService.findById(principal.sub);
 
     if (!user) {
       throw new BusinessException(
@@ -487,26 +454,29 @@ export class AuthService {
     const uploadedAvatar = await this.fileService.upload(
       file,
       FilePurpose.AVATAR,
-      userId,
+      {
+        workspaceId: principal.workspaceId,
+        uploadedByUserId: principal.sub,
+      },
     );
 
     let avatar: StoredFile;
 
     try {
-      avatar = await this.usersService.replaceAvatar(userId, uploadedAvatar.id);
+      avatar = await this.usersService.replaceAvatar(
+        principal.sub,
+        uploadedAvatar.id,
+      );
     } catch (error) {
-      await this.safeDeleteUploadedAvatar(uploadedAvatar.id, userId);
+      await this.safeDeleteUploadedAvatar(uploadedAvatar.id, principal.sub);
       throw error;
     }
 
-    const plan = await this.getUserPlan(userId);
+    const plan = await this.getWorkspacePlan(principal.workspaceId);
 
-    return this.toAuthUserDto(user, plan, avatar);
+    return this.toAuthUserDto({ ...principal, user }, plan, avatar);
   }
 
-  /**
-   * Remove the current authenticated user's avatar
-   */
   async removeAvatar(userId: string): Promise<void> {
     const user = await this.usersService.findById(userId);
 
@@ -521,32 +491,22 @@ export class AuthService {
     await this.usersService.removeAvatar(userId);
   }
 
-  // ==========================================================================
-  // Private helper methods
-  // ==========================================================================
-
-  /**
-   * Get user's current plan info (for including in auth responses)
-   */
-  private async getUserPlan(
-    userId: string,
+  private async getWorkspacePlan(
+    workspaceId: string,
   ): Promise<{ code: string; name: string } | undefined> {
     try {
       const subscription =
-        await this.subscriptionsService.getUserSubscription(userId);
+        await this.subscriptionsService.getWorkspaceSubscription(workspaceId);
+
       return {
         code: subscription.plan.code,
         name: subscription.plan.name,
       };
     } catch {
-      // User may not have a subscription yet (shouldn't happen, but be safe)
       return undefined;
     }
   }
 
-  /**
-   * Send verification email with OTP
-   */
   private async sendVerificationEmail(user: User): Promise<void> {
     const otpResult = await this.otpService.generate(
       user.id,
@@ -560,11 +520,7 @@ export class AuthService {
     });
   }
 
-  /**
-   * Send welcome email after successful email verification
-   */
   private async sendWelcomeEmail(user: User): Promise<void> {
-    // TODO: Move this URL to configuration when frontend is ready
     const loginUrl = 'https://app.facets.com/login';
 
     await this.mailService.sendTemplate('welcome', user.email, {
@@ -574,9 +530,6 @@ export class AuthService {
     });
   }
 
-  /**
-   * Send password reset email with OTP
-   */
   private async sendPasswordResetEmail(user: User): Promise<void> {
     const otpResult = await this.otpService.generate(
       user.id,
@@ -590,29 +543,26 @@ export class AuthService {
     });
   }
 
-  /**
-   * Generate access and refresh tokens
-   */
   private async generateTokens(
-    user: User,
+    principal: AuthenticatedPrincipal,
     metadata?: RequestMetadata,
   ): Promise<TokensResponseDto> {
-    // Generate a unique token ID for the refresh token
     const tokenId = crypto.randomUUID();
 
-    // Create JWT payloads
     const accessPayload: JwtPayload = {
-      sub: user.id,
-      email: user.email,
+      sub: principal.sub,
+      email: principal.email,
+      workspaceId: principal.workspaceId,
+      membershipId: principal.membershipId,
+      workspaceRole: principal.workspaceRole,
+      platformRole: principal.platformRole,
     };
 
     const refreshPayload: RefreshTokenPayload = {
-      sub: user.id,
-      email: user.email,
+      ...accessPayload,
       tokenId,
     };
 
-    // Generate tokens
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(accessPayload, {
         secret: this.configService.jwt.accessSecret,
@@ -629,8 +579,9 @@ export class AuthService {
     );
 
     await this.refreshTokensRepository.create({
+      id: tokenId,
       token: this.hashToken(refreshToken),
-      userId: user.id,
+      userId: principal.sub,
       expiresAt,
       userAgent: metadata?.userAgent,
       ipAddress: metadata?.ipAddress,
@@ -643,21 +594,17 @@ export class AuthService {
     };
   }
 
-  /**
-   * Hash a token for storage (using SHA-256)
-   */
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
-  /**
-   * Convert User entity to AuthUserDto (excludes sensitive fields)
-   */
   private async toAuthUserDto(
-    user: User,
+    principal: AuthenticatedPrincipal,
     plan?: { code: string; name: string },
     avatar?: StoredFile | null,
   ): Promise<AuthUserDto> {
+    const { user, workspace, membership } = principal;
+
     return {
       id: user.id,
       email: user.email,
@@ -668,18 +615,30 @@ export class AuthService {
       createdAt: user.createdAt,
       avatar: avatar ? await this.fileService.toResponseDto(avatar) : undefined,
       plan,
+      workspace: {
+        id: workspace.id,
+        name: workspace.name,
+        type: workspace.type,
+        status: workspace.status,
+      },
+      membership: {
+        id: membership.id,
+        role: membership.role,
+        status: membership.status,
+      },
+      platformRole: user.platformRole,
     };
   }
 
   private async safeDeleteUploadedAvatar(
     fileId: string,
-    userId: string,
+    uploadedByUserId: string,
   ): Promise<void> {
     try {
-      await this.fileService.delete(fileId, userId);
+      await this.fileService.deleteAvatar(fileId, { uploadedByUserId });
     } catch (cleanupError) {
       this.logger.error(
-        `Failed to cleanup uploaded avatar ${fileId} for user ${userId}`,
+        `Failed to cleanup uploaded avatar ${fileId} for user ${uploadedByUserId}`,
         cleanupError instanceof Error
           ? cleanupError.stack
           : String(cleanupError),
@@ -687,13 +646,110 @@ export class AuthService {
     }
   }
 
-  /**
-   * Parse expiry string to seconds (e.g., '1h' -> 3600, '7d' -> 604800)
-   */
+  private buildAuthenticatedPrincipal(
+    user: User,
+    context: WorkspaceSessionContext,
+  ): AuthenticatedPrincipal {
+    return {
+      sub: user.id,
+      email: user.email,
+      workspaceId: context.workspace.id,
+      actorUserId: user.id,
+      membershipId: context.membership.id,
+      workspaceRole: context.membership.role,
+      platformRole: user.platformRole,
+      user,
+      workspace: context.workspace,
+      membership: context.membership,
+    };
+  }
+
+  private async resolveLoginWorkspaceContext(
+    userId: string,
+  ): Promise<WorkspaceSessionContext> {
+    const membership = await this.prisma.workspaceMembership.findFirst({
+      where: {
+        userId,
+        status: WorkspaceMembershipStatus.ACTIVE,
+        workspace: {
+          status: WorkspaceStatus.ACTIVE,
+        },
+      },
+      include: {
+        workspace: true,
+      },
+      orderBy: [{ joinedAt: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    if (!membership) {
+      throw new BusinessException(
+        ERROR_CODES.UNAUTHORIZED,
+        'Account access is not valid for workspace context resolution',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    return {
+      workspace: membership.workspace,
+      membership,
+      plan: await this.getWorkspacePlan(membership.workspaceId),
+    };
+  }
+
+  private async resolveRefreshWorkspaceContext(
+    userId: string,
+    membershipId: string,
+    workspaceId: string,
+  ): Promise<WorkspaceSessionContext> {
+    const membership = await this.prisma.workspaceMembership.findFirst({
+      where: {
+        id: membershipId,
+        userId,
+        workspaceId,
+        status: WorkspaceMembershipStatus.ACTIVE,
+        workspace: {
+          status: WorkspaceStatus.ACTIVE,
+        },
+      },
+      include: {
+        workspace: true,
+      },
+    });
+
+    if (!membership) {
+      throw new UnauthorizedException({
+        code: ERROR_CODES.UNAUTHORIZED,
+        message: 'Workspace membership is no longer active',
+      });
+    }
+
+    return {
+      workspace: membership.workspace,
+      membership,
+      plan: await this.getWorkspacePlan(membership.workspaceId),
+    };
+  }
+
+  private buildDefaultWorkspaceName(dto: RegisterDto): string {
+    const firstName = dto.firstName.trim();
+    const lastName = dto.lastName.trim();
+    const fullName = `${firstName} ${lastName}`.trim();
+
+    if (fullName.length > 0) {
+      return `${fullName} Workspace`;
+    }
+
+    if (firstName.length > 0) {
+      return `${firstName} Workspace`;
+    }
+
+    const emailLocalPart = dto.email.split('@')[0]?.trim() || 'Personal';
+    return `${emailLocalPart} Workspace`;
+  }
+
   private parseExpiryToSeconds(expiry: string): number {
     const match = expiry.match(/^(\d+)(s|m|h|d)$/);
     if (!match) {
-      // Default to 1 hour if invalid format
       return 3600;
     }
 
@@ -714,9 +770,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Throw appropriate error based on user status
-   */
   private throwStatusError(reason: string): never {
     switch (reason) {
       case 'EMAIL_NOT_VERIFIED':
@@ -745,35 +798,16 @@ export class AuthService {
     }
   }
 
-  // ==========================================================================
-  // Cookie management (for web clients)
-  // ==========================================================================
-
-  /**
-   * Get the cookie options for the refresh token
-   *
-   * - httpOnly: Not accessible from JavaScript (prevents XSS token theft)
-   * - secure: Only sent over HTTPS (except in development)
-   * - sameSite: 'strict' for CSRF protection
-   * - path: Restricted to the refresh endpoint only
-   * - maxAge: Matches the refresh token expiry
-   */
   private getRefreshTokenCookieOptions(): CookieOptions {
     return {
       httpOnly: true,
       secure: this.configService.isProduction,
       sameSite: 'strict',
       path: this.configService.cookie.refreshTokenPath,
-      maxAge: this.refreshTokenExpirySeconds * 1000, // Convert to milliseconds
+      maxAge: this.refreshTokenExpirySeconds * 1000,
     };
   }
 
-  /**
-   * Set the refresh token as an HttpOnly cookie on the response
-   *
-   * This is for web clients only. Mobile/native clients should use
-   * the refresh token from the response body and store it in Secure Storage.
-   */
   setRefreshTokenCookie(res: Response, refreshToken: string): void {
     res.cookie(
       REFRESH_TOKEN_COOKIE_NAME,
@@ -782,11 +816,6 @@ export class AuthService {
     );
   }
 
-  /**
-   * Clear the refresh token cookie from the response
-   *
-   * Used during logout to ensure the cookie is removed from the browser.
-   */
   clearRefreshTokenCookie(res: Response): void {
     res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, {
       httpOnly: true,
@@ -796,35 +825,16 @@ export class AuthService {
     });
   }
 
-  // ==========================================================================
-  // Access Token Cookie management (for web clients)
-  // ==========================================================================
-
-  /**
-   * Get the cookie options for the access token
-   *
-   * - httpOnly: Not accessible from JavaScript (prevents XSS token theft)
-   * - secure: Only sent over HTTPS (except in development)
-   * - sameSite: 'strict' for CSRF protection
-   * - path: '/' so it's sent with every API request
-   * - maxAge: Matches the access token expiry
-   */
   private getAccessTokenCookieOptions(): CookieOptions {
     return {
       httpOnly: true,
       secure: this.configService.isProduction,
       sameSite: 'strict',
       path: '/',
-      maxAge: this.accessTokenExpiry * 1000, // Convert to milliseconds
+      maxAge: this.accessTokenExpiry * 1000,
     };
   }
 
-  /**
-   * Set the access token as an HttpOnly cookie on the response
-   *
-   * This is for web clients only. Mobile/native clients should use
-   * the access token from the response body and send it via Authorization header.
-   */
   setAccessTokenCookie(res: Response, accessToken: string): void {
     res.cookie(
       ACCESS_TOKEN_COOKIE_NAME,
@@ -833,11 +843,6 @@ export class AuthService {
     );
   }
 
-  /**
-   * Clear the access token cookie from the response
-   *
-   * Used during logout to ensure the cookie is removed from the browser.
-   */
   clearAccessTokenCookie(res: Response): void {
     res.clearCookie(ACCESS_TOKEN_COOKIE_NAME, {
       httpOnly: true,

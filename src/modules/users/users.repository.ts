@@ -155,7 +155,7 @@ export class UsersRepository {
         const newAvatar = await tx.file.findFirst({
           where: {
             id: newAvatarFileId,
-            userId,
+            uploadedByUserId: userId,
             purpose: FilePurpose.AVATAR,
             deletedAt: null,
           },

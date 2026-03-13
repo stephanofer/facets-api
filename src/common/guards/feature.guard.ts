@@ -12,6 +12,7 @@ import {
 import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
 import { BusinessException } from '@common/exceptions/business.exception';
 import { ERROR_CODES } from '@common/constants/app.constants';
+import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
 import { FeatureLimitType, FeatureType } from '../../generated/prisma/client';
 
 /**
@@ -51,10 +52,10 @@ export class FeatureGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
-    const user = request.user;
+    const principal = request.user as AuthenticatedPrincipal | undefined;
 
     // Must be authenticated
-    if (!user?.sub) {
+    if (!principal?.workspaceId) {
       throw new BusinessException(
         ERROR_CODES.UNAUTHORIZED,
         'Authentication required',
@@ -62,14 +63,15 @@ export class FeatureGuard implements CanActivate {
       );
     }
 
-    const userId = user.sub;
+    const workspaceId = principal.workspaceId;
     const { feature } = featureOptions;
 
-    // Get the feature limit from user's plan
-    const planFeature = await this.subscriptionsService.getFeatureLimit(
-      userId,
-      feature,
-    );
+    // Get the feature limit from workspace plan
+    const planFeature =
+      await this.subscriptionsService.getWorkspaceFeatureLimit(
+        workspaceId,
+        feature,
+      );
 
     // Feature not in plan
     if (!planFeature) {
@@ -103,7 +105,10 @@ export class FeatureGuard implements CanActivate {
         // CONSUMABLE: We can check the usage record
         if (planFeature.featureType === FeatureType.CONSUMABLE) {
           const checkResult =
-            await this.subscriptionsService.checkFeatureAccess(userId, feature);
+            await this.subscriptionsService.checkWorkspaceFeatureAccess(
+              workspaceId,
+              feature,
+            );
 
           if (!checkResult.allowed) {
             throw new BusinessException(
@@ -121,7 +126,7 @@ export class FeatureGuard implements CanActivate {
           }
         }
         // For RESOURCE type, we allow the request to proceed
-        // The service layer should call checkFeatureAccess with the actual count
+        // The service layer should call checkWorkspaceFeatureAccess with the actual count
         return true;
 
       default:

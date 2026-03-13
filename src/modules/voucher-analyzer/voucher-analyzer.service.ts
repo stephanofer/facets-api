@@ -18,7 +18,7 @@ export class VoucherAnalyzerService {
   ) {}
 
   async analyze(
-    userId: string,
+    principal: { sub: string; workspaceId: string },
     file: Express.Multer.File,
     requestId?: string,
   ): Promise<VoucherAnalysisResponseDto> {
@@ -34,7 +34,8 @@ export class VoucherAnalyzerService {
       },
       {
         capability: 'voucher-analyzer',
-        userId,
+        userId: principal.sub,
+        workspaceId: principal.workspaceId,
         module: 'voucher-analyzer',
         requestId,
         environment: this.configService.ai.metadataEnvironment,

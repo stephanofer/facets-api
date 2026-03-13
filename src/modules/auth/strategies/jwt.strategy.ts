@@ -3,9 +3,14 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Request } from 'express';
 import { ConfigService } from '@config/config.service';
+import { PrismaService } from '@database/prisma.service';
 import { UsersService } from '@modules/users/users.service';
 import { JwtPayload } from '@modules/auth/dtos/auth-response.dto';
-import { User } from '../../../generated/prisma/client';
+import { WorkspaceMembershipStatus } from '../../../generated/prisma/client';
+import {
+  AuthenticatedPrincipal,
+  AuthenticatedUser,
+} from '@modules/auth/interfaces/authenticated-principal.interface';
 
 /**
  * Cookie name for the access token (HttpOnly, web clients)
@@ -13,14 +18,9 @@ import { User } from '../../../generated/prisma/client';
 export const ACCESS_TOKEN_COOKIE_NAME = 'accessToken';
 
 /**
- * Authenticated user attached to request.user by Passport
- *
- * Extends JwtPayload with the full User entity so downstream
- * controllers/services don't need to re-query the database.
+ * Transitional re-export kept for compatibility while the app migrates.
  */
-export interface AuthenticatedUser extends JwtPayload {
-  user: User;
-}
+export type { AuthenticatedPrincipal, AuthenticatedUser };
 
 /**
  * JWT Strategy for validating access tokens
@@ -35,6 +35,7 @@ export interface AuthenticatedUser extends JwtPayload {
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
     private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
   ) {
     const accessSecret = configService.jwt.accessSecret;
@@ -64,12 +65,27 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
    * Returns the full user entity alongside JWT fields so controllers
    * don't need to re-query the database.
    */
-  async validate(payload: JwtPayload): Promise<AuthenticatedUser> {
-    // Verify the user still exists and is active
-    const user = await this.usersService.findById(payload.sub);
+  async validate(payload: JwtPayload): Promise<AuthenticatedPrincipal> {
+    const membership = await this.prisma.workspaceMembership.findFirst({
+      where: {
+        id: payload.membershipId,
+        userId: payload.sub,
+        workspaceId: payload.workspaceId,
+        status: WorkspaceMembershipStatus.ACTIVE,
+        workspace: {
+          status: 'ACTIVE',
+        },
+      },
+      include: {
+        user: true,
+        workspace: true,
+      },
+    });
 
-    if (!user) {
-      throw new UnauthorizedException('User not found');
+    const user = membership?.user;
+
+    if (!membership || !user) {
+      throw new UnauthorizedException('Workspace membership not found');
     }
 
     const loginStatus = this.usersService.canLogin(user);
@@ -81,9 +97,16 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     // Return payload + full user (attached to request.user)
     return {
-      sub: payload.sub,
-      email: payload.email,
+      sub: user.id,
+      email: user.email,
+      workspaceId: membership.workspaceId,
+      actorUserId: user.id,
+      membershipId: membership.id,
+      workspaceRole: membership.role,
+      platformRole: user.platformRole,
       user,
+      workspace: membership.workspace,
+      membership,
     };
   }
 }

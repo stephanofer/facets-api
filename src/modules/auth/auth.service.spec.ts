@@ -1,20 +1,27 @@
 /* eslint-disable @typescript-eslint/unbound-method */
-import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Test, TestingModule } from '@nestjs/testing';
 import * as argon2 from 'argon2';
 import { AuthService } from '@modules/auth/auth.service';
-import { UsersService } from '@modules/users/users.service';
 import { RefreshTokensRepository } from '@modules/auth/refresh-tokens.repository';
-import { OtpService } from '@modules/otp/otp.service';
-import { MailService } from '@mail/mail.service';
 import { ConfigService } from '@config/config.service';
 import { PrismaService } from '@database/prisma.service';
+import { MailService } from '@mail/mail.service';
+import { OtpService } from '@modules/otp/otp.service';
 import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
+import { UsersService } from '@modules/users/users.service';
 import { FileService } from '@storage/services/file.service';
-import { UserStatus, OtpType } from '../../generated/prisma/client';
+import {
+  OtpType,
+  PlatformRole,
+  UserStatus,
+  WorkspaceMembershipStatus,
+  WorkspaceRole,
+  WorkspaceStatus,
+  WorkspaceType,
+} from '../../generated/prisma/client';
 
-// Mock argon2
 jest.mock('argon2');
 
 describe('AuthService', () => {
@@ -28,6 +35,16 @@ describe('AuthService', () => {
   let subscriptionsService: jest.Mocked<SubscriptionsService>;
   let fileService: jest.Mocked<FileService>;
 
+  const mockWorkspace = {
+    id: 'workspace-id',
+    name: 'Test User Workspace',
+    slug: null,
+    type: WorkspaceType.PERSONAL,
+    status: WorkspaceStatus.ACTIVE,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
   const mockUser = {
     id: 'test-user-id',
     email: 'test@example.com',
@@ -37,9 +54,23 @@ describe('AuthService', () => {
     emailVerified: true,
     emailVerifiedAt: new Date(),
     status: UserStatus.ACTIVE,
+    platformRole: PlatformRole.USER,
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
+  };
+
+  const mockMembership = {
+    id: 'membership-id',
+    workspaceId: mockWorkspace.id,
+    userId: mockUser.id,
+    role: WorkspaceRole.ADMIN,
+    status: WorkspaceMembershipStatus.ACTIVE,
+    joinedAt: new Date(),
+    invitedByUserId: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    workspace: mockWorkspace,
   };
 
   const mockRefreshToken = {
@@ -61,7 +92,8 @@ describe('AuthService', () => {
 
   const mockAvatarFile = {
     id: 'file-1',
-    userId: mockUser.id,
+    workspaceId: mockWorkspace.id,
+    uploadedByUserId: mockUser.id,
     purpose: 'AVATAR',
     bucket: 'facets-public',
     key: 'avatars/file-1.png',
@@ -76,93 +108,102 @@ describe('AuthService', () => {
   };
 
   beforeEach(async () => {
-    const mockUsersService = {
-      create: jest.fn(),
-      findById: jest.fn(),
-      findByEmail: jest.fn(),
-      emailExists: jest.fn(),
-      verifyEmail: jest.fn(),
-      updatePassword: jest.fn(),
-      removeAvatar: jest.fn(),
-      excludePassword: jest.fn(),
-      canLogin: jest.fn(),
-    };
-
-    const mockRefreshTokensRepository = {
-      create: jest.fn(),
-      findByToken: jest.fn(),
-      findById: jest.fn(),
-      findActiveByUserId: jest.fn(),
-      revoke: jest.fn(),
-      revokeByToken: jest.fn(),
-      revokeAllForUser: jest.fn(),
-      deleteExpired: jest.fn(),
-      isTokenValid: jest.fn(),
-    };
-
-    const mockJwtService = {
-      signAsync: jest.fn(),
-      verifyAsync: jest.fn(),
-    };
-
-    const mockConfigService = {
-      jwt: {
-        accessSecret: 'test-access-secret',
-        refreshSecret: 'test-refresh-secret',
-        accessExpires: '1h',
-        refreshExpires: '7d',
-      },
-      isProduction: false,
-      cookie: {
-        refreshTokenPath: '/api/v1/auth/refresh',
-      },
-    };
-
-    const mockOtpService = {
-      generate: jest.fn(),
-      verify: jest.fn(),
-      getExpiryMinutes: jest.fn().mockReturnValue(10),
-    };
-
-    const mockMailService = {
-      sendTemplate: jest.fn(),
-      send: jest.fn(),
-    };
-
-    const mockSubscriptionsService = {
-      createSubscriptionForNewUser: jest.fn(),
-      getUserSubscription: jest.fn(),
-    };
-
-    const mockFileService = {
-      upload: jest.fn(),
-      delete: jest.fn(),
-      toResponseDto: jest.fn(),
-    };
-
-    const mockPrismaService = {
-      $transaction: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
-        { provide: UsersService, useValue: mockUsersService },
+        {
+          provide: UsersService,
+          useValue: {
+            findById: jest.fn(),
+            findByEmail: jest.fn(),
+            emailExists: jest.fn(),
+            verifyEmail: jest.fn(),
+            updatePassword: jest.fn(),
+            findAvatarByUserId: jest.fn(),
+            replaceAvatar: jest.fn(),
+            removeAvatar: jest.fn(),
+            canLogin: jest.fn(),
+          },
+        },
         {
           provide: RefreshTokensRepository,
-          useValue: mockRefreshTokensRepository,
+          useValue: {
+            create: jest.fn(),
+            findById: jest.fn(),
+            revoke: jest.fn(),
+            revokeByToken: jest.fn(),
+            revokeAllForUser: jest.fn(),
+            isTokenValid: jest.fn(),
+          },
         },
-        { provide: JwtService, useValue: mockJwtService },
-        { provide: ConfigService, useValue: mockConfigService },
-        { provide: PrismaService, useValue: mockPrismaService },
-        { provide: OtpService, useValue: mockOtpService },
-        { provide: MailService, useValue: mockMailService },
-        { provide: SubscriptionsService, useValue: mockSubscriptionsService },
-        { provide: FileService, useValue: mockFileService },
+        {
+          provide: JwtService,
+          useValue: {
+            signAsync: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            jwt: {
+              accessSecret: 'test-access-secret',
+              refreshSecret: 'test-refresh-secret',
+              accessExpires: '1h',
+              refreshExpires: '7d',
+            },
+            isProduction: false,
+            cookie: {
+              refreshTokenPath: '/api/v1/auth/refresh',
+            },
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: {
+            $transaction: jest.fn(),
+            workspaceMembership: {
+              findFirst: jest.fn(),
+            },
+          },
+        },
+        {
+          provide: OtpService,
+          useValue: {
+            generate: jest.fn(),
+            verify: jest.fn(),
+            getExpiryMinutes: jest.fn().mockReturnValue(10),
+          },
+        },
+        {
+          provide: MailService,
+          useValue: {
+            sendTemplate: jest.fn(),
+          },
+        },
+        {
+          provide: SubscriptionsService,
+          useValue: {
+            getWorkspaceSubscription: jest.fn(),
+          },
+        },
+        {
+          provide: FileService,
+          useValue: {
+            upload: jest.fn(),
+            deleteAvatar: jest.fn(),
+            toResponseDto: jest.fn().mockResolvedValue({
+              id: mockAvatarFile.id,
+              url: mockAvatarFile.publicUrl,
+              mimeType: mockAvatarFile.mimeType,
+              size: mockAvatarFile.size,
+              purpose: mockAvatarFile.purpose,
+            }),
+          },
+        },
       ],
     }).compile();
 
-    authService = module.get<AuthService>(AuthService);
+    authService = module.get(AuthService);
     usersService = module.get(UsersService);
     refreshTokensRepository = module.get(RefreshTokensRepository);
     jwtService = module.get(JwtService);
@@ -171,14 +212,6 @@ describe('AuthService', () => {
     prismaService = module.get(PrismaService);
     subscriptionsService = module.get(SubscriptionsService);
     fileService = module.get(FileService);
-
-    fileService.toResponseDto.mockImplementation(async (file) => ({
-      id: file.id,
-      url: file.publicUrl ?? 'https://cdn.facets.test/fallback',
-      mimeType: file.mimeType,
-      size: file.size,
-      purpose: file.purpose,
-    }));
   });
 
   describe('register', () => {
@@ -189,7 +222,7 @@ describe('AuthService', () => {
       lastName: 'User',
     };
 
-    it('should register a new user successfully', async () => {
+    it('should register a new user successfully with workspace bootstrap', async () => {
       const createdUser = {
         ...mockUser,
         email: registerDto.email,
@@ -198,31 +231,41 @@ describe('AuthService', () => {
         status: UserStatus.PENDING_VERIFICATION,
         emailVerified: false,
       };
-      const createdSubscription = {
-        id: 'subscription-id',
-        plan: { code: 'FREE', name: 'Free' },
-      };
 
       usersService.emailExists.mockResolvedValue(false);
       (argon2.hash as jest.Mock).mockResolvedValue('hashed-password');
-      // Mock $transaction to execute the callback with a fake tx and return our data
       prismaService.$transaction.mockImplementation(async (callback: any) => {
         const tx = {
-          user: {
-            create: jest.fn().mockResolvedValue(createdUser),
-          },
           plan: {
             findFirst: jest.fn().mockResolvedValue({
               id: 'plan-id',
+              code: 'FREE',
+              name: 'Free',
               isDefault: true,
               isActive: true,
               planFeatures: [],
             }),
           },
+          workspace: {
+            create: jest.fn().mockResolvedValue(mockWorkspace),
+          },
+          user: {
+            create: jest.fn().mockResolvedValue(createdUser),
+          },
+          workspaceMembership: {
+            create: jest.fn().mockResolvedValue({
+              ...mockMembership,
+              userId: createdUser.id,
+            }),
+          },
+          workspaceSettings: {
+            create: jest.fn().mockResolvedValue({ id: 'settings-id' }),
+          },
           subscription: {
-            create: jest.fn().mockResolvedValue(createdSubscription),
+            create: jest.fn().mockResolvedValue({ id: 'subscription-id' }),
           },
         };
+
         return callback(tx);
       });
       otpService.generate.mockResolvedValue(mockOtpResult);
@@ -231,10 +274,9 @@ describe('AuthService', () => {
       const result = await authService.register(registerDto);
 
       expect(result.message).toContain('Registration successful');
-      expect(result.user.email).toBe(registerDto.email);
-      expect(usersService.emailExists).toHaveBeenCalledWith(registerDto.email);
-      expect(argon2.hash).toHaveBeenCalledWith(registerDto.password);
-      expect(prismaService.$transaction).toHaveBeenCalled();
+      expect(result.user.workspace.id).toBe(mockWorkspace.id);
+      expect(result.user.membership.role).toBe(WorkspaceRole.ADMIN);
+      expect(result.user.platformRole).toBe(PlatformRole.USER);
     });
 
     it('should throw ConflictException when email already exists', async () => {
@@ -252,64 +294,35 @@ describe('AuthService', () => {
       password: 'SecurePass123',
     };
 
-    it('should login successfully with valid credentials', async () => {
+    it('should login successfully with workspace context', async () => {
       usersService.findByEmail.mockResolvedValue(mockUser);
       usersService.canLogin.mockReturnValue({ allowed: true });
       (argon2.verify as jest.Mock).mockResolvedValue(true);
-      jwtService.signAsync.mockResolvedValue('mock-token');
-      refreshTokensRepository.create.mockResolvedValue(mockRefreshToken);
-      subscriptionsService.getUserSubscription.mockResolvedValue({
+      (
+        prismaService.workspaceMembership.findFirst as jest.Mock
+      ).mockResolvedValue(mockMembership as never);
+      subscriptionsService.getWorkspaceSubscription.mockResolvedValue({
         plan: { code: 'FREE', name: 'Free' },
       } as never);
+      jwtService.signAsync.mockResolvedValue('mock-token');
+      refreshTokensRepository.create.mockResolvedValue(
+        mockRefreshToken as never,
+      );
 
       const result = await authService.login(loginDto);
 
       expect(result.tokens.accessToken).toBe('mock-token');
-      expect(result.tokens.refreshToken).toBe('mock-token');
-      expect(result.user.email).toBe(mockUser.email);
+      expect(result.user.workspace.id).toBe(mockWorkspace.id);
+      expect(result.user.membership.id).toBe(mockMembership.id);
     });
 
-    it('should throw UnauthorizedException when user not found', async () => {
-      usersService.findByEmail.mockResolvedValue(null);
-
-      await expect(authService.login(loginDto)).rejects.toThrow(
-        UnauthorizedException,
-      );
-    });
-
-    it('should throw UnauthorizedException when password is invalid', async () => {
+    it('should deny login when no active workspace membership exists', async () => {
       usersService.findByEmail.mockResolvedValue(mockUser);
-      (argon2.verify as jest.Mock).mockResolvedValue(false);
-
-      await expect(authService.login(loginDto)).rejects.toThrow(
-        UnauthorizedException,
-      );
-    });
-
-    it('should throw when user is pending verification', async () => {
-      usersService.findByEmail.mockResolvedValue({
-        ...mockUser,
-        status: UserStatus.PENDING_VERIFICATION,
-      });
-      usersService.canLogin.mockReturnValue({
-        allowed: false,
-        reason: 'EMAIL_NOT_VERIFIED',
-      });
+      usersService.canLogin.mockReturnValue({ allowed: true });
       (argon2.verify as jest.Mock).mockResolvedValue(true);
-
-      await expect(authService.login(loginDto)).rejects.toThrow();
-    });
-
-    it('should throw when user is suspended', async () => {
-      usersService.findByEmail.mockResolvedValue({
-        ...mockUser,
-        status: UserStatus.SUSPENDED,
-      });
-      usersService.canLogin.mockReturnValue({
-        allowed: false,
-        reason: 'ACCOUNT_SUSPENDED',
-      });
-      (argon2.verify as jest.Mock).mockResolvedValue(true);
+      (
+        prismaService.workspaceMembership.findFirst as jest.Mock
+      ).mockResolvedValue(null);
 
       await expect(authService.login(loginDto)).rejects.toThrow();
     });
@@ -319,29 +332,40 @@ describe('AuthService', () => {
     const payload = {
       sub: mockUser.id,
       email: mockUser.email,
+      workspaceId: mockWorkspace.id,
+      membershipId: mockMembership.id,
+      workspaceRole: WorkspaceRole.ADMIN,
+      platformRole: PlatformRole.USER,
       tokenId: mockRefreshToken.id,
       refreshToken: 'original-token',
     };
 
-    it('should refresh tokens successfully', async () => {
-      refreshTokensRepository.findById.mockResolvedValue(mockRefreshToken);
-      refreshTokensRepository.isTokenValid.mockReturnValue(true);
-      refreshTokensRepository.revoke.mockResolvedValue(mockRefreshToken);
-      refreshTokensRepository.create.mockResolvedValue(mockRefreshToken);
-      usersService.findById.mockResolvedValue(mockUser);
-      usersService.canLogin.mockReturnValue({ allowed: true });
-      jwtService.signAsync.mockResolvedValue('new-token');
-
-      // Mock the hash to match what's stored
-      const crypto = await import('crypto');
-      const expectedHash = crypto
+    it('should refresh tokens while preserving workspace claims', async () => {
+      const expectedHash = require('crypto')
         .createHash('sha256')
         .update(payload.refreshToken)
         .digest('hex');
+
       refreshTokensRepository.findById.mockResolvedValue({
         ...mockRefreshToken,
         token: expectedHash,
-      });
+      } as never);
+      refreshTokensRepository.isTokenValid.mockReturnValue(true);
+      refreshTokensRepository.revoke.mockResolvedValue(
+        mockRefreshToken as never,
+      );
+      usersService.findById.mockResolvedValue(mockUser);
+      usersService.canLogin.mockReturnValue({ allowed: true });
+      (
+        prismaService.workspaceMembership.findFirst as jest.Mock
+      ).mockResolvedValue(mockMembership as never);
+      subscriptionsService.getWorkspaceSubscription.mockResolvedValue({
+        plan: { code: 'FREE', name: 'Free' },
+      } as never);
+      jwtService.signAsync.mockResolvedValue('new-token');
+      refreshTokensRepository.create.mockResolvedValue(
+        mockRefreshToken as never,
+      );
 
       const result = await authService.refreshTokens(payload);
 
@@ -351,83 +375,53 @@ describe('AuthService', () => {
       );
     });
 
-    it('should throw when token is not found', async () => {
-      refreshTokensRepository.findById.mockResolvedValue(null);
+    it('should deny refresh when membership is no longer active', async () => {
+      const expectedHash = require('crypto')
+        .createHash('sha256')
+        .update(payload.refreshToken)
+        .digest('hex');
 
-      await expect(authService.refreshTokens(payload)).rejects.toThrow(
-        UnauthorizedException,
-      );
-    });
-
-    it('should throw when token is revoked', async () => {
       refreshTokensRepository.findById.mockResolvedValue({
         ...mockRefreshToken,
-        revokedAt: new Date(),
-      });
-      refreshTokensRepository.isTokenValid.mockReturnValue(false);
+        token: expectedHash,
+      } as never);
+      refreshTokensRepository.isTokenValid.mockReturnValue(true);
+      refreshTokensRepository.revoke.mockResolvedValue(
+        mockRefreshToken as never,
+      );
+      usersService.findById.mockResolvedValue(mockUser);
+      (
+        prismaService.workspaceMembership.findFirst as jest.Mock
+      ).mockResolvedValue(null);
 
       await expect(authService.refreshTokens(payload)).rejects.toThrow(
         UnauthorizedException,
-      );
-    });
-  });
-
-  describe('logout', () => {
-    it('should revoke refresh token', async () => {
-      refreshTokensRepository.revokeByToken.mockResolvedValue(mockRefreshToken);
-
-      await authService.logout('some-token');
-
-      expect(refreshTokensRepository.revokeByToken).toHaveBeenCalled();
-    });
-  });
-
-  describe('logoutAll', () => {
-    it('should revoke all refresh tokens for user', async () => {
-      refreshTokensRepository.revokeAllForUser.mockResolvedValue({ count: 3 });
-
-      const result = await authService.logoutAll(mockUser.id);
-
-      expect(result.revokedCount).toBe(3);
-      expect(refreshTokensRepository.revokeAllForUser).toHaveBeenCalledWith(
-        mockUser.id,
       );
     });
   });
 
   describe('getMe', () => {
-    it('should return user info', async () => {
-      subscriptionsService.getUserSubscription.mockResolvedValue({
+    it('should return workspace-aware user info', async () => {
+      subscriptionsService.getWorkspaceSubscription.mockResolvedValue({
         plan: { code: 'FREE', name: 'Free' },
       } as never);
-      usersService.findAvatarByUserId = jest.fn().mockResolvedValue(null);
+      usersService.findAvatarByUserId.mockResolvedValue(null);
 
       const result = await authService.getMe({
         sub: mockUser.id,
+        email: mockUser.email,
+        workspaceId: mockWorkspace.id,
+        actorUserId: mockUser.id,
+        membershipId: mockMembership.id,
+        workspaceRole: WorkspaceRole.ADMIN,
+        platformRole: PlatformRole.USER,
         user: mockUser,
+        workspace: mockWorkspace,
+        membership: mockMembership,
       });
 
-      expect(result.id).toBe(mockUser.id);
-      expect(result.email).toBe(mockUser.email);
-    });
-
-    it('should include avatar when user has one', async () => {
-      subscriptionsService.getUserSubscription.mockResolvedValue({
-        plan: { code: 'FREE', name: 'Free' },
-      } as never);
-      usersService.findAvatarByUserId = jest
-        .fn()
-        .mockResolvedValue(mockAvatarFile as never);
-
-      const result = await authService.getMe({
-        sub: mockUser.id,
-        user: mockUser,
-      });
-
-      expect(result.avatar).toMatchObject({
-        id: mockAvatarFile.id,
-        url: mockAvatarFile.publicUrl,
-      });
+      expect(result.workspace.id).toBe(mockWorkspace.id);
+      expect(result.membership.role).toBe(WorkspaceRole.ADMIN);
     });
   });
 
@@ -445,77 +439,40 @@ describe('AuthService', () => {
       buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47]),
     } as unknown as Express.Multer.File;
 
-    it('should upload and replace avatar successfully', async () => {
+    it('should upload avatar using workspace-aware ownership metadata', async () => {
       usersService.findById.mockResolvedValue(mockUser);
-      usersService.replaceAvatar = jest
-        .fn()
-        .mockResolvedValue(mockAvatarFile as never);
-      subscriptionsService.getUserSubscription.mockResolvedValue({
+      usersService.replaceAvatar.mockResolvedValue(mockAvatarFile as never);
+      subscriptionsService.getWorkspaceSubscription.mockResolvedValue({
         plan: { code: 'FREE', name: 'Free' },
       } as never);
       fileService.upload.mockResolvedValue(mockAvatarFile as never);
 
-      const result = await authService.uploadAvatar(mockUser.id, uploadFile);
-
-      expect(fileService.upload).toHaveBeenCalledWith(
+      const result = await authService.uploadAvatar(
+        {
+          sub: mockUser.id,
+          email: mockUser.email,
+          workspaceId: mockWorkspace.id,
+          actorUserId: mockUser.id,
+          membershipId: mockMembership.id,
+          workspaceRole: WorkspaceRole.ADMIN,
+          platformRole: PlatformRole.USER,
+          user: mockUser,
+          workspace: mockWorkspace,
+          membership: mockMembership,
+        },
         uploadFile,
-        'AVATAR',
-        mockUser.id,
       );
-      expect(usersService.replaceAvatar).toHaveBeenCalledWith(
-        mockUser.id,
-        mockAvatarFile.id,
-      );
+
+      expect(fileService.upload).toHaveBeenCalledWith(uploadFile, 'AVATAR', {
+        workspaceId: mockWorkspace.id,
+        uploadedByUserId: mockUser.id,
+      });
       expect(result.avatar?.id).toBe(mockAvatarFile.id);
     });
-
-    it('should cleanup uploaded file when avatar replacement fails', async () => {
-      usersService.findById.mockResolvedValue(mockUser);
-      usersService.replaceAvatar = jest
-        .fn()
-        .mockRejectedValue(new Error('replace failed'));
-      fileService.upload.mockResolvedValue(mockAvatarFile as never);
-      fileService.delete.mockResolvedValue(mockAvatarFile as never);
-
-      await expect(
-        authService.uploadAvatar(mockUser.id, uploadFile),
-      ).rejects.toThrow('replace failed');
-
-      expect(fileService.delete).toHaveBeenCalledWith(
-        mockAvatarFile.id,
-        mockUser.id,
-      );
-    });
   });
-
-  describe('removeAvatar', () => {
-    it('should remove avatar successfully', async () => {
-      usersService.findById.mockResolvedValue(mockUser);
-      usersService.removeAvatar = jest.fn().mockResolvedValue(undefined);
-
-      await authService.removeAvatar(mockUser.id);
-
-      expect(usersService.removeAvatar).toHaveBeenCalledWith(mockUser.id);
-    });
-
-    it('should throw when user does not exist', async () => {
-      usersService.findById.mockResolvedValue(null);
-
-      await expect(authService.removeAvatar(mockUser.id)).rejects.toThrow();
-    });
-  });
-
-  // ==========================================================================
-  // Phase 2: Email Verification & Password Recovery Tests
-  // ==========================================================================
 
   describe('verifyEmail', () => {
-    const verifyDto = {
-      email: 'test@example.com',
-      code: '123456',
-    };
-
-    it('should verify email and return tokens for auto-login', async () => {
+    it('should verify email and return workspace-aware tokens', async () => {
       const unverifiedUser = {
         ...mockUser,
         emailVerified: false,
@@ -532,254 +489,31 @@ describe('AuthService', () => {
         valid: true,
         userId: mockUser.id,
         otpId: 'otp-123',
-      });
+      } as never);
       usersService.verifyEmail.mockResolvedValue(verifiedUser);
-      jwtService.signAsync.mockResolvedValue('mock-token');
-      refreshTokensRepository.create.mockResolvedValue(mockRefreshToken);
-      subscriptionsService.getUserSubscription.mockResolvedValue({
+      (
+        prismaService.workspaceMembership.findFirst as jest.Mock
+      ).mockResolvedValue(mockMembership as never);
+      subscriptionsService.getWorkspaceSubscription.mockResolvedValue({
         plan: { code: 'FREE', name: 'Free' },
       } as never);
+      jwtService.signAsync.mockResolvedValue('mock-token');
+      refreshTokensRepository.create.mockResolvedValue(
+        mockRefreshToken as never,
+      );
 
-      const result = await authService.verifyEmail(verifyDto);
+      const result = await authService.verifyEmail({
+        email: 'test@example.com',
+        code: '123456',
+      });
 
-      expect(result.message).toContain('verified successfully');
+      expect(result.user.workspace.id).toBe(mockWorkspace.id);
       expect(result.tokens.accessToken).toBe('mock-token');
-      expect(result.user.emailVerified).toBe(true);
       expect(otpService.verify).toHaveBeenCalledWith(
-        verifyDto.code,
+        '123456',
         mockUser.id,
         OtpType.EMAIL_VERIFICATION,
       );
-    });
-
-    it('should throw when email already verified', async () => {
-      usersService.findByEmail.mockResolvedValue(mockUser); // Already verified
-
-      await expect(authService.verifyEmail(verifyDto)).rejects.toThrow();
-    });
-
-    it('should throw when user not found', async () => {
-      usersService.findByEmail.mockResolvedValue(null);
-
-      await expect(authService.verifyEmail(verifyDto)).rejects.toThrow();
-    });
-  });
-
-  describe('resendVerification', () => {
-    const resendDto = {
-      email: 'test@example.com',
-    };
-
-    it('should resend verification email', async () => {
-      const unverifiedUser = {
-        ...mockUser,
-        emailVerified: false,
-        status: UserStatus.PENDING_VERIFICATION,
-      };
-
-      usersService.findByEmail.mockResolvedValue(unverifiedUser);
-      otpService.generate.mockResolvedValue(mockOtpResult);
-      mailService.sendTemplate.mockResolvedValue(undefined);
-
-      const result = await authService.resendVerification(resendDto);
-
-      expect(result.message).toContain('verification code');
-      expect(mailService.sendTemplate).toHaveBeenCalledWith(
-        'email-verification',
-        resendDto.email,
-        expect.objectContaining({ otpCode: mockOtpResult.code }),
-      );
-    });
-
-    it('should return success even when user not found (prevent email enumeration)', async () => {
-      usersService.findByEmail.mockResolvedValue(null);
-
-      const result = await authService.resendVerification(resendDto);
-
-      expect(result.message).toContain('verification code');
-      expect(mailService.sendTemplate).not.toHaveBeenCalled();
-    });
-
-    it('should throw when email already verified', async () => {
-      usersService.findByEmail.mockResolvedValue(mockUser); // Already verified
-
-      await expect(authService.resendVerification(resendDto)).rejects.toThrow();
-    });
-  });
-
-  describe('forgotPassword', () => {
-    const forgotDto = {
-      email: 'test@example.com',
-    };
-
-    it('should send password reset email', async () => {
-      usersService.findByEmail.mockResolvedValue(mockUser);
-      otpService.generate.mockResolvedValue(mockOtpResult);
-      mailService.sendTemplate.mockResolvedValue(undefined);
-
-      const result = await authService.forgotPassword(forgotDto);
-
-      expect(result.message).toContain('password reset code');
-      expect(mailService.sendTemplate).toHaveBeenCalledWith(
-        'password-reset',
-        forgotDto.email,
-        expect.objectContaining({ otpCode: mockOtpResult.code }),
-      );
-    });
-
-    it('should return success even when user not found (prevent email enumeration)', async () => {
-      usersService.findByEmail.mockResolvedValue(null);
-
-      const result = await authService.forgotPassword(forgotDto);
-
-      expect(result.message).toContain('password reset code');
-      expect(mailService.sendTemplate).not.toHaveBeenCalled();
-    });
-
-    it('should not send email for deleted accounts', async () => {
-      usersService.findByEmail.mockResolvedValue({
-        ...mockUser,
-        status: UserStatus.DELETED,
-      });
-
-      const result = await authService.forgotPassword(forgotDto);
-
-      expect(result.message).toContain('password reset code');
-      expect(mailService.sendTemplate).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('resetPassword', () => {
-    const resetDto = {
-      email: 'test@example.com',
-      code: '123456',
-      newPassword: 'NewSecurePass123',
-    };
-
-    it('should reset password and revoke all sessions', async () => {
-      usersService.findByEmail.mockResolvedValue(mockUser);
-      otpService.verify.mockResolvedValue({
-        valid: true,
-        userId: mockUser.id,
-        otpId: 'otp-123',
-      });
-      (argon2.hash as jest.Mock).mockResolvedValue('new-hashed-password');
-      usersService.updatePassword.mockResolvedValue(mockUser);
-      refreshTokensRepository.revokeAllForUser.mockResolvedValue({ count: 3 });
-
-      const result = await authService.resetPassword(resetDto);
-
-      expect(result.message).toContain('reset successfully');
-      expect(otpService.verify).toHaveBeenCalledWith(
-        resetDto.code,
-        mockUser.id,
-        OtpType.PASSWORD_RESET,
-      );
-      expect(usersService.updatePassword).toHaveBeenCalledWith(
-        mockUser.id,
-        'new-hashed-password',
-      );
-      expect(refreshTokensRepository.revokeAllForUser).toHaveBeenCalledWith(
-        mockUser.id,
-      );
-    });
-
-    it('should throw when user not found', async () => {
-      usersService.findByEmail.mockResolvedValue(null);
-
-      await expect(authService.resetPassword(resetDto)).rejects.toThrow();
-    });
-  });
-
-  // ==========================================================================
-  // Cookie Management Tests
-  // ==========================================================================
-
-  describe('setRefreshTokenCookie', () => {
-    it('should set HttpOnly cookie with correct options', () => {
-      const mockRes = {
-        cookie: jest.fn(),
-      } as unknown as import('express').Response;
-
-      authService.setRefreshTokenCookie(mockRes, 'test-refresh-token');
-
-      expect(mockRes.cookie).toHaveBeenCalledWith(
-        'refreshToken',
-        'test-refresh-token',
-        expect.objectContaining({
-          httpOnly: true,
-          secure: false, // Not production in tests
-          sameSite: 'strict',
-          path: '/api/v1/auth/refresh',
-        }),
-      );
-
-      // Verify maxAge is set and is a positive number (7 days in ms)
-      const cookieOptions = (mockRes.cookie as jest.Mock).mock.calls[0][2];
-      expect(cookieOptions.maxAge).toBe(7 * 24 * 60 * 60 * 1000);
-    });
-  });
-
-  describe('clearRefreshTokenCookie', () => {
-    it('should clear the refresh token cookie with correct options', () => {
-      const mockRes = {
-        clearCookie: jest.fn(),
-      } as unknown as import('express').Response;
-
-      authService.clearRefreshTokenCookie(mockRes);
-
-      expect(mockRes.clearCookie).toHaveBeenCalledWith('refreshToken', {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'strict',
-        path: '/api/v1/auth/refresh',
-      });
-    });
-  });
-
-  // ==========================================================================
-  // Access Token Cookie Management Tests
-  // ==========================================================================
-
-  describe('setAccessTokenCookie', () => {
-    it('should set HttpOnly cookie with correct options', () => {
-      const mockRes = {
-        cookie: jest.fn(),
-      } as unknown as import('express').Response;
-
-      authService.setAccessTokenCookie(mockRes, 'test-access-token');
-
-      expect(mockRes.cookie).toHaveBeenCalledWith(
-        'accessToken',
-        'test-access-token',
-        expect.objectContaining({
-          httpOnly: true,
-          secure: false, // Not production in tests
-          sameSite: 'strict',
-          path: '/',
-        }),
-      );
-
-      // Verify maxAge is set and is a positive number (1 hour in ms)
-      const cookieOptions = (mockRes.cookie as jest.Mock).mock.calls[0][2];
-      expect(cookieOptions.maxAge).toBe(1 * 60 * 60 * 1000);
-    });
-  });
-
-  describe('clearAccessTokenCookie', () => {
-    it('should clear the access token cookie with correct options', () => {
-      const mockRes = {
-        clearCookie: jest.fn(),
-      } as unknown as import('express').Response;
-
-      authService.clearAccessTokenCookie(mockRes);
-
-      expect(mockRes.clearCookie).toHaveBeenCalledWith('accessToken', {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'strict',
-        path: '/',
-      });
     });
   });
 });

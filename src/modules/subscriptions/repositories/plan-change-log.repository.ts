@@ -1,14 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '@database/prisma.service';
-import { PlanChangeType, Plan, Prisma } from '../../../generated/prisma/client';
 import { Decimal } from '@prisma/client/runtime/client';
+import { PrismaService } from '@database/prisma.service';
+import { Plan, PlanChangeType, Prisma } from '../../../generated/prisma/client';
 
-/**
- * Base PlanChangeLog interface to avoid LSP issues
- */
 export interface PlanChangeLogBase {
   id: string;
-  userId: string;
+  workspaceId: string;
+  requestedByUserId: string | null;
   fromPlanId: string;
   toPlanId: string;
   changeType: PlanChangeType;
@@ -27,7 +25,8 @@ export interface PlanChangeLogWithPlans extends PlanChangeLogBase {
 }
 
 export interface CreatePlanChangeLogData {
-  userId: string;
+  workspaceId: string;
+  requestedByUserId?: string;
   fromPlanId: string;
   toPlanId: string;
   changeType: PlanChangeType;
@@ -38,7 +37,6 @@ export interface CreatePlanChangeLogData {
   metadata?: Record<string, unknown>;
 }
 
-// Standard include for plan relations
 const plansInclude = {
   fromPlan: true,
   toPlan: true,
@@ -48,13 +46,11 @@ const plansInclude = {
 export class PlanChangeLogRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Create a new plan change log entry
-   */
   async create(data: CreatePlanChangeLogData): Promise<PlanChangeLogWithPlans> {
     const result = await this.prisma.planChangeLog.create({
       data: {
-        userId: data.userId,
+        workspaceId: data.workspaceId,
+        requestedByUserId: data.requestedByUserId,
         fromPlanId: data.fromPlanId,
         toPlanId: data.toPlanId,
         changeType: data.changeType,
@@ -68,51 +64,46 @@ export class PlanChangeLogRepository {
       },
       include: plansInclude,
     });
+
     return result as PlanChangeLogWithPlans;
   }
 
-  /**
-   * Get plan change history for a user
-   */
-  async findByUserId(
-    userId: string,
+  async findByWorkspaceId(
+    workspaceId: string,
     limit: number = 20,
   ): Promise<PlanChangeLogWithPlans[]> {
     const results = await this.prisma.planChangeLog.findMany({
-      where: { userId },
+      where: { workspaceId },
       include: plansInclude,
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
+
     return results as PlanChangeLogWithPlans[];
   }
 
-  /**
-   * Get the most recent plan change for a user
-   */
-  async findLatestByUserId(
-    userId: string,
+  async findLatestByWorkspaceId(
+    workspaceId: string,
   ): Promise<PlanChangeLogWithPlans | null> {
     const result = await this.prisma.planChangeLog.findFirst({
-      where: { userId },
+      where: { workspaceId },
       include: plansInclude,
       orderBy: { createdAt: 'desc' },
     });
+
     return result as PlanChangeLogWithPlans | null;
   }
 
-  /**
-   * Get plan changes by type for a user
-   */
-  async findByUserIdAndType(
-    userId: string,
+  async findByWorkspaceIdAndType(
+    workspaceId: string,
     changeType: PlanChangeType,
   ): Promise<PlanChangeLogWithPlans[]> {
     const results = await this.prisma.planChangeLog.findMany({
-      where: { userId, changeType },
+      where: { workspaceId, changeType },
       include: plansInclude,
       orderBy: { createdAt: 'desc' },
     });
+
     return results as PlanChangeLogWithPlans[];
   }
 }

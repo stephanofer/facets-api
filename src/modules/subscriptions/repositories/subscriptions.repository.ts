@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
 import {
-  Subscription,
-  SubscriptionStatus,
   Plan,
   PlanFeature,
   Prisma,
+  Subscription,
+  SubscriptionStatus,
 } from '../../../generated/prisma/client';
 
 export interface SubscriptionWithPlan extends Subscription {
@@ -17,13 +17,12 @@ export interface SubscriptionWithScheduledPlan extends SubscriptionWithPlan {
 }
 
 export interface CreateSubscriptionData {
-  userId: string;
+  workspaceId: string;
   planId: string;
   status?: SubscriptionStatus;
   currentPeriodEnd?: Date | null;
 }
 
-// Standard include for plan with features
 const planWithFeaturesInclude = {
   plan: {
     include: { planFeatures: true },
@@ -34,13 +33,10 @@ const planWithFeaturesInclude = {
 export class SubscriptionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * Create a new subscription for a user
-   */
   async create(data: CreateSubscriptionData): Promise<SubscriptionWithPlan> {
     const result = await this.prisma.subscription.create({
       data: {
-        userId: data.userId,
+        workspaceId: data.workspaceId,
         planId: data.planId,
         status: data.status ?? SubscriptionStatus.ACTIVE,
         currentPeriodStart: new Date(),
@@ -48,41 +44,37 @@ export class SubscriptionsRepository {
       },
       include: planWithFeaturesInclude,
     });
+
     return result as SubscriptionWithPlan;
   }
 
-  /**
-   * Find subscription by user ID
-   */
-  async findByUserId(userId: string): Promise<SubscriptionWithPlan | null> {
+  async findByWorkspaceId(
+    workspaceId: string,
+  ): Promise<SubscriptionWithPlan | null> {
     const result = await this.prisma.subscription.findUnique({
-      where: { userId },
+      where: { workspaceId },
       include: planWithFeaturesInclude,
     });
+
     return result as SubscriptionWithPlan | null;
   }
 
-  /**
-   * Find subscription by ID
-   */
   async findById(id: string): Promise<SubscriptionWithPlan | null> {
     const result = await this.prisma.subscription.findUnique({
       where: { id },
       include: planWithFeaturesInclude,
     });
+
     return result as SubscriptionWithPlan | null;
   }
 
-  /**
-   * Update subscription plan
-   */
   async updatePlan(
-    userId: string,
+    workspaceId: string,
     planId: string,
     currentPeriodEnd?: Date | null,
   ): Promise<SubscriptionWithPlan> {
     const result = await this.prisma.subscription.update({
-      where: { userId },
+      where: { workspaceId },
       data: {
         planId,
         currentPeriodStart: new Date(),
@@ -91,30 +83,26 @@ export class SubscriptionsRepository {
       },
       include: planWithFeaturesInclude,
     });
+
     return result as SubscriptionWithPlan;
   }
 
-  /**
-   * Update subscription status
-   */
   async updateStatus(
-    userId: string,
+    workspaceId: string,
     status: SubscriptionStatus,
   ): Promise<SubscriptionWithPlan> {
     const result = await this.prisma.subscription.update({
-      where: { userId },
+      where: { workspaceId },
       data: { status },
       include: planWithFeaturesInclude,
     });
+
     return result as SubscriptionWithPlan;
   }
 
-  /**
-   * Check if user has an active subscription
-   */
-  async hasActiveSubscription(userId: string): Promise<boolean> {
+  async hasActiveSubscription(workspaceId: string): Promise<boolean> {
     const subscription = await this.prisma.subscription.findUnique({
-      where: { userId },
+      where: { workspaceId },
       select: { status: true },
     });
 
@@ -124,15 +112,12 @@ export class SubscriptionsRepository {
     );
   }
 
-  /**
-   * Get the user's current plan feature
-   */
-  async getUserPlanFeature(
-    userId: string,
+  async getWorkspacePlanFeature(
+    workspaceId: string,
     featureCode: string,
   ): Promise<PlanFeature | null> {
     const subscription = await this.prisma.subscription.findUnique({
-      where: { userId },
+      where: { workspaceId },
       include: {
         plan: {
           include: {
@@ -147,22 +132,15 @@ export class SubscriptionsRepository {
     return subscription?.plan?.planFeatures[0] ?? null;
   }
 
-  // ==========================================================================
-  // Phase 4: Plan Management Methods
-  // ==========================================================================
-
-  /**
-   * Schedule a plan change (for downgrades)
-   */
   async scheduleDowngrade(
-    userId: string,
+    workspaceId: string,
     scheduledPlanId: string,
     scheduledChangeAt: Date,
     graceOverages?: Record<string, number>,
     gracePeriodEnd?: Date,
   ): Promise<SubscriptionWithPlan> {
     const result = await this.prisma.subscription.update({
-      where: { userId },
+      where: { workspaceId },
       data: {
         scheduledPlanId,
         scheduledChangeAt,
@@ -174,25 +152,22 @@ export class SubscriptionsRepository {
       },
       include: planWithFeaturesInclude,
     });
+
     return result as SubscriptionWithPlan;
   }
 
-  /**
-   * Apply an immediate upgrade
-   */
   async applyUpgrade(
-    userId: string,
+    workspaceId: string,
     newPlanId: string,
     currentPeriodEnd: Date | null,
   ): Promise<SubscriptionWithPlan> {
     const result = await this.prisma.subscription.update({
-      where: { userId },
+      where: { workspaceId },
       data: {
         planId: newPlanId,
         currentPeriodStart: new Date(),
         currentPeriodEnd,
         status: SubscriptionStatus.ACTIVE,
-        // Clear any scheduled changes
         scheduledPlanId: null,
         scheduledChangeAt: null,
         cancelledAt: null,
@@ -202,20 +177,18 @@ export class SubscriptionsRepository {
       },
       include: planWithFeaturesInclude,
     });
+
     return result as SubscriptionWithPlan;
   }
 
-  /**
-   * Schedule cancellation (downgrade to FREE at end of period)
-   */
   async scheduleCancellation(
-    userId: string,
+    workspaceId: string,
     freePlanId: string,
     scheduledChangeAt: Date,
     reason?: string,
   ): Promise<SubscriptionWithPlan> {
     const result = await this.prisma.subscription.update({
-      where: { userId },
+      where: { workspaceId },
       data: {
         scheduledPlanId: freePlanId,
         scheduledChangeAt,
@@ -224,15 +197,13 @@ export class SubscriptionsRepository {
       },
       include: planWithFeaturesInclude,
     });
+
     return result as SubscriptionWithPlan;
   }
 
-  /**
-   * Reactivate a cancelled subscription
-   */
-  async reactivate(userId: string): Promise<SubscriptionWithPlan> {
+  async reactivate(workspaceId: string): Promise<SubscriptionWithPlan> {
     const result = await this.prisma.subscription.update({
-      where: { userId },
+      where: { workspaceId },
       data: {
         scheduledPlanId: null,
         scheduledChangeAt: null,
@@ -241,15 +212,15 @@ export class SubscriptionsRepository {
       },
       include: planWithFeaturesInclude,
     });
+
     return result as SubscriptionWithPlan;
   }
 
-  /**
-   * Cancel a scheduled change (downgrade or cancellation)
-   */
-  async cancelScheduledChange(userId: string): Promise<SubscriptionWithPlan> {
+  async cancelScheduledChange(
+    workspaceId: string,
+  ): Promise<SubscriptionWithPlan> {
     const result = await this.prisma.subscription.update({
-      where: { userId },
+      where: { workspaceId },
       data: {
         scheduledPlanId: null,
         scheduledChangeAt: null,
@@ -260,21 +231,19 @@ export class SubscriptionsRepository {
       },
       include: planWithFeaturesInclude,
     });
+
     return result as SubscriptionWithPlan;
   }
 
-  /**
-   * Apply a scheduled plan change (used by cron job)
-   */
   async applyScheduledChange(
-    userId: string,
+    workspaceId: string,
     newPlanId: string,
     currentPeriodEnd: Date | null,
     graceOverages?: Record<string, number>,
     gracePeriodEnd?: Date,
   ): Promise<SubscriptionWithPlan> {
     const result = await this.prisma.subscription.update({
-      where: { userId },
+      where: { workspaceId },
       data: {
         planId: newPlanId,
         currentPeriodStart: new Date(),
@@ -292,12 +261,10 @@ export class SubscriptionsRepository {
       },
       include: planWithFeaturesInclude,
     });
+
     return result as SubscriptionWithPlan;
   }
 
-  /**
-   * Find all subscriptions with scheduled changes that are due
-   */
   async findDueScheduledChanges(): Promise<SubscriptionWithScheduledPlan[]> {
     const now = new Date();
     const results = await this.prisma.subscription.findMany({
@@ -314,12 +281,10 @@ export class SubscriptionsRepository {
         },
       },
     });
+
     return results as SubscriptionWithScheduledPlan[];
   }
 
-  /**
-   * Find all subscriptions with expired grace periods
-   */
   async findExpiredGracePeriods(): Promise<SubscriptionWithPlan[]> {
     const now = new Date();
     const results = await this.prisma.subscription.findMany({
@@ -329,32 +294,28 @@ export class SubscriptionsRepository {
       },
       include: planWithFeaturesInclude,
     });
+
     return results as SubscriptionWithPlan[];
   }
 
-  /**
-   * Clear grace period data after it expires
-   */
-  async clearGracePeriod(userId: string): Promise<SubscriptionWithPlan> {
+  async clearGracePeriod(workspaceId: string): Promise<SubscriptionWithPlan> {
     const result = await this.prisma.subscription.update({
-      where: { userId },
+      where: { workspaceId },
       data: {
         graceOverages: Prisma.JsonNull,
         gracePeriodEnd: null,
       },
       include: planWithFeaturesInclude,
     });
+
     return result as SubscriptionWithPlan;
   }
 
-  /**
-   * Find subscription with scheduled plan included
-   */
-  async findByUserIdWithScheduledPlan(
-    userId: string,
+  async findByWorkspaceIdWithScheduledPlan(
+    workspaceId: string,
   ): Promise<SubscriptionWithScheduledPlan | null> {
     const result = await this.prisma.subscription.findUnique({
-      where: { userId },
+      where: { workspaceId },
       include: {
         plan: {
           include: { planFeatures: true },
@@ -364,6 +325,7 @@ export class SubscriptionsRepository {
         },
       },
     });
+
     return result as SubscriptionWithScheduledPlan | null;
   }
 }

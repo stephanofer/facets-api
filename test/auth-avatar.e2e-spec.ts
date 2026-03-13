@@ -7,12 +7,15 @@ import {
   cleanupTestUser,
 } from './helpers/test-app.helper';
 import { PrismaService } from '@database/prisma.service';
+import { WorkspaceRole } from '../src/generated/prisma/client';
 
 describe('Auth avatar (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
   let accessToken: string;
   let userId: string;
+  let workspaceId: string;
+  let membershipId: string;
 
   const pngBuffer = Buffer.from([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
@@ -25,6 +28,8 @@ describe('Auth avatar (e2e)', () => {
     const testUser = await createTestUser(app);
     accessToken = testUser.accessToken;
     userId = testUser.userId;
+    workspaceId = testUser.workspaceId;
+    membershipId = testUser.membershipId;
   }, 30000);
 
   afterAll(async () => {
@@ -119,6 +124,13 @@ describe('Auth avatar (e2e)', () => {
         .expect(200);
 
       expect(res.body.success).toBe(true);
+      expect(res.body.data.workspace).toMatchObject({
+        id: workspaceId,
+      });
+      expect(res.body.data.membership).toMatchObject({
+        id: membershipId,
+        role: WorkspaceRole.ADMIN,
+      });
       expect(res.body.data.avatar).toMatchObject({
         id: uploadRes.body.data.avatar.id,
         mimeType: 'image/png',

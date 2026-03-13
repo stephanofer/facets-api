@@ -1,10 +1,4 @@
-import {
-  ForbiddenException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@config/config.service';
 import {
   FILE_PURPOSE_CONFIG,
@@ -26,6 +20,19 @@ export interface UploadFileOptions {
   transactionId?: string;
 }
 
+export interface FileOwnershipContext {
+  workspaceId: string;
+  uploadedByUserId?: string;
+}
+
+export interface AvatarDeletionContext {
+  uploadedByUserId: string;
+}
+
+export interface WorkspaceFileDeletionContext {
+  workspaceId: string;
+}
+
 @Injectable()
 export class FileService {
   private readonly logger = new Logger(FileService.name);
@@ -40,7 +47,7 @@ export class FileService {
   async upload(
     file: Express.Multer.File,
     purpose: FilePurpose,
-    userId: string,
+    ownership: FileOwnershipContext,
     options: UploadFileOptions = {},
   ): Promise<File> {
     const rule = getFilePurposeRule(purpose);
@@ -59,7 +66,8 @@ export class FileService {
 
     try {
       return await this.fileRepository.create({
-        userId,
+        workspaceId: ownership.workspaceId,
+        uploadedByUserId: ownership.uploadedByUserId,
         purpose,
         bucket,
         key,
@@ -75,18 +83,42 @@ export class FileService {
     }
   }
 
-  async delete(fileId: string, userId: string): Promise<File> {
-    const file = await this.fileRepository.findActiveById(fileId);
+  async deleteAvatar(
+    fileId: string,
+    context: AvatarDeletionContext,
+  ): Promise<File> {
+    const file = await this.fileRepository.findActiveAvatarById(
+      fileId,
+      context.uploadedByUserId,
+    );
 
     if (!file) {
       throw new NotFoundException('File not found');
     }
 
-    if (file.userId !== userId) {
-      throw new ForbiddenException('You do not have access to this file');
+    return this.fileRepository.markDeletedAvatar(
+      fileId,
+      context.uploadedByUserId,
+    );
+  }
+
+  async deleteWorkspaceFile(
+    fileId: string,
+    context: WorkspaceFileDeletionContext,
+  ): Promise<File> {
+    const file = await this.fileRepository.findActiveWorkspaceFileById(
+      fileId,
+      context.workspaceId,
+    );
+
+    if (!file) {
+      throw new NotFoundException('File not found');
     }
 
-    return this.fileRepository.markDeleted(fileId);
+    return this.fileRepository.markDeletedWorkspaceFile(
+      fileId,
+      context.workspaceId,
+    );
   }
 
   async toResponseDto(file: File): Promise<FileResponseDto> {

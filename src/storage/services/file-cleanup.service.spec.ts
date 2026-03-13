@@ -20,7 +20,8 @@ describe('FileCleanupService', () => {
   function createStoredFile(overrides: Partial<StoredFile> = {}): StoredFile {
     return {
       id: 'file-1',
-      userId: 'user-1',
+      workspaceId: 'workspace-1',
+      uploadedByUserId: 'user-1',
       purpose: FilePurpose.AVATAR,
       bucket: 'facets-public',
       key: 'avatars/file-1.webp',

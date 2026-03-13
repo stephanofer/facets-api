@@ -28,12 +28,14 @@ import {
   CategoryWithChildrenDto,
   CategoryTreeResponseDto,
 } from '@modules/categories/dtos/category-response.dto';
-import { CurrentUser } from '@common/decorators/current-user.decorator';
+import { CurrentPrincipal } from '@common/decorators/current-principal.decorator';
 import { RequireFeature } from '@common/decorators/feature.decorator';
+import { RequireWorkspaceRole } from '@common/decorators/workspace-role.decorator';
 import { FeatureGuard } from '@common/guards/feature.guard';
 import { ParseCuidPipe } from '@common/pipes/parse-cuid.pipe';
-import { AuthenticatedUser } from '@modules/auth/strategies/jwt.strategy';
 import { FEATURES } from '@modules/subscriptions/constants/features.constant';
+import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
+import { WorkspaceRole } from '../../generated/prisma/client';
 
 @ApiTags('Categories')
 @ApiBearerAuth()
@@ -47,6 +49,7 @@ export class CategoriesController {
   @Post()
   @UseGuards(FeatureGuard)
   @RequireFeature(FEATURES.CUSTOM_CATEGORIES)
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN, WorkspaceRole.MEMBER)
   @ApiOperation({
     summary: 'Create custom category',
     description:
@@ -71,20 +74,25 @@ export class CategoriesController {
       'Validation error, max depth exceeded, or parent type mismatch',
   })
   async create(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Body() dto: CreateCategoryDto,
   ): Promise<CategoryResponseDto> {
-    return this.categoriesService.create(user.sub, dto);
+    return this.categoriesService.create(principal.workspaceId, dto);
   }
 
   /**
    * List all categories (system + custom)
    */
   @Get()
+  @RequireWorkspaceRole(
+    WorkspaceRole.ADMIN,
+    WorkspaceRole.MEMBER,
+    WorkspaceRole.GUEST,
+  )
   @ApiOperation({
     summary: 'List categories',
     description:
-      'Get all categories for the authenticated user. Includes system categories (shared) and custom categories (personal). Returns tree structure by default.',
+      'Get all categories for the authenticated workspace. Includes system categories (shared) and workspace custom categories. Returns tree structure by default.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -92,16 +100,21 @@ export class CategoriesController {
     type: CategoryTreeResponseDto,
   })
   async findAll(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Query() query: QueryCategoryDto,
   ): Promise<CategoryTreeResponseDto> {
-    return this.categoriesService.findAll(user.sub, query);
+    return this.categoriesService.findAll(principal.workspaceId, query);
   }
 
   /**
    * Get a single category with its children
    */
   @Get(':id')
+  @RequireWorkspaceRole(
+    WorkspaceRole.ADMIN,
+    WorkspaceRole.MEMBER,
+    WorkspaceRole.GUEST,
+  )
   @ApiOperation({
     summary: 'Get category',
     description:
@@ -118,16 +131,17 @@ export class CategoriesController {
     description: 'Category not found',
   })
   async findById(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Param('id', ParseCuidPipe) id: string,
   ): Promise<CategoryWithChildrenDto> {
-    return this.categoriesService.findById(user.sub, id);
+    return this.categoriesService.findById(principal.workspaceId, id);
   }
 
   /**
    * Update a custom category
    */
   @Put(':id')
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN, WorkspaceRole.MEMBER)
   @ApiOperation({
     summary: 'Update category',
     description:
@@ -152,17 +166,18 @@ export class CategoriesController {
     description: 'Category name already exists',
   })
   async update(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Param('id', ParseCuidPipe) id: string,
     @Body() dto: UpdateCategoryDto,
   ): Promise<CategoryResponseDto> {
-    return this.categoriesService.update(user.sub, id, dto);
+    return this.categoriesService.update(principal.workspaceId, id, dto);
   }
 
   /**
    * Delete a custom category
    */
   @Delete(':id')
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN, WorkspaceRole.MEMBER)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Delete category',
@@ -187,16 +202,17 @@ export class CategoriesController {
     description: 'Category has transactions, deactivate instead',
   })
   async delete(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Param('id', ParseCuidPipe) id: string,
   ): Promise<void> {
-    return this.categoriesService.delete(user.sub, id);
+    return this.categoriesService.delete(principal.workspaceId, id);
   }
 
   /**
    * Deactivate a custom category (soft delete)
    */
   @Patch(':id/deactivate')
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN, WorkspaceRole.MEMBER)
   @ApiOperation({
     summary: 'Deactivate category',
     description:
@@ -217,16 +233,17 @@ export class CategoriesController {
     description: 'Cannot deactivate system categories',
   })
   async deactivate(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Param('id', ParseCuidPipe) id: string,
   ): Promise<CategoryResponseDto> {
-    return this.categoriesService.deactivate(user.sub, id);
+    return this.categoriesService.deactivate(principal.workspaceId, id);
   }
 
   /**
    * Reactivate a custom category
    */
   @Patch(':id/reactivate')
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN, WorkspaceRole.MEMBER)
   @ApiOperation({
     summary: 'Reactivate category',
     description: 'Reactivate a previously deactivated custom category.',
@@ -246,9 +263,9 @@ export class CategoriesController {
     description: 'Cannot modify system categories',
   })
   async reactivate(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Param('id', ParseCuidPipe) id: string,
   ): Promise<CategoryResponseDto> {
-    return this.categoriesService.reactivate(user.sub, id);
+    return this.categoriesService.reactivate(principal.workspaceId, id);
   }
 }

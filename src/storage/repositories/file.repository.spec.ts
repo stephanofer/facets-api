@@ -30,7 +30,8 @@ describe('FileRepository', () => {
 
   it('should create files through Prisma', async () => {
     const data = {
-      userId: 'user-1',
+      workspaceId: 'workspace-1',
+      uploadedByUserId: 'user-1',
       purpose: FilePurpose.AVATAR,
       bucket: 'facets-public',
       key: 'avatars/file.webp',
@@ -55,6 +56,31 @@ describe('FileRepository', () => {
     });
   });
 
+  it('should find active avatars by id and uploader', async () => {
+    await repository.findActiveAvatarById('file-1', 'user-1');
+
+    expect(prismaService.file.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'file-1',
+        purpose: FilePurpose.AVATAR,
+        uploadedByUserId: 'user-1',
+        deletedAt: null,
+      },
+    });
+  });
+
+  it('should find active workspace files by id and workspace', async () => {
+    await repository.findActiveWorkspaceFileById('file-1', 'workspace-1');
+
+    expect(prismaService.file.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'file-1',
+        workspaceId: 'workspace-1',
+        deletedAt: null,
+      },
+    });
+  });
+
   it('should mark files as deleted', async () => {
     await repository.markDeleted('file-1');
 
@@ -64,6 +90,47 @@ describe('FileRepository', () => {
 
     expect(updateArgs.where).toEqual({ id: 'file-1' });
     expect(updateArgs.data.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it('should mark avatars as deleted after validating uploader ownership', async () => {
+    prismaService.file.findFirst.mockResolvedValue({ id: 'file-1' });
+
+    await repository.markDeletedAvatar('file-1', 'user-1');
+
+    expect(prismaService.file.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'file-1',
+        purpose: FilePurpose.AVATAR,
+        uploadedByUserId: 'user-1',
+        deletedAt: null,
+      },
+    });
+    expect(prismaService.file.update).toHaveBeenCalledWith({
+      where: { id: 'file-1' },
+      data: {
+        deletedAt: expect.any(Date),
+      },
+    });
+  });
+
+  it('should mark workspace files as deleted after validating workspace ownership', async () => {
+    prismaService.file.findFirst.mockResolvedValue({ id: 'file-1' });
+
+    await repository.markDeletedWorkspaceFile('file-1', 'workspace-1');
+
+    expect(prismaService.file.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'file-1',
+        workspaceId: 'workspace-1',
+        deletedAt: null,
+      },
+    });
+    expect(prismaService.file.update).toHaveBeenCalledWith({
+      where: { id: 'file-1' },
+      data: {
+        deletedAt: expect.any(Date),
+      },
+    });
   });
 
   it('should query pending cleanup files with default batch size', async () => {

@@ -40,6 +40,7 @@ describe('OpenAiGatewayClient', () => {
       metadata: {
         capability: 'voucher-analyzer',
         userId: 'user-1',
+        workspaceId: 'workspace-1',
       },
       timeoutMs: 1000,
     });
@@ -58,6 +59,7 @@ describe('OpenAiGatewayClient', () => {
           'cf-aig-metadata': JSON.stringify({
             capability: 'voucher-analyzer',
             userId: 'user-1',
+            workspaceId: 'workspace-1',
           }),
         },
         timeout: 1000,

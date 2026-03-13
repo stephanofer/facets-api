@@ -1,39 +1,41 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Delete,
   Body,
-  Query,
-  HttpStatus,
+  Controller,
+  Delete,
+  Get,
   HttpCode,
+  HttpStatus,
+  Post,
+  Query,
 } from '@nestjs/common';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
   ApiBearerAuth,
+  ApiOperation,
   ApiQuery,
+  ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
-import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
-import { PlanManagementService } from '@modules/subscriptions/plan-management.service';
+import { CurrentPrincipal } from '@common/decorators/current-principal.decorator';
+import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
+import {
+  CancelResponseDto,
+  CancelScheduledChangeResponseDto,
+  CancelSubscriptionDto,
+  ChangePlanDto,
+  DowngradeResponseDto,
+  PlanChangeHistoryResponseDto,
+  PreviewResponseDto,
+  ReactivateResponseDto,
+  UpgradeResponseDto,
+} from '@modules/subscriptions/dtos/plan-management.dto';
 import {
   CurrentSubscriptionResponseDto,
   UsageResponseDto,
 } from '@modules/subscriptions/dtos/subscription.dto';
-import {
-  ChangePlanDto,
-  CancelSubscriptionDto,
-  PreviewResponseDto,
-  UpgradeResponseDto,
-  DowngradeResponseDto,
-  CancelResponseDto,
-  ReactivateResponseDto,
-  CancelScheduledChangeResponseDto,
-  PlanChangeHistoryResponseDto,
-} from '@modules/subscriptions/dtos/plan-management.dto';
-import { CurrentUser } from '@common/decorators/current-user.decorator';
-import { AuthenticatedUser } from '@modules/auth/strategies/jwt.strategy';
+import { RequireWorkspaceRole } from '@common/decorators/workspace-role.decorator';
+import { PlanManagementService } from '@modules/subscriptions/plan-management.service';
+import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
+import { WorkspaceRole } from '../../generated/prisma/client';
 
 @ApiTags('Subscriptions')
 @ApiBearerAuth()
@@ -44,81 +46,50 @@ export class SubscriptionsController {
     private readonly planManagementService: PlanManagementService,
   ) {}
 
-  // ==========================================================================
-  // Phase 3: Basic Subscription Endpoints
-  // ==========================================================================
-
-  /**
-   * Get current user's subscription
-   */
   @Get('current')
   @ApiOperation({
     summary: 'Get current subscription',
     description:
-      "Get the current user's subscription details including plan and status.",
+      'Get the current workspace subscription details including plan and status.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Current subscription details',
     type: CurrentSubscriptionResponseDto,
   })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'No active subscription found',
-  })
-  @ApiResponse({
-    status: HttpStatus.UNAUTHORIZED,
-    description: 'Not authenticated',
-  })
   async getCurrentSubscription(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ): Promise<CurrentSubscriptionResponseDto> {
-    const subscription = await this.subscriptionsService.getUserSubscription(
-      user.sub,
-    );
+    const subscription =
+      await this.subscriptionsService.getWorkspaceSubscription(
+        principal.workspaceId,
+      );
+
     return { subscription };
   }
 
-  /**
-   * Get current usage for all features
-   */
   @Get('usage')
   @ApiOperation({
     summary: 'Get usage statistics',
     description:
-      "Get the current usage for all features in the user's plan. Shows current count, limits, and percentage used.",
+      'Get the current usage for all features in the active workspace plan.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Usage statistics for all features',
     type: UsageResponseDto,
   })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'No active subscription found',
-  })
-  @ApiResponse({
-    status: HttpStatus.UNAUTHORIZED,
-    description: 'Not authenticated',
-  })
   async getUsage(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ): Promise<UsageResponseDto> {
-    return this.subscriptionsService.getUserUsage(user.sub);
+    return this.subscriptionsService.getWorkspaceUsage(principal.workspaceId);
   }
 
-  // ==========================================================================
-  // Phase 4: Plan Management Endpoints
-  // ==========================================================================
-
-  /**
-   * Preview plan change effects
-   */
   @Get('preview')
   @ApiOperation({
     summary: 'Preview plan change',
     description:
-      'Preview the effects of changing to a different plan. Shows pricing, overages, and effective dates.',
+      'Preview the effects of changing to a different plan for the active workspace.',
   })
   @ApiQuery({
     name: 'planCode',
@@ -130,191 +101,120 @@ export class SubscriptionsController {
     description: 'Plan change preview',
     type: PreviewResponseDto,
   })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'Subscription or plan not found',
-  })
-  @ApiResponse({
-    status: HttpStatus.BAD_REQUEST,
-    description: 'Already on this plan',
-  })
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN)
   async previewPlanChange(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Query('planCode') planCode: string,
   ): Promise<PreviewResponseDto> {
     const preview = await this.planManagementService.previewPlanChange(
-      user.sub,
+      principal,
       planCode,
     );
+
     return { preview };
   }
 
-  /**
-   * Upgrade to a higher plan (immediate)
-   */
   @Post('upgrade')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Upgrade plan',
     description:
-      'Upgrade to a higher tier plan. The change takes effect immediately and proration is applied.',
+      'Upgrade the active workspace to a higher tier plan. The change takes effect immediately.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Plan upgraded successfully',
     type: UpgradeResponseDto,
   })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'Subscription or plan not found',
-  })
-  @ApiResponse({
-    status: HttpStatus.BAD_REQUEST,
-    description: 'Invalid upgrade (same plan or lower tier)',
-  })
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN)
   async upgradePlan(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Body() dto: ChangePlanDto,
   ): Promise<UpgradeResponseDto> {
-    return this.planManagementService.upgradePlan(
-      user.sub,
-      dto.planCode,
-      user.email,
-    );
+    return this.planManagementService.upgradePlan(principal, dto.planCode);
   }
 
-  /**
-   * Downgrade to a lower plan (scheduled)
-   */
   @Post('downgrade')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Downgrade plan',
     description:
-      'Downgrade to a lower tier plan. The change is scheduled for the end of the current billing period.',
+      'Downgrade the active workspace to a lower tier plan. The change is scheduled for the end of the current billing period.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Downgrade scheduled successfully',
     type: DowngradeResponseDto,
   })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'Subscription or plan not found',
-  })
-  @ApiResponse({
-    status: HttpStatus.BAD_REQUEST,
-    description: 'Invalid downgrade (same plan or higher tier)',
-  })
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN)
   async downgradePlan(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Body() dto: ChangePlanDto,
   ): Promise<DowngradeResponseDto> {
-    return this.planManagementService.downgradePlan(
-      user.sub,
-      dto.planCode,
-      user.email,
-    );
+    return this.planManagementService.downgradePlan(principal, dto.planCode);
   }
 
-  /**
-   * Cancel subscription
-   */
   @Post('cancel')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Cancel subscription',
     description:
-      'Cancel the subscription. The user will be downgraded to the Free plan at the end of the billing period.',
+      'Cancel the active workspace subscription. It will downgrade to Free at the end of the billing period.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Cancellation scheduled successfully',
     type: CancelResponseDto,
   })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'No active subscription found',
-  })
-  @ApiResponse({
-    status: HttpStatus.BAD_REQUEST,
-    description: 'Cannot cancel free plan or already cancelled',
-  })
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN)
   async cancelSubscription(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Body() dto: CancelSubscriptionDto,
   ): Promise<CancelResponseDto> {
-    return this.planManagementService.cancelSubscription(
-      user.sub,
-      dto.reason,
-      user.email,
-    );
+    return this.planManagementService.cancelSubscription(principal, dto.reason);
   }
 
-  /**
-   * Reactivate a cancelled subscription
-   */
   @Post('reactivate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Reactivate subscription',
     description:
-      'Reactivate a cancelled subscription before the cancellation takes effect.',
+      'Reactivate a cancelled active workspace subscription before cancellation takes effect.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Subscription reactivated successfully',
     type: ReactivateResponseDto,
   })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'No active subscription found',
-  })
-  @ApiResponse({
-    status: HttpStatus.BAD_REQUEST,
-    description: 'No pending cancellation to reactivate',
-  })
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN)
   async reactivateSubscription(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ): Promise<ReactivateResponseDto> {
-    return this.planManagementService.reactivateSubscription(user.sub);
+    return this.planManagementService.reactivateSubscription(principal);
   }
 
-  /**
-   * Cancel a scheduled change (downgrade or cancellation)
-   */
   @Delete('scheduled')
   @ApiOperation({
     summary: 'Cancel scheduled change',
     description:
-      'Cancel a scheduled downgrade or cancellation. The subscription will remain on the current plan.',
+      'Cancel a scheduled downgrade or cancellation for the active workspace.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Scheduled change cancelled successfully',
     type: CancelScheduledChangeResponseDto,
   })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'No active subscription found',
-  })
-  @ApiResponse({
-    status: HttpStatus.BAD_REQUEST,
-    description: 'No scheduled change to cancel',
-  })
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN)
   async cancelScheduledChange(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
   ): Promise<CancelScheduledChangeResponseDto> {
-    return this.planManagementService.cancelScheduledChange(user.sub);
+    return this.planManagementService.cancelScheduledChange(principal);
   }
 
-  /**
-   * Get plan change history
-   */
   @Get('history')
   @ApiOperation({
     summary: 'Get plan change history',
-    description: 'Get a list of all plan changes for the current user.',
+    description: 'Get a list of all plan changes for the active workspace.',
   })
   @ApiQuery({
     name: 'limit',
@@ -327,14 +227,16 @@ export class SubscriptionsController {
     description: 'Plan change history',
     type: PlanChangeHistoryResponseDto,
   })
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN)
   async getPlanChangeHistory(
-    @CurrentUser() user: AuthenticatedUser,
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
     @Query('limit') limit?: number,
   ): Promise<PlanChangeHistoryResponseDto> {
     const history = await this.planManagementService.getPlanChangeHistory(
-      user.sub,
+      principal,
       limit ? Number(limit) : undefined,
     );
+
     return { history };
   }
 }

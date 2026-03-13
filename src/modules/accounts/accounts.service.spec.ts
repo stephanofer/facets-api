@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/unbound-method */
 import { Test, TestingModule } from '@nestjs/testing';
-import { HttpStatus } from '@nestjs/common';
 import { AccountsService } from '@modules/accounts/accounts.service';
 import { AccountsRepository } from '@modules/accounts/accounts.repository';
 import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
@@ -13,11 +12,14 @@ describe('AccountsService', () => {
   let accountsRepository: jest.Mocked<AccountsRepository>;
   let subscriptionsService: jest.Mocked<SubscriptionsService>;
 
-  const userId = 'test-user-id';
+  const workspaceId = 'test-workspace-id';
+  const actorUserId = 'actor-user-id';
 
   const mockAccount = {
     id: 'account-id-1',
-    userId,
+    workspaceId,
+    createdByUserId: actorUserId,
+    updatedByUserId: actorUserId,
     name: 'My Checking',
     type: AccountType.DEBIT_CARD,
     balance: new Prisma.Decimal(1500),
@@ -60,7 +62,7 @@ describe('AccountsService', () => {
     };
 
     const mockSubscriptionsService = {
-      checkFeatureAccess: jest.fn(),
+      checkWorkspaceFeatureAccess: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -86,7 +88,7 @@ describe('AccountsService', () => {
 
     it('should create an account successfully', async () => {
       accountsRepository.countActive.mockResolvedValue(2);
-      subscriptionsService.checkFeatureAccess.mockResolvedValue({
+      subscriptionsService.checkWorkspaceFeatureAccess.mockResolvedValue({
         allowed: true,
         current: 2,
         limit: 5,
@@ -95,40 +97,48 @@ describe('AccountsService', () => {
       accountsRepository.nameExists.mockResolvedValue(false);
       accountsRepository.create.mockResolvedValue(mockAccount);
 
-      const result = await service.create(userId, createDto);
+      const result = await service.create(workspaceId, actorUserId, createDto);
 
       expect(result).toBeDefined();
       expect(result.name).toBe('My Checking');
       expect(result.type).toBe(AccountType.DEBIT_CARD);
       expect(accountsRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          userId,
+          workspaceId,
+          createdByUserId: actorUserId,
+          updatedByUserId: actorUserId,
           name: 'My Checking',
           type: AccountType.DEBIT_CARD,
         }),
       );
+      expect(accountsRepository.countActive).toHaveBeenCalledWith(workspaceId);
+      expect(
+        subscriptionsService.checkWorkspaceFeatureAccess,
+      ).toHaveBeenCalledWith(workspaceId, 'accounts', 2);
     });
 
     it('should throw when feature limit is exceeded', async () => {
       accountsRepository.countActive.mockResolvedValue(5);
-      subscriptionsService.checkFeatureAccess.mockResolvedValue({
+      subscriptionsService.checkWorkspaceFeatureAccess.mockResolvedValue({
         allowed: false,
         current: 5,
         limit: 5,
         reason: 'FEATURE_LIMIT_EXCEEDED',
       });
 
-      await expect(service.create(userId, createDto)).rejects.toThrow(
-        BusinessException,
-      );
-      await expect(service.create(userId, createDto)).rejects.toMatchObject({
+      await expect(
+        service.create(workspaceId, actorUserId, createDto),
+      ).rejects.toThrow(BusinessException);
+      await expect(
+        service.create(workspaceId, actorUserId, createDto),
+      ).rejects.toMatchObject({
         code: ERROR_CODES.FEATURE_LIMIT_EXCEEDED,
       });
     });
 
     it('should throw when currency does not exist', async () => {
       accountsRepository.countActive.mockResolvedValue(0);
-      subscriptionsService.checkFeatureAccess.mockResolvedValue({
+      subscriptionsService.checkWorkspaceFeatureAccess.mockResolvedValue({
         allowed: true,
         current: 0,
         limit: 5,
@@ -136,13 +146,16 @@ describe('AccountsService', () => {
       accountsRepository.currencyExists.mockResolvedValue(false);
 
       await expect(
-        service.create(userId, { ...createDto, currencyCode: 'XYZ' }),
+        service.create(workspaceId, actorUserId, {
+          ...createDto,
+          currencyCode: 'XYZ',
+        }),
       ).rejects.toThrow(BusinessException);
     });
 
     it('should throw when account name already exists', async () => {
       accountsRepository.countActive.mockResolvedValue(0);
-      subscriptionsService.checkFeatureAccess.mockResolvedValue({
+      subscriptionsService.checkWorkspaceFeatureAccess.mockResolvedValue({
         allowed: true,
         current: 0,
         limit: 5,
@@ -150,17 +163,19 @@ describe('AccountsService', () => {
       accountsRepository.currencyExists.mockResolvedValue(true);
       accountsRepository.nameExists.mockResolvedValue(true);
 
-      await expect(service.create(userId, createDto)).rejects.toThrow(
-        BusinessException,
-      );
-      await expect(service.create(userId, createDto)).rejects.toMatchObject({
+      await expect(
+        service.create(workspaceId, actorUserId, createDto),
+      ).rejects.toThrow(BusinessException);
+      await expect(
+        service.create(workspaceId, actorUserId, createDto),
+      ).rejects.toMatchObject({
         code: ERROR_CODES.ACCOUNT_DUPLICATE_NAME,
       });
     });
 
     it('should require credit limit for CREDIT_CARD type', async () => {
       accountsRepository.countActive.mockResolvedValue(0);
-      subscriptionsService.checkFeatureAccess.mockResolvedValue({
+      subscriptionsService.checkWorkspaceFeatureAccess.mockResolvedValue({
         allowed: true,
         current: 0,
         limit: 5,
@@ -171,22 +186,21 @@ describe('AccountsService', () => {
       const creditCardDto = {
         name: 'Visa',
         type: AccountType.CREDIT_CARD,
-        // Missing creditLimit
       };
 
-      await expect(service.create(userId, creditCardDto)).rejects.toThrow(
-        BusinessException,
-      );
-      await expect(service.create(userId, creditCardDto)).rejects.toMatchObject(
-        {
-          code: ERROR_CODES.INVALID_CREDIT_CARD_FIELDS,
-        },
-      );
+      await expect(
+        service.create(workspaceId, actorUserId, creditCardDto),
+      ).rejects.toThrow(BusinessException);
+      await expect(
+        service.create(workspaceId, actorUserId, creditCardDto),
+      ).rejects.toMatchObject({
+        code: ERROR_CODES.INVALID_CREDIT_CARD_FIELDS,
+      });
     });
 
     it('should reject credit card fields on non-credit card accounts', async () => {
       accountsRepository.countActive.mockResolvedValue(0);
-      subscriptionsService.checkFeatureAccess.mockResolvedValue({
+      subscriptionsService.checkWorkspaceFeatureAccess.mockResolvedValue({
         allowed: true,
         current: 0,
         limit: 5,
@@ -200,17 +214,19 @@ describe('AccountsService', () => {
         creditLimit: 5000,
       };
 
-      await expect(service.create(userId, invalidDto)).rejects.toThrow(
-        BusinessException,
-      );
-      await expect(service.create(userId, invalidDto)).rejects.toMatchObject({
+      await expect(
+        service.create(workspaceId, actorUserId, invalidDto),
+      ).rejects.toThrow(BusinessException);
+      await expect(
+        service.create(workspaceId, actorUserId, invalidDto),
+      ).rejects.toMatchObject({
         code: ERROR_CODES.INVALID_CREDIT_CARD_FIELDS,
       });
     });
 
     it('should create a credit card account with all fields', async () => {
       accountsRepository.countActive.mockResolvedValue(0);
-      subscriptionsService.checkFeatureAccess.mockResolvedValue({
+      subscriptionsService.checkWorkspaceFeatureAccess.mockResolvedValue({
         allowed: true,
         current: 0,
         limit: 5,
@@ -227,7 +243,11 @@ describe('AccountsService', () => {
         paymentDueDay: 5,
       };
 
-      const result = await service.create(userId, creditCardDto);
+      const result = await service.create(
+        workspaceId,
+        actorUserId,
+        creditCardDto,
+      );
 
       expect(result.creditLimit).toBe('5000');
       expect(result.statementClosingDay).toBe(15);
@@ -239,12 +259,12 @@ describe('AccountsService', () => {
     it('should return all active accounts by default', async () => {
       accountsRepository.findAll.mockResolvedValue([mockAccount]);
 
-      const result = await service.findAll(userId, {});
+      const result = await service.findAll(workspaceId, {});
 
       expect(result.accounts).toHaveLength(1);
       expect(result.total).toBe(1);
       expect(accountsRepository.findAll).toHaveBeenCalledWith({
-        userId,
+        workspaceId,
         type: undefined,
         includeArchived: false,
         currencyCode: undefined,
@@ -254,7 +274,7 @@ describe('AccountsService', () => {
     it('should filter by type', async () => {
       accountsRepository.findAll.mockResolvedValue([]);
 
-      await service.findAll(userId, { type: AccountType.CREDIT_CARD });
+      await service.findAll(workspaceId, { type: AccountType.CREDIT_CARD });
 
       expect(accountsRepository.findAll).toHaveBeenCalledWith(
         expect.objectContaining({ type: AccountType.CREDIT_CARD }),
@@ -266,16 +286,20 @@ describe('AccountsService', () => {
     it('should return an account', async () => {
       accountsRepository.findById.mockResolvedValue(mockAccount);
 
-      const result = await service.findById(userId, mockAccount.id);
+      const result = await service.findById(workspaceId, mockAccount.id);
       expect(result.id).toBe(mockAccount.id);
+      expect(accountsRepository.findById).toHaveBeenCalledWith(
+        mockAccount.id,
+        workspaceId,
+      );
     });
 
     it('should throw if account not found', async () => {
       accountsRepository.findById.mockResolvedValue(null);
 
-      await expect(service.findById(userId, 'non-existent-id')).rejects.toThrow(
-        BusinessException,
-      );
+      await expect(
+        service.findById(workspaceId, 'non-existent-id'),
+      ).rejects.toThrow(BusinessException);
     });
   });
 
@@ -286,11 +310,45 @@ describe('AccountsService', () => {
       accountsRepository.nameExists.mockResolvedValue(false);
       accountsRepository.update.mockResolvedValue(updatedAccount);
 
-      const result = await service.update(userId, mockAccount.id, {
+      const result = await service.update(
+        workspaceId,
+        actorUserId,
+        mockAccount.id,
+        {
+          name: 'Updated Name',
+        },
+      );
+
+      expect(result.name).toBe('Updated Name');
+      expect(accountsRepository.update).toHaveBeenCalledWith(
+        mockAccount.id,
+        workspaceId,
+        expect.objectContaining({
+          name: 'Updated Name',
+          updatedByUserId: actorUserId,
+        }),
+      );
+    });
+
+    it('should stamp updater actor on update writes', async () => {
+      const updatedAccount = {
+        ...mockAccount,
+        name: 'Updated Name',
+        updatedByUserId: 'new-actor-id',
+      };
+      accountsRepository.findById.mockResolvedValue(mockAccount);
+      accountsRepository.nameExists.mockResolvedValue(false);
+      accountsRepository.update.mockResolvedValue(updatedAccount);
+
+      await service.update(workspaceId, 'new-actor-id', mockAccount.id, {
         name: 'Updated Name',
       });
 
-      expect(result.name).toBe('Updated Name');
+      expect(accountsRepository.update).toHaveBeenCalledWith(
+        mockAccount.id,
+        workspaceId,
+        expect.objectContaining({ updatedByUserId: 'new-actor-id' }),
+      );
     });
 
     it('should throw on duplicate name during update', async () => {
@@ -298,7 +356,9 @@ describe('AccountsService', () => {
       accountsRepository.nameExists.mockResolvedValue(true);
 
       await expect(
-        service.update(userId, mockAccount.id, { name: 'Existing Name' }),
+        service.update(workspaceId, actorUserId, mockAccount.id, {
+          name: 'Existing Name',
+        }),
       ).rejects.toMatchObject({ code: ERROR_CODES.ACCOUNT_DUPLICATE_NAME });
     });
   });
@@ -308,9 +368,16 @@ describe('AccountsService', () => {
       accountsRepository.findById.mockResolvedValue(mockAccount);
       accountsRepository.hasTransactions.mockResolvedValue(false);
 
-      await service.delete(userId, mockAccount.id);
+      await service.delete(workspaceId, mockAccount.id);
 
-      expect(accountsRepository.delete).toHaveBeenCalledWith(mockAccount.id);
+      expect(accountsRepository.hasTransactions).toHaveBeenCalledWith(
+        mockAccount.id,
+        workspaceId,
+      );
+      expect(accountsRepository.delete).toHaveBeenCalledWith(
+        mockAccount.id,
+        workspaceId,
+      );
     });
 
     it('should throw if account has transactions', async () => {
@@ -318,7 +385,7 @@ describe('AccountsService', () => {
       accountsRepository.hasTransactions.mockResolvedValue(true);
 
       await expect(
-        service.delete(userId, mockAccount.id),
+        service.delete(workspaceId, mockAccount.id),
       ).rejects.toMatchObject({ code: ERROR_CODES.ACCOUNT_HAS_TRANSACTIONS });
     });
   });
@@ -331,15 +398,25 @@ describe('AccountsService', () => {
         isArchived: true,
       });
 
-      const result = await service.archive(userId, mockAccount.id);
+      const result = await service.archive(
+        workspaceId,
+        actorUserId,
+        mockAccount.id,
+      );
       expect(result.isArchived).toBe(true);
+      expect(accountsRepository.setArchived).toHaveBeenCalledWith(
+        mockAccount.id,
+        workspaceId,
+        true,
+        actorUserId,
+      );
     });
 
     it('should unarchive an account within limits', async () => {
       const archivedAccount = { ...mockAccount, isArchived: true };
       accountsRepository.findById.mockResolvedValue(archivedAccount);
       accountsRepository.countActive.mockResolvedValue(2);
-      subscriptionsService.checkFeatureAccess.mockResolvedValue({
+      subscriptionsService.checkWorkspaceFeatureAccess.mockResolvedValue({
         allowed: true,
         current: 2,
         limit: 5,
@@ -349,15 +426,25 @@ describe('AccountsService', () => {
         isArchived: false,
       });
 
-      const result = await service.unarchive(userId, archivedAccount.id);
+      const result = await service.unarchive(
+        workspaceId,
+        actorUserId,
+        archivedAccount.id,
+      );
       expect(result.isArchived).toBe(false);
+      expect(accountsRepository.setArchived).toHaveBeenCalledWith(
+        archivedAccount.id,
+        workspaceId,
+        false,
+        actorUserId,
+      );
     });
 
     it('should throw when unarchiving exceeds limit', async () => {
       const archivedAccount = { ...mockAccount, isArchived: true };
       accountsRepository.findById.mockResolvedValue(archivedAccount);
       accountsRepository.countActive.mockResolvedValue(5);
-      subscriptionsService.checkFeatureAccess.mockResolvedValue({
+      subscriptionsService.checkWorkspaceFeatureAccess.mockResolvedValue({
         allowed: false,
         current: 5,
         limit: 5,
@@ -365,7 +452,7 @@ describe('AccountsService', () => {
       });
 
       await expect(
-        service.unarchive(userId, archivedAccount.id),
+        service.unarchive(workspaceId, actorUserId, archivedAccount.id),
       ).rejects.toMatchObject({ code: ERROR_CODES.FEATURE_LIMIT_EXCEEDED });
     });
 
@@ -373,7 +460,7 @@ describe('AccountsService', () => {
       accountsRepository.findById.mockResolvedValue(mockAccount);
 
       await expect(
-        service.unarchive(userId, mockAccount.id),
+        service.unarchive(workspaceId, actorUserId, mockAccount.id),
       ).rejects.toMatchObject({ code: ERROR_CODES.VALIDATION_ERROR });
     });
   });
@@ -389,11 +476,35 @@ describe('AccountsService', () => {
       ]);
       accountsRepository.countActive.mockResolvedValue(3);
 
-      const result = await service.getBalanceSummary(userId);
+      const result = await service.getBalanceSummary(workspaceId);
 
       expect(result.balances).toHaveLength(1);
       expect(result.balances[0].currencyCode).toBe('USD');
       expect(result.totalAccounts).toBe(3);
+      expect(accountsRepository.getBalanceSummary).toHaveBeenCalledWith(
+        workspaceId,
+      );
+    });
+  });
+
+  describe('workspace scoping', () => {
+    it('should use workspaceId for ownership lookups and limits', async () => {
+      accountsRepository.findById.mockResolvedValue(mockAccount);
+      accountsRepository.countActive.mockResolvedValue(1);
+      accountsRepository.getBalanceSummary.mockResolvedValue([]);
+
+      await service.findById(workspaceId, mockAccount.id);
+      await service.countActive(workspaceId);
+      await service.getBalanceSummary(workspaceId);
+
+      expect(accountsRepository.findById).toHaveBeenCalledWith(
+        mockAccount.id,
+        workspaceId,
+      );
+      expect(accountsRepository.countActive).toHaveBeenCalledWith(workspaceId);
+      expect(accountsRepository.getBalanceSummary).toHaveBeenCalledWith(
+        workspaceId,
+      );
     });
   });
 });

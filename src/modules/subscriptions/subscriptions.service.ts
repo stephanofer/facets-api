@@ -1,24 +1,24 @@
-import { Injectable, HttpStatus } from '@nestjs/common';
-import {
-  PlansRepository,
-  PlanWithFeatures,
-} from '@modules/subscriptions/repositories/plans.repository';
-import {
-  SubscriptionsRepository,
-  SubscriptionWithPlan,
-} from '@modules/subscriptions/repositories/subscriptions.repository';
-import { UsageRepository } from '@modules/subscriptions/repositories/usage.repository';
+import { HttpStatus, Injectable } from '@nestjs/common';
+import { ERROR_CODES } from '@common/constants/app.constants';
+import { BusinessException } from '@common/exceptions/business.exception';
 import { FeatureCode } from '@modules/subscriptions/constants/features.constant';
 import {
+  FeatureCheckResultDto,
+  FeatureUsageDto,
   PlanDto,
   SubscriptionDto,
-  FeatureUsageDto,
   UsageResponseDto,
-  FeatureCheckResultDto,
   toPlanDto,
 } from '@modules/subscriptions/dtos/subscription.dto';
-import { BusinessException } from '@common/exceptions/business.exception';
-import { ERROR_CODES } from '@common/constants/app.constants';
+import {
+  PlanWithFeatures,
+  PlansRepository,
+} from '@modules/subscriptions/repositories/plans.repository';
+import {
+  SubscriptionWithPlan,
+  SubscriptionsRepository,
+} from '@modules/subscriptions/repositories/subscriptions.repository';
+import { UsageRepository } from '@modules/subscriptions/repositories/usage.repository';
 import {
   FeatureLimitType,
   FeatureType,
@@ -34,21 +34,11 @@ export class SubscriptionsService {
     private readonly usageRepository: UsageRepository,
   ) {}
 
-  // ==========================================================================
-  // Plans
-  // ==========================================================================
-
-  /**
-   * Get all active plans
-   */
   async getAllPlans(): Promise<PlanDto[]> {
     const plans = await this.plansRepository.findAllActive();
     return plans.map(toPlanDto);
   }
 
-  /**
-   * Get a single plan by code
-   */
   async getPlanByCode(code: string): Promise<PlanDto> {
     const plan = await this.plansRepository.findByCode(code);
     if (!plan) {
@@ -58,12 +48,10 @@ export class SubscriptionsService {
         HttpStatus.NOT_FOUND,
       );
     }
+
     return toPlanDto(plan);
   }
 
-  /**
-   * Get the default plan (FREE)
-   */
   async getDefaultPlan(): Promise<PlanWithFeatures> {
     const plan = await this.plansRepository.findDefault();
     if (!plan) {
@@ -73,19 +61,15 @@ export class SubscriptionsService {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+
     return plan;
   }
 
-  // ==========================================================================
-  // Subscriptions
-  // ==========================================================================
-
-  /**
-   * Get user's current subscription
-   */
-  async getUserSubscription(userId: string): Promise<SubscriptionDto> {
+  async getWorkspaceSubscription(
+    workspaceId: string,
+  ): Promise<SubscriptionDto> {
     const subscription =
-      await this.subscriptionsRepository.findByUserId(userId);
+      await this.subscriptionsRepository.findByWorkspaceId(workspaceId);
 
     if (!subscription) {
       throw new BusinessException(
@@ -98,49 +82,34 @@ export class SubscriptionsService {
     return this.toSubscriptionDto(subscription);
   }
 
-  /**
-   * Create a subscription for a new user (assign FREE plan)
-   */
-  async createSubscriptionForNewUser(
-    userId: string,
+  async createSubscriptionForWorkspace(
+    workspaceId: string,
   ): Promise<SubscriptionWithPlan> {
     const defaultPlan = await this.getDefaultPlan();
 
     return this.subscriptionsRepository.create({
-      userId,
+      workspaceId,
       planId: defaultPlan.id,
-      currentPeriodEnd: null, // Free plan has no end date
+      currentPeriodEnd: null,
     });
   }
 
-  /**
-   * Check if user has a subscription
-   */
-  async hasSubscription(userId: string): Promise<boolean> {
+  async hasWorkspaceSubscription(workspaceId: string): Promise<boolean> {
     const subscription =
-      await this.subscriptionsRepository.findByUserId(userId);
+      await this.subscriptionsRepository.findByWorkspaceId(workspaceId);
     return subscription !== null;
   }
 
-  // ==========================================================================
-  // Feature Access Control
-  // ==========================================================================
-
-  /**
-   * Check if a user can access a feature (for boolean features)
-   * or if they haven't exceeded their limit (for count features)
-   */
-  async checkFeatureAccess(
-    userId: string,
+  async checkWorkspaceFeatureAccess(
+    workspaceId: string,
     featureCode: FeatureCode,
-    resourceCount?: number, // For RESOURCE type, current count from table
+    resourceCount?: number,
   ): Promise<FeatureCheckResultDto> {
-    const feature = await this.subscriptionsRepository.getUserPlanFeature(
-      userId,
+    const feature = await this.subscriptionsRepository.getWorkspacePlanFeature(
+      workspaceId,
       featureCode,
     );
 
-    // If feature not found in plan, deny access
     if (!feature) {
       return {
         allowed: false,
@@ -150,7 +119,6 @@ export class SubscriptionsService {
       };
     }
 
-    // Check based on limit type
     switch (feature.limitType) {
       case FeatureLimitType.UNLIMITED:
         return {
@@ -158,7 +126,6 @@ export class SubscriptionsService {
           current: resourceCount ?? 0,
           limit: -1,
         };
-
       case FeatureLimitType.BOOLEAN:
         return {
           allowed: feature.limitValue === 1,
@@ -167,10 +134,8 @@ export class SubscriptionsService {
           current: 0,
           limit: feature.limitValue,
         };
-
       case FeatureLimitType.COUNT:
-        return this.checkCountLimit(userId, feature, resourceCount);
-
+        return this.checkCountLimit(workspaceId, feature, resourceCount);
       default:
         return {
           allowed: false,
@@ -181,23 +146,82 @@ export class SubscriptionsService {
     }
   }
 
-  /**
-   * Check count-based limit for RESOURCE or CONSUMABLE features
-   */
+  async incrementUsage(
+    workspaceId: string,
+    featureCode: FeatureCode,
+    periodType: LimitPeriod = LimitPeriod.MONTHLY,
+    amount: number = 1,
+  ): Promise<void> {
+    await this.usageRepository.incrementUsage(
+      workspaceId,
+      featureCode,
+      periodType,
+      amount,
+    );
+  }
+
+  async decrementUsage(
+    workspaceId: string,
+    featureCode: FeatureCode,
+    periodType: LimitPeriod = LimitPeriod.MONTHLY,
+    amount: number = 1,
+  ): Promise<void> {
+    await this.usageRepository.decrementUsage(
+      workspaceId,
+      featureCode,
+      periodType,
+      amount,
+    );
+  }
+
+  async getWorkspaceUsage(workspaceId: string): Promise<UsageResponseDto> {
+    const subscription =
+      await this.subscriptionsRepository.findByWorkspaceId(workspaceId);
+
+    if (!subscription) {
+      throw new BusinessException(
+        ERROR_CODES.RESOURCE_NOT_FOUND,
+        'No active subscription found',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const allUsage = await this.usageRepository.getAllCurrentUsage(workspaceId);
+    const usageMap = new Map(allUsage.map((u) => [u.featureCode, u]));
+
+    const features: FeatureUsageDto[] = subscription.plan.planFeatures.map(
+      (planFeature) => this.mapFeatureUsage(planFeature, usageMap),
+    );
+
+    return {
+      planCode: subscription.plan.code,
+      planName: subscription.plan.name,
+      features,
+    };
+  }
+
+  async getWorkspaceFeatureLimit(
+    workspaceId: string,
+    featureCode: FeatureCode,
+  ): Promise<PlanFeature | null> {
+    return this.subscriptionsRepository.getWorkspacePlanFeature(
+      workspaceId,
+      featureCode,
+    );
+  }
+
   private async checkCountLimit(
-    userId: string,
+    workspaceId: string,
     feature: PlanFeature,
     resourceCount?: number,
   ): Promise<FeatureCheckResultDto> {
     let currentUsage: number;
 
     if (feature.featureType === FeatureType.RESOURCE) {
-      // For RESOURCE, the caller must provide the current count from the table
       currentUsage = resourceCount ?? 0;
     } else {
-      // For CONSUMABLE, get usage from UsageRecord
       currentUsage = await this.usageRepository.getCurrentUsage(
-        userId,
+        workspaceId,
         feature.featureCode,
         feature.limitPeriod ?? LimitPeriod.MONTHLY,
       );
@@ -213,86 +237,6 @@ export class SubscriptionsService {
     };
   }
 
-  /**
-   * Increment usage for a consumable feature
-   * Call this after successfully creating a resource (e.g., transaction)
-   */
-  async incrementUsage(
-    userId: string,
-    featureCode: FeatureCode,
-    periodType: LimitPeriod = LimitPeriod.MONTHLY,
-    amount: number = 1,
-  ): Promise<void> {
-    await this.usageRepository.incrementUsage(
-      userId,
-      featureCode,
-      periodType,
-      amount,
-    );
-  }
-
-  /**
-   * Decrement usage (for admin corrections only)
-   * Note: Deleting a resource does NOT restore consumable usage
-   */
-  async decrementUsage(
-    userId: string,
-    featureCode: FeatureCode,
-    periodType: LimitPeriod = LimitPeriod.MONTHLY,
-    amount: number = 1,
-  ): Promise<void> {
-    await this.usageRepository.decrementUsage(
-      userId,
-      featureCode,
-      periodType,
-      amount,
-    );
-  }
-
-  // ==========================================================================
-  // Usage Reporting
-  // ==========================================================================
-
-  /**
-   * Get current usage for all features for a user
-   *
-   * Uses a single batch query to fetch all usage records instead of
-   * querying individually per feature (resolves N+1 problem).
-   */
-  async getUserUsage(userId: string): Promise<UsageResponseDto> {
-    const subscription =
-      await this.subscriptionsRepository.findByUserId(userId);
-
-    if (!subscription) {
-      throw new BusinessException(
-        ERROR_CODES.RESOURCE_NOT_FOUND,
-        'No active subscription found',
-        HttpStatus.NOT_FOUND,
-      );
-    }
-
-    // Batch query: get ALL usage records for this user in one query
-    const allUsage = await this.usageRepository.getAllCurrentUsage(userId);
-    const usageMap = new Map(allUsage.map((u) => [u.featureCode, u]));
-
-    // Map features synchronously using the pre-fetched usage data
-    const features: FeatureUsageDto[] = subscription.plan.planFeatures.map(
-      (planFeature) => this.mapFeatureUsage(planFeature, usageMap),
-    );
-
-    return {
-      planCode: subscription.plan.code,
-      planName: subscription.plan.name,
-      features,
-    };
-  }
-
-  /**
-   * Map a plan feature to its usage DTO using pre-fetched usage data
-   *
-   * This is a synchronous operation — no DB queries needed because
-   * usage data was already fetched in batch.
-   */
   private mapFeatureUsage(
     planFeature: PlanFeature,
     usageMap: Map<string, { count: number; periodEnd: Date }>,
@@ -306,8 +250,6 @@ export class SubscriptionsService {
         current = usageRecord?.count ?? 0;
         periodEnd = usageRecord?.periodEnd;
       }
-      // For RESOURCE type, the actual count should come from the specific
-      // resource service — intentionally left at 0 here
     }
 
     const limit = planFeature.limitValue;
@@ -334,23 +276,6 @@ export class SubscriptionsService {
     };
   }
 
-  /**
-   * Get feature limit for a user (used by FeatureGuard)
-   */
-  async getFeatureLimit(
-    userId: string,
-    featureCode: FeatureCode,
-  ): Promise<PlanFeature | null> {
-    return this.subscriptionsRepository.getUserPlanFeature(userId, featureCode);
-  }
-
-  // ==========================================================================
-  // Helpers
-  // ==========================================================================
-
-  /**
-   * Convert subscription entity to DTO
-   */
   private toSubscriptionDto(
     subscription: SubscriptionWithPlan,
   ): SubscriptionDto {

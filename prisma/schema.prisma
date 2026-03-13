@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -20,31 +21,22 @@ model User {
   emailVerified   Boolean    @default(false)
   emailVerifiedAt DateTime?
   status          UserStatus @default(PENDING_VERIFICATION)
+  platformRole    PlatformRole @default(USER)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  refreshTokens  RefreshToken[]
-  otpCodes       OtpCode[]
-  subscription   Subscription?
-  usageRecords   UsageRecord[]
-  planChangeLogs PlanChangeLog[]
-  profile        UserProfile?
-  preferences    UserPreference[]
-
-  // Phase 6: Feature module relations
-  accounts          Account[]
-  categories        Category[]
-  transactions      Transaction[]
-  debts             Debt[]
-  debtPayments      DebtPayment[]
-  loans             Loan[]
-  loanPayments      LoanPayment[]
-  goals             Goal[]
-  goalContributions GoalContribution[]
-  recurringPayments RecurringPayment[]
-  files             File[]
+  refreshTokens        RefreshToken[]
+  otpCodes             OtpCode[]
+  profile              UserProfile?
+  preferences          UserPreference[]
+  memberships          WorkspaceMembership[] @relation("WorkspaceMembershipUser")
+  invitedMemberships   WorkspaceMembership[] @relation("WorkspaceMembershipInviter")
+  requestedPlanChanges PlanChangeLog[]       @relation("PlanChangeRequestedBy")
+  uploadedFiles        File[]                @relation("UploadedFiles")
+  createdAccounts      Account[]             @relation("AccountCreatedBy")
+  updatedAccounts      Account[]             @relation("AccountUpdatedBy")
 
   @@index([email])
   @@index([status])
@@ -56,6 +48,36 @@ enum UserStatus {
   ACTIVE
   SUSPENDED
   DELETED
+}
+
+enum PlatformRole {
+  USER
+  SUPER_ADMIN
+}
+
+enum WorkspaceRole {
+  ADMIN
+  MEMBER
+  GUEST
+}
+
+enum WorkspaceMembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  REMOVED
+}
+
+enum WorkspaceType {
+  PERSONAL
+  FAMILY
+  GROUP
+}
+
+enum WorkspaceStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
 }
 
 model RefreshToken {
@@ -102,6 +124,91 @@ enum OtpType {
 }
 
 // =============================================================================
+// WORKSPACE-FIRST TENANCY FOUNDATION
+// =============================================================================
+
+/// Workspace is the tenant boundary for business data, billing, and feature access.
+/// This baseline is intentionally destructive versus the legacy user-owned model.
+/// When the user applies migrations manually, local/test databases should be reset
+/// to this new truth instead of preserving fake backwards compatibility.
+model Workspace {
+  id     String          @id @default(cuid(2))
+  name   String          @db.VarChar(120)
+  slug   String?         @unique @db.VarChar(120)
+  type   WorkspaceType   @default(PERSONAL)
+  status WorkspaceStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships       WorkspaceMembership[]
+  settings          WorkspaceSettings?
+  subscription      Subscription?
+  usageRecords      UsageRecord[]
+  planChangeLogs    PlanChangeLog[]
+  accounts          Account[]
+  categories        Category[]
+  transactions      Transaction[]
+  debts             Debt[]
+  debtPayments      DebtPayment[]
+  loans             Loan[]
+  loanPayments      LoanPayment[]
+  goals             Goal[]
+  goalContributions GoalContribution[]
+  recurringPayments RecurringPayment[]
+  files             File[]
+
+  @@index([status])
+  @@index([type, status])
+  @@map("workspaces")
+}
+
+/// Membership joins identity to tenant context. Role and status live HERE, not on User.
+/// Partial unique indexes require Prisma's `partialIndexes` preview feature.
+/// If a specific Prisma workflow cannot materialize them yet, keep this schema truth and
+/// create the matching database constraints manually when the user runs migrations.
+model WorkspaceMembership {
+  id              String                    @id @default(cuid(2))
+  workspaceId     String
+  workspace       Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                      @relation("WorkspaceMembershipUser", fields: [userId], references: [id], onDelete: Cascade)
+  role            WorkspaceRole
+  status          WorkspaceMembershipStatus @default(ACTIVE)
+  joinedAt        DateTime                  @default(now())
+  invitedByUserId String?
+  invitedByUser   User?                     @relation("WorkspaceMembershipInviter", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  @@index([workspaceId, status])
+  @@index([userId, status])
+  @@index([invitedByUserId])
+  @@unique([workspaceId, userId], name: "workspace_memberships_active_workspace_user_unique", where: { status: "ACTIVE" })
+  @@unique([workspaceId], name: "workspace_memberships_single_active_admin_unique", where: { role: "ADMIN", status: "ACTIVE" })
+  @@map("workspace_memberships")
+}
+
+/// Shared workspace configuration. Personal UI preferences stay on UserPreference.
+model WorkspaceSettings {
+  id               String    @id @default(cuid(2))
+  workspaceId      String    @unique
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  baseCurrencyCode String    @default("USD") @db.VarChar(3)
+  baseLanguage     String    @default("en") @db.VarChar(10)
+  dateFormat       String    @default("DD/MM/YYYY") @db.VarChar(30)
+  monthStartDay    Int       @default(1)
+  weekStartDay     Int       @default(1)
+  timezone         String    @default("UTC") @db.VarChar(50)
+  locale           String    @default("en-US") @db.VarChar(10)
+  displayLabel     String    @db.VarChar(100)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("workspace_settings")
+}
+
+// =============================================================================
 // PHASE 3: Subscription System & Feature Access
 // =============================================================================
 
@@ -132,8 +239,8 @@ model Plan {
 
 model Subscription {
   id                 String             @id @default(cuid(2))
-  userId             String             @unique
-  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId        String             @unique
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   planId             String
   plan               Plan               @relation(fields: [planId], references: [id])
   status             SubscriptionStatus @default(ACTIVE)
@@ -160,7 +267,7 @@ model Subscription {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([userId])
+  @@index([workspaceId])
   @@index([planId])
   @@index([status])
   @@index([scheduledChangeAt])
@@ -182,8 +289,10 @@ enum SubscriptionStatus {
 
 model PlanChangeLog {
   id              String         @id @default(cuid(2))
-  userId          String
-  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId     String
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  requestedByUserId String?
+  requestedByUser User?          @relation("PlanChangeRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
   fromPlanId      String
   fromPlan        Plan           @relation("FromPlan", fields: [fromPlanId], references: [id])
   toPlanId        String
@@ -197,8 +306,9 @@ model PlanChangeLog {
   metadata        Json?
   createdAt       DateTime       @default(now())
 
-  @@index([userId])
-  @@index([createdAt])
+  @@index([workspaceId])
+  @@index([workspaceId, createdAt])
+  @@index([requestedByUserId])
   @@map("plan_change_logs")
 }
 
@@ -248,8 +358,8 @@ enum LimitPeriod {
 
 model UsageRecord {
   id          String      @id @default(cuid(2))
-  userId      String
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   featureCode String
   periodType  LimitPeriod
   periodStart DateTime
@@ -258,8 +368,8 @@ model UsageRecord {
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
-  @@unique([userId, featureCode, periodStart])
-  @@index([userId, featureCode])
+  @@unique([workspaceId, featureCode, periodStart])
+  @@index([workspaceId, featureCode])
   @@index([periodEnd])
   @@map("usage_records")
 }
@@ -445,12 +555,16 @@ enum PreferenceDataType {
 ///   because that would break the audit trail. Archived accounts are hidden from UI
 ///   but their transactions remain queryable.
 model Account {
-  id       String      @id @default(cuid(2))
-  userId   String
-  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name     String      @db.VarChar(100)
-  type     AccountType
-  balance  Decimal     @default(0) @db.Decimal(19, 4) // Running balance, updated by triggers/service
+  id              String    @id @default(cuid(2))
+  workspaceId     String
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdByUserId String?
+  createdByUser   User?     @relation("AccountCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  updatedByUserId String?
+  updatedByUser   User?     @relation("AccountUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+  name            String    @db.VarChar(100)
+  type            AccountType
+  balance         Decimal   @default(0) @db.Decimal(19, 4) // Running balance, updated by triggers/service
 
   // Currency (FK to reference table)
   currencyCode String   @default("USD") @db.VarChar(3)
@@ -472,7 +586,7 @@ model Account {
   /// Day of month when payment is due (1-31). NULL for non-credit.
   paymentDueDay       Int?
 
-  sortOrder Int @default(0) // User-defined display order
+  sortOrder Int @default(0) // Workspace-defined display order
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -485,9 +599,11 @@ model Account {
   goalContributions   GoalContribution[]
   recurringPayments   RecurringPayment[]
 
-  @@index([userId, isArchived]) // Main query: "show me my active accounts"
-  @@index([userId, type]) // Filter by type: "show me my credit cards"
-  @@index([userId, currencyCode]) // Multi-currency grouping
+  @@index([workspaceId, isArchived]) // Main query: "show me active workspace accounts"
+  @@index([workspaceId, type]) // Filter by type: "show me workspace credit cards"
+  @@index([workspaceId, currencyCode]) // Multi-currency grouping
+  @@index([createdByUserId])
+  @@index([updatedByUserId])
   @@map("accounts")
 }
 
@@ -506,8 +622,8 @@ enum AccountType {
 // =============================================================================
 
 /// Transaction categories with support for:
-/// 1. System categories (seeded, shared by all users, not editable)
-/// 2. User custom categories (created by user, editable)
+/// 1. System categories (seeded, shared by all workspaces, not editable)
+/// 2. Workspace custom categories (created by workspace members, editable)
 /// 3. Two-level hierarchy (parent → children) — NOT unlimited depth
 ///
 /// WHY two-level max instead of unlimited depth?
@@ -518,21 +634,21 @@ enum AccountType {
 ///
 /// WHY system + custom in the same table?
 /// - Single FK from Transaction → Category (no polymorphic mess)
-/// - System categories can be "overridden" by user categories with same parentId
-/// - Queries for "all my categories" are a single indexed query, not a UNION
+/// - System categories can be "overridden" by workspace categories with same parentId
+/// - Queries for visible categories are a single indexed query, not a UNION
 ///
-/// The `isSystem` flag + `userId` NULL combo identifies system categories:
-/// - isSystem=true, userId=NULL → System category (shared, read-only)
-/// - isSystem=false, userId=X → User's custom category
+/// The `isSystem` flag + `workspaceId` NULL combo identifies system categories:
+/// - isSystem=true, workspaceId=NULL → System category (shared, read-only)
+/// - isSystem=false, workspaceId=X → Workspace custom category
 model Category {
-  id       String          @id @default(cuid(2))
-  userId   String? // NULL = system category, set = user's custom
-  user     User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parentId String? // NULL = top-level category, set = subcategory
-  parent   Category?       @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children Category[]      @relation("CategoryHierarchy")
-  name     String          @db.VarChar(100)
-  type     TransactionType // EXPENSE, INCOME, or TRANSFER — categories are type-scoped
+  id          String          @id @default(cuid(2))
+  workspaceId String? // NULL = system category, set = workspace custom
+  workspace   Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parentId    String? // NULL = top-level category, set = subcategory
+  parent      Category?       @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Category[]      @relation("CategoryHierarchy")
+  name        String          @db.VarChar(100)
+  type        TransactionType // EXPENSE, INCOME, or TRANSFER — categories are type-scoped
 
   // UI
   icon  String? @db.VarChar(50)
@@ -549,10 +665,12 @@ model Category {
 
   transactions Transaction[]
 
-  // System categories: unique by name+type (no duplicates in system set)
-  // User categories: unique by userId+name+type+parentId (no duplicates per user per level)
-  @@unique([userId, name, type, parentId])
-  @@index([userId, type, isActive]) // Main query: "show me my expense categories"
+  // Split top-level vs child uniqueness because SQL UNIQUE treats NULLs as distinct.
+  @@unique([name, type], name: "categories_system_top_level_unique", where: { isSystem: true, parentId: null })
+  @@unique([name, type, parentId], name: "categories_system_child_unique", where: { isSystem: true, parentId: { not: null } })
+  @@unique([workspaceId, name, type], name: "categories_workspace_top_level_unique", where: { isSystem: false, parentId: null })
+  @@unique([workspaceId, name, type, parentId], name: "categories_workspace_child_unique", where: { isSystem: false, parentId: { not: null } })
+  @@index([workspaceId, type, isActive]) // Main query: "show me visible workspace categories"
   @@index([parentId]) // Load children of a parent
   @@index([isSystem, type, isActive]) // Load system categories by type
   @@map("categories")
@@ -586,9 +704,9 @@ model Category {
 ///   `exchangeRate` captures the conversion used. The account balance is
 ///   always updated in the ACCOUNT's currency.
 model Transaction {
-  id     String @id @default(cuid(2))
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid(2))
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   // Type and amount
   type   TransactionType
@@ -635,10 +753,10 @@ model Transaction {
   updatedAt DateTime @updatedAt
 
   // Performance indexes — these are the most critical indexes in the ENTIRE app
-  @@index([userId, date(sort: Desc)]) // Dashboard: recent transactions
-  @@index([userId, accountId, date(sort: Desc)]) // Account detail: transactions for this account
-  @@index([userId, type, date(sort: Desc)]) // Filter: "show me my expenses this month"
-  @@index([userId, categoryId, date(sort: Desc)]) // Reports: spending by category
+  @@index([workspaceId, date(sort: Desc)]) // Dashboard: recent workspace transactions
+  @@index([workspaceId, accountId, date(sort: Desc)]) // Account detail within workspace
+  @@index([workspaceId, type, date(sort: Desc)]) // Filter by workspace + type + date
+  @@index([workspaceId, categoryId, date(sort: Desc)]) // Reports: spending by category
   @@index([accountId]) // FK lookups
   @@index([transferToAccountId]) // FK lookups for transfers
   @@index([recurringPaymentId]) // Find transactions generated by a recurring payment
@@ -683,9 +801,9 @@ enum TransactionSource {
 ///   FORGIVEN → user chose to forgive the debt
 ///   CANCELLED → debt was cancelled/voided
 model Debt {
-  id     String @id @default(cuid(2))
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid(2))
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   // Who and how much
   counterpartyName String        @db.VarChar(200) // "Juan Pérez", "Mi hermano"
@@ -710,9 +828,9 @@ model Debt {
 
   payments DebtPayment[]
 
-  @@index([userId, status]) // Main query: "show me my active debts"
-  @@index([userId, direction, status]) // Filter: "who owes me money?"
-  @@index([userId, dueDate]) // Upcoming due dates
+  @@index([workspaceId, status]) // Main query: "show me active workspace debts"
+  @@index([workspaceId, direction, status]) // Filter by direction within workspace
+  @@index([workspaceId, dueDate]) // Upcoming due dates
   @@map("debts")
 }
 
@@ -736,11 +854,11 @@ enum DebtStatus {
 /// - Partial payments: debts are rarely paid in one shot
 /// - Account linking: the payment came FROM an account (affects that account's balance)
 model DebtPayment {
-  id     String @id @default(cuid(2))
-  debtId String
-  debt   Debt   @relation(fields: [debtId], references: [id], onDelete: Cascade)
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid(2))
+  debtId       String
+  debt         Debt      @relation(fields: [debtId], references: [id], onDelete: Cascade)
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   amount Decimal @db.Decimal(19, 4) // Payment amount
 
@@ -758,7 +876,7 @@ model DebtPayment {
   createdAt DateTime @default(now())
 
   @@index([debtId]) // Payments for a debt
-  @@index([userId, paidAt(sort: Desc)]) // Recent payments by user
+  @@index([workspaceId, paidAt(sort: Desc)]) // Recent payments by workspace
   @@map("debt_payments")
 }
 
@@ -788,9 +906,9 @@ model DebtPayment {
 /// - The `monthlyPayment` field stores the expected fixed installment amount.
 ///   For variable-rate loans, this is recalculated when the rate changes.
 model Loan {
-  id     String @id @default(cuid(2))
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid(2))
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   // Loan details
   lenderName    String        @db.VarChar(200) // "Banco Nación", "Mi tío Carlos"
@@ -827,9 +945,9 @@ model Loan {
 
   payments LoanPayment[]
 
-  @@index([userId, status]) // Main query: "show me my active loans"
-  @@index([userId, direction, status]) // Filter: "loans I took" vs "loans I gave"
-  @@index([userId, nextPaymentDate]) // Upcoming payments
+  @@index([workspaceId, status]) // Main query: "show me active workspace loans"
+  @@index([workspaceId, direction, status]) // Filter by direction within workspace
+  @@index([workspaceId, nextPaymentDate]) // Upcoming payments
   @@map("loans")
 }
 
@@ -858,11 +976,11 @@ enum LoanStatus {
 /// - Tax deductions in many countries are based on interest paid
 /// - Accurate remaining balance calculation
 model LoanPayment {
-  id     String @id @default(cuid(2))
-  loanId String
-  loan   Loan   @relation(fields: [loanId], references: [id], onDelete: Cascade)
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid(2))
+  loanId       String
+  loan         Loan      @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   installmentNumber Int // Which installment is this (1, 2, 3...)
   amount            Decimal @db.Decimal(19, 4) // Total payment amount
@@ -888,8 +1006,8 @@ model LoanPayment {
 
   @@unique([loanId, installmentNumber]) // Each installment number is unique per loan
   @@index([loanId, status]) // Payments for a loan filtered by status
-  @@index([userId, dueDate]) // Upcoming payments across all loans
-  @@index([userId, paidAt(sort: Desc)]) // Recent payments
+  @@index([workspaceId, dueDate]) // Upcoming payments across all workspace loans
+  @@index([workspaceId, paidAt(sort: Desc)]) // Recent payments
   @@map("loan_payments")
 }
 
@@ -926,9 +1044,9 @@ enum LoanPaymentStatus {
 ///   We DON'T store it because it's trivially computable and would be another
 ///   field to keep in sync.
 model Goal {
-  id     String @id @default(cuid(2))
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid(2))
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   name          String  @db.VarChar(200) // "Emergency Fund", "Vacation 2027"
   description   String? @db.VarChar(500)
@@ -954,8 +1072,8 @@ model Goal {
 
   contributions GoalContribution[]
 
-  @@index([userId, status]) // Main query: "show me my active goals"
-  @@index([userId, targetDate]) // Goals with upcoming deadlines
+  @@index([workspaceId, status]) // Main query: "show me active workspace goals"
+  @@index([workspaceId, targetDate]) // Goals with upcoming deadlines
   @@map("goals")
 }
 
@@ -973,11 +1091,11 @@ enum GoalStatus {
 /// Why allow negative? Because life happens — sometimes you need to pull money
 /// FROM your emergency fund. The currentAmount on Goal handles this correctly.
 model GoalContribution {
-  id     String @id @default(cuid(2))
-  goalId String
-  goal   Goal   @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid(2))
+  goalId       String
+  goal         Goal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   amount Decimal @db.Decimal(19, 4) // Can be negative (withdrawal from goal)
 
@@ -995,7 +1113,7 @@ model GoalContribution {
   createdAt DateTime @default(now())
 
   @@index([goalId]) // Contributions for a goal
-  @@index([userId, date(sort: Desc)]) // Recent contributions
+  @@index([workspaceId, date(sort: Desc)]) // Recent contributions
   @@map("goal_contributions")
 }
 
@@ -1028,9 +1146,9 @@ model GoalContribution {
 ///
 /// - `endDate` supports "repeat until this date" patterns
 model RecurringPayment {
-  id     String @id @default(cuid(2))
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid(2))
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   // What transaction to generate
   name              String          @db.VarChar(200) // "Netflix", "Rent", "Salary"
@@ -1070,9 +1188,9 @@ model RecurringPayment {
   // Transactions generated from this template
   transactions Transaction[]
 
-  @@index([userId, status]) // Main query: "show me my active recurring payments"
+  @@index([workspaceId, status]) // Main query: "show me active workspace recurring payments"
   @@index([nextOccurrence, status]) // CRON job: "what needs to fire today?"
-  @@index([userId, type, status]) // Filter: recurring expenses vs incomes
+  @@index([workspaceId, type, status]) // Filter: recurring expenses vs incomes
   @@map("recurring_payments")
 }
 
@@ -1113,15 +1231,17 @@ enum FilePurpose {
 ///   presigned URLs generated on-demand (not stored here because they expire).
 /// - Soft delete (`deletedAt`) allows recovery and defers actual R2 deletion
 ///   to a background cron job, avoiding coupling HTTP requests to external calls.
-/// - `userId` is required on every file for multi-tenancy scoping and ownership checks.
+/// - `workspaceId` is required on every file for tenant scoping and ownership checks.
 ///
 /// CONTEXT RELATIONS (optional FKs, at most one will be set per file):
 /// - `transactionId` — set for TRANSACTION_RECEIPT files
 /// - `profileAvatar` — inverse side of UserProfile.avatarFileId (no FK on File side)
 model File {
-  id     String @id @default(cuid(2))
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String    @id @default(cuid(2))
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  uploadedByUserId String?
+  uploadedByUser User?     @relation("UploadedFiles", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
 
   purpose      FilePurpose
   bucket       String      @db.VarChar(100) // "facets-public" | "facets-private"
@@ -1144,8 +1264,9 @@ model File {
   profileAvatar UserProfile? @relation("ProfileAvatar")
 
   @@unique([bucket, key])
-  @@index([userId])
-  @@index([userId, purpose])
+  @@index([workspaceId])
+  @@index([workspaceId, purpose])
+  @@index([uploadedByUserId])
   @@index([transactionId])
   @@index([deletedAt])
   @@map("files")
