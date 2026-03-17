@@ -1,255 +1,367 @@
 <!--
-  FACETS - Email Verification Template
-  
-  Template Name: email-verification
+  FACETS - Template de Verificación de Email
+  Estilo: Clean Card — tarjeta con línea de acento primario
+
   Variables:
-    - {{userName}}          - User's display name
-    - {{otpCode}}           - 6-digit verification code
-    - {{expiresInMinutes}}  - Minutes until code expires (typically 10)
-  
-  INSTRUCTIONS FOR MAILTRAP:
-  1. Go to https://mailtrap.io/sending/templates
-  2. Click "Create New Template"
-  3. Set name: "Email Verification"
-  4. Set subject: "Verify your email - {{otpCode}}"
-  5. Copy this HTML into the template editor
-  6. Save and copy the UUID
-  7. Paste UUID in src/mail/templates/template.registry.ts
+    - {{userName}}          - Nombre del usuario
+    - {{otpCode}}           - Código de verificación de 6 dígitos
+    - {{expiresInMinutes}}  - Minutos hasta que expire el código
 -->
 <!doctype html>
-<html lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Verify Your Email</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="supported-color-schemes" content="dark" />
+    <title>Verificá tu email</title>
+    <!--[if mso]>
+      <noscript>
+        <xml>
+          <o:OfficeDocumentSettings>
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+          </o:OfficeDocumentSettings>
+        </xml>
+      </noscript>
+    <![endif]-->
     <style>
-      /* Reset and base styles */
+      body,
+      table,
+      td,
+      a {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+      }
+      table,
+      td {
+        mso-table-lspace: 0pt;
+        mso-table-rspace: 0pt;
+      }
+      img {
+        -ms-interpolation-mode: bicubic;
+        border: 0;
+        height: auto;
+        line-height: 100%;
+        outline: none;
+        text-decoration: none;
+      }
       body {
         margin: 0;
         padding: 0;
-        font-family:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-          'Helvetica Neue', Arial, sans-serif;
-        font-size: 16px;
-        line-height: 1.6;
-        color: #1a1a2e;
-        background-color: #f4f4f8;
+        width: 100% !important;
+        height: 100% !important;
+        background-color: #121212;
       }
 
-      /* Container */
-      .container {
-        max-width: 600px;
-        margin: 0 auto;
-        padding: 40px 20px;
-      }
-
-      /* Card */
-      .card {
-        background-color: #ffffff;
-        border-radius: 16px;
-        box-shadow:
-          0 4px 6px rgba(0, 0, 0, 0.05),
-          0 10px 20px rgba(0, 0, 0, 0.03);
-        overflow: hidden;
-      }
-
-      /* Header */
-      .header {
-        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-        padding: 40px 32px;
-        text-align: center;
-      }
-
-      .logo {
-        font-size: 28px;
-        font-weight: 700;
-        color: #ffffff;
-        margin: 0;
-        letter-spacing: -0.5px;
-      }
-
-      .header-icon {
-        font-size: 48px;
-        display: block;
-        margin-top: 16px;
-      }
-
-      /* Content */
-      .content {
-        padding: 40px 32px;
-        text-align: center;
-      }
-
-      .title {
-        font-size: 24px;
-        font-weight: 600;
-        color: #1a1a2e;
-        margin: 0 0 16px 0;
-      }
-
-      .message {
-        color: #4a4a68;
-        margin: 0 0 32px 0;
-      }
-
-      /* OTP Code Box */
-      .otp-container {
-        background: linear-gradient(135deg, #f8f8fc 0%, #f0f0f8 100%);
-        border: 2px dashed #d1d5db;
-        border-radius: 16px;
-        padding: 32px;
-        margin: 32px 0;
-      }
-
-      .otp-label {
-        font-size: 12px;
-        font-weight: 600;
-        color: #6366f1;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin: 0 0 12px 0;
-      }
-
-      .otp-code {
-        font-size: 48px;
-        font-weight: 700;
-        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-        letter-spacing: 12px;
-        color: #1a1a2e;
-        margin: 0;
-        padding-left: 12px; /* Compensate for letter-spacing */
-      }
-
-      .otp-expiry {
-        display: inline-flex;
-        align-items: center;
-        background-color: #fef3c7;
-        color: #92400e;
-        font-size: 14px;
-        font-weight: 500;
-        padding: 8px 16px;
-        border-radius: 50px;
-        margin-top: 20px;
-      }
-
-      .otp-expiry-icon {
-        margin-right: 8px;
-      }
-
-      /* Warning */
-      .warning {
-        background-color: #fef3c7;
-        border-left: 4px solid #f59e0b;
-        border-radius: 8px;
-        padding: 16px 20px;
-        margin: 32px 0;
-        text-align: left;
-      }
-
-      .warning-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: #92400e;
-        margin: 0 0 4px 0;
-      }
-
-      .warning-text {
-        font-size: 14px;
-        color: #78350f;
-        margin: 0;
-      }
-
-      /* Help text */
-      .help-text {
-        color: #9ca3af;
-        font-size: 14px;
-        margin: 24px 0 0 0;
-      }
-
-      /* Footer */
-      .footer {
-        text-align: center;
-        padding: 24px 32px;
-        border-top: 1px solid #e8e8f0;
-      }
-
-      .footer-text {
-        color: #9ca3af;
-        font-size: 14px;
-        margin: 0;
-      }
-
-      /* Responsive */
-      @media only screen and (max-width: 480px) {
-        .container {
-          padding: 20px 12px;
+      @media only screen and (max-width: 620px) {
+        .email-container {
+          width: 100% !important;
+          max-width: 100% !important;
         }
-
-        .header,
-        .content,
-        .footer {
-          padding-left: 24px;
-          padding-right: 24px;
+        .content-padding {
+          padding-left: 24px !important;
+          padding-right: 24px !important;
         }
-
         .otp-code {
-          font-size: 36px;
-          letter-spacing: 8px;
-          padding-left: 8px;
+          font-size: 28px !important;
+          letter-spacing: 6px !important;
         }
-
-        .title {
-          font-size: 20px;
+        .heading {
+          font-size: 22px !important;
         }
       }
     </style>
   </head>
-  <body>
-    <div class="container">
-      <div class="card">
-        <!-- Header -->
-        <div class="header">
-          <h1 class="logo">Facets</h1>
-          <span class="header-icon">✉️</span>
-        </div>
-
-        <!-- Content -->
-        <div class="content">
-          <h2 class="title">Verify Your Email</h2>
-
-          <p class="message">
-            Hi {{userName}}, thanks for signing up! Please use the verification
-            code below to confirm your email address.
-          </p>
-
-          <div class="otp-container">
-            <p class="otp-label">Your Verification Code</p>
-            <p class="otp-code">{{otpCode}}</p>
-            <span class="otp-expiry">
-              <span class="otp-expiry-icon">⏱️</span>
-              Expires in {{expiresInMinutes}} minutes
-            </span>
-          </div>
-
-          <div class="warning">
-            <p class="warning-title">🔒 Security Notice</p>
-            <p class="warning-text">
-              Never share this code with anyone. Our team will never ask for
-              your verification code.
-            </p>
-          </div>
-
-          <p class="help-text">
-            If you didn't create an account with Facets, you can safely ignore
-            this email.
-          </p>
-        </div>
-
-        <!-- Footer -->
-        <div class="footer">
-          <p class="footer-text">© 2026 Facets. All rights reserved.</p>
-        </div>
-      </div>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      background-color: #121212;
+      font-family:
+        -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+        Arial, sans-serif;
+    "
+  >
+    <!-- Preheader (texto oculto para vista previa) -->
+    <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all">
+      Tu código de verificación: {{otpCode}} — Ingresá este código para
+      verificar tu cuenta de Facets.
     </div>
+
+    <!-- Wrapper exterior -->
+    <table
+      role="presentation"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      width="100%"
+      style="background-color: #121212"
+    >
+      <tr>
+        <td align="center" style="padding: 40px 16px">
+          <!-- Contenedor del email -->
+          <table
+            role="presentation"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            width="560"
+            class="email-container"
+            style="max-width: 560px; width: 100%"
+          >
+            <!-- Logo -->
+            <tr>
+              <td align="center" style="padding-bottom: 32px">
+                <img
+                  src="https://pub-f0ef02f9b576486094ab916456e57e32.r2.dev/LOGO.png"
+                  alt="Facets"
+                  width="120"
+                  style="display: block; width: 120px; height: auto"
+                />
+              </td>
+            </tr>
+
+            <!-- Tarjeta -->
+            <tr>
+              <td>
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  width="100%"
+                  style="
+                    background-color: #1a1a1a;
+                    border-radius: 12px;
+                    overflow: hidden;
+                  "
+                >
+                  <!-- Línea de acento primario -->
+                  <tr>
+                    <td
+                      style="
+                        height: 3px;
+                        background-color: #d4ef5c;
+                        font-size: 0;
+                        line-height: 0;
+                      "
+                    >
+                      &nbsp;
+                    </td>
+                  </tr>
+                  <!-- Contenido -->
+                  <tr>
+                    <td class="content-padding" style="padding: 48px 40px 20px">
+                      <h1
+                        class="heading"
+                        style="
+                          margin: 0 0 12px;
+                          font-size: 24px;
+                          font-weight: 600;
+                          color: #ffffff;
+                          text-align: center;
+                        "
+                      >
+                        Verificá tu email
+                      </h1>
+                      <p
+                        style="
+                          margin: 0;
+                          font-size: 15px;
+                          line-height: 24px;
+                          color: #a0a0a0;
+                          text-align: center;
+                        "
+                      >
+                        Hola <span style="color: #d4ef5c">{{userName}}</span>, ingresá el siguiente código para
+                        verificar tu dirección de email.
+                      </p>
+                    </td>
+                  </tr>
+                  <!-- Código OTP -->
+                  <tr>
+                    <td class="content-padding" style="padding: 24px 40px">
+                      <table
+                        role="presentation"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                        width="100%"
+                      >
+                        <tr>
+                          <td
+                            align="center"
+                            style="
+                              background-color: #121212;
+                              border-radius: 8px;
+                              padding: 24px 16px;
+                            "
+                          >
+                            <span
+                              class="otp-code"
+                              style="
+                                font-family:
+                                  'SF Mono', 'Fira Code', 'Fira Mono',
+                                  'Roboto Mono', monospace;
+                                font-size: 36px;
+                                font-weight: 700;
+                                color: #d4ef5c;
+                                letter-spacing: 10px;
+                                line-height: 1.2;
+                                display: inline-block;
+                              "
+                            >
+                              {{otpCode}}
+                            </span>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <!-- Expiración -->
+                  <tr>
+                    <td class="content-padding" style="padding: 8px 40px 16px">
+                      <p
+                        style="
+                          margin: 0;
+                          font-size: 13px;
+                          color: #666666;
+                          text-align: center;
+                        "
+                      >
+                        Este código expira en
+                        <strong style="color: #a0a0a0"
+                          >{{expiresInMinutes}} minutos</strong
+                        >
+                      </p>
+                    </td>
+                  </tr>
+                  <!-- Separador -->
+                  <tr>
+                    <td class="content-padding" style="padding: 16px 40px">
+                      <table
+                        role="presentation"
+                        cellpadding="0"
+                        cellspacing="0"
+                        border="0"
+                        width="100%"
+                      >
+                        <tr>
+                          <td
+                            style="
+                              height: 1px;
+                              background-color: #2a2a2a;
+                              font-size: 0;
+                              line-height: 0;
+                            "
+                          >
+                            &nbsp;
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <!-- Nota de seguridad -->
+                  <tr>
+                    <td class="content-padding" style="padding: 8px 40px 40px">
+                      <p
+                        style="
+                          margin: 0;
+                          font-size: 13px;
+                          line-height: 20px;
+                          color: #555555;
+                          text-align: center;
+                        "
+                      >
+                        Si no solicitaste este código, podés ignorar este email
+                        con tranquilidad.
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding: 32px 0">
+                <!-- Redes sociales -->
+                <table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  align="center"
+                >
+                  <tr>
+                    <td style="padding: 0 12px">
+                      <a
+                        href="https://tiktok.com/@facetsapp"
+                        target="_blank"
+                        style="
+                          color: #666666;
+                          text-decoration: none;
+                          font-size: 13px;
+                          font-family:
+                            -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                            Roboto, 'Helvetica Neue', Arial, sans-serif;
+                        "
+                        >TikTok</a
+                      >
+                    </td>
+                    <td style="color: #333333; font-size: 13px">·</td>
+                    <td style="padding: 0 12px">
+                      <a
+                        href="https://facebook.com/facetsapp"
+                        target="_blank"
+                        style="
+                          color: #666666;
+                          text-decoration: none;
+                          font-size: 13px;
+                          font-family:
+                            -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                            Roboto, 'Helvetica Neue', Arial, sans-serif;
+                        "
+                        >Facebook</a
+                      >
+                    </td>
+                    <td style="color: #333333; font-size: 13px">·</td>
+                    <td style="padding: 0 12px">
+                      <a
+                        href="https://instagram.com/facetsapp"
+                        target="_blank"
+                        style="
+                          color: #666666;
+                          text-decoration: none;
+                          font-size: 13px;
+                          font-family:
+                            -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                            Roboto, 'Helvetica Neue', Arial, sans-serif;
+                        "
+                        >Instagram</a
+                      >
+                    </td>
+                  </tr>
+                </table>
+                <p
+                  style="
+                    margin: 16px 0 0;
+                    font-size: 12px;
+                    color: #444444;
+                    text-align: center;
+                    font-family:
+                      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                      'Helvetica Neue', Arial, sans-serif;
+                  "
+                >
+                  © 2026 Facets. Todos los derechos reservados.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
   </body>
 </html>
