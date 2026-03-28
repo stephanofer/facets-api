@@ -3,13 +3,11 @@ import {
   PrismaClient,
   FeatureLimitType,
   FeatureType,
-  LimitPeriod,
   PreferenceCategory,
   PreferenceDataType,
 } from '../src/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
-import { SYSTEM_CATEGORIES } from '../src/modules/categories/system-categories.data';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -363,58 +361,31 @@ const preferenceDefinitions: PreferenceDefinitionSeedData[] = [
   },
   {
     category: PreferenceCategory.DASHBOARD,
-    key: 'show_recent_transactions',
+    key: 'show_activity_feed',
     dataType: PreferenceDataType.BOOLEAN,
     defaultValue: true,
-    label: 'Show recent transactions',
-    description: 'Display recent transactions list on the dashboard',
+    label: 'Show activity feed',
+    description: 'Display recent workspace activity on the dashboard',
     sortOrder: 1,
   },
   {
     category: PreferenceCategory.DASHBOARD,
-    key: 'show_spending_chart',
+    key: 'show_usage_overview',
     dataType: PreferenceDataType.BOOLEAN,
     defaultValue: true,
-    label: 'Show spending chart',
-    description: 'Display the monthly spending chart on the dashboard',
+    label: 'Show usage overview',
+    description: 'Display workspace usage insights on the dashboard',
     sortOrder: 2,
   },
   {
     category: PreferenceCategory.DASHBOARD,
-    key: 'show_goals_progress',
-    dataType: PreferenceDataType.BOOLEAN,
-    defaultValue: true,
-    label: 'Show goals progress',
-    description: 'Display financial goals progress on the dashboard',
-    sortOrder: 3,
-  },
-  {
-    category: PreferenceCategory.DASHBOARD,
-    key: 'show_upcoming_payments',
-    dataType: PreferenceDataType.BOOLEAN,
-    defaultValue: true,
-    label: 'Show upcoming payments',
-    description: 'Display upcoming recurring payments on the dashboard',
-    sortOrder: 4,
-  },
-  {
-    category: PreferenceCategory.DASHBOARD,
-    key: 'show_debts_summary',
-    dataType: PreferenceDataType.BOOLEAN,
-    defaultValue: false,
-    label: 'Show debts summary',
-    description: 'Display debts summary card on the dashboard',
-    sortOrder: 5,
-  },
-  {
-    category: PreferenceCategory.DASHBOARD,
-    key: 'recent_transactions_count',
+    key: 'activity_items_count',
     dataType: PreferenceDataType.NUMBER,
     defaultValue: 5,
-    label: 'Recent transactions count',
+    label: 'Activity items count',
     description:
-      'Number of recent transactions to show on the dashboard (3-10)',
-    sortOrder: 6,
+      'Number of recent workspace activity items to show on the dashboard (3-10)',
+    sortOrder: 3,
   },
 
   // --- APPEARANCE preferences ---
@@ -458,30 +429,12 @@ const preferenceDefinitions: PreferenceDefinitionSeedData[] = [
   },
   {
     category: PreferenceCategory.NOTIFICATIONS,
-    key: 'notify_recurring_payments',
+    key: 'notify_workspace_changes',
     dataType: PreferenceDataType.BOOLEAN,
     defaultValue: true,
-    label: 'Recurring payment reminders',
-    description: 'Get notified before recurring payments are due',
+    label: 'Workspace change alerts',
+    description: 'Get notified about relevant workspace changes and updates',
     sortOrder: 2,
-  },
-  {
-    category: PreferenceCategory.NOTIFICATIONS,
-    key: 'notify_goal_milestones',
-    dataType: PreferenceDataType.BOOLEAN,
-    defaultValue: true,
-    label: 'Goal milestone alerts',
-    description: 'Get notified when you reach a goal milestone',
-    sortOrder: 3,
-  },
-  {
-    category: PreferenceCategory.NOTIFICATIONS,
-    key: 'notify_budget_exceeded',
-    dataType: PreferenceDataType.BOOLEAN,
-    defaultValue: true,
-    label: 'Budget exceeded alerts',
-    description: 'Get notified when spending exceeds your budget',
-    sortOrder: 4,
   },
 
   // --- PRIVACY preferences ---
@@ -532,27 +485,6 @@ const preferenceDefinitions: PreferenceDefinitionSeedData[] = [
     description: 'Choose which day starts your week',
     sortOrder: 2,
   },
-
-  // --- TRANSACTIONS preferences ---
-  {
-    category: PreferenceCategory.TRANSACTIONS,
-    key: 'default_transaction_type',
-    dataType: PreferenceDataType.STRING,
-    defaultValue: 'expense',
-    label: 'Default transaction type',
-    description:
-      'Pre-selected transaction type when creating a new transaction',
-    sortOrder: 0,
-  },
-  {
-    category: PreferenceCategory.TRANSACTIONS,
-    key: 'confirm_before_delete',
-    dataType: PreferenceDataType.BOOLEAN,
-    defaultValue: true,
-    label: 'Confirm before delete',
-    description: 'Show confirmation dialog before deleting a transaction',
-    sortOrder: 1,
-  },
 ];
 
 interface PlanSeedData {
@@ -569,15 +501,13 @@ interface FeatureSeedData {
   featureCode: string;
   limitType: FeatureLimitType;
   limitValue: number;
-  featureType?: FeatureType;
-  limitPeriod?: LimitPeriod;
 }
 
 const plans: PlanSeedData[] = [
   {
     code: 'free',
     name: 'Free',
-    description: 'Perfect for getting started with personal finance tracking',
+    description: 'Baseline access for the platform core modules',
     priceMonthly: 0,
     isDefault: true,
     sortOrder: 0,
@@ -585,7 +515,7 @@ const plans: PlanSeedData[] = [
   {
     code: 'pro',
     name: 'Pro',
-    description: 'For power users who need more flexibility and features',
+    description: 'Extended access for growing workspaces',
     priceMonthly: 4.99,
     priceYearly: 49.99,
     isDefault: false,
@@ -594,7 +524,7 @@ const plans: PlanSeedData[] = [
   {
     code: 'premium',
     name: 'Premium',
-    description: 'Complete financial management with all features unlocked',
+    description: 'Highest tier with all active platform features enabled',
     priceMonthly: 9.99,
     priceYearly: 99.99,
     isDefault: false,
@@ -604,51 +534,6 @@ const plans: PlanSeedData[] = [
 
 const features: Record<string, FeatureSeedData[]> = {
   free: [
-    // RESOURCE limits (count from actual tables)
-    {
-      featureCode: 'accounts',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 2,
-      featureType: FeatureType.RESOURCE,
-    },
-    {
-      featureCode: 'goals',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 1,
-      featureType: FeatureType.RESOURCE,
-    },
-    {
-      featureCode: 'debts',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 2,
-      featureType: FeatureType.RESOURCE,
-    },
-    {
-      featureCode: 'loans',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 1,
-      featureType: FeatureType.RESOURCE,
-    },
-    {
-      featureCode: 'custom_categories',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 5,
-      featureType: FeatureType.RESOURCE,
-    },
-    {
-      featureCode: 'recurring_payments',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 3,
-      featureType: FeatureType.RESOURCE,
-    },
-    // CONSUMABLE limits (count from UsageRecord, period-based)
-    {
-      featureCode: 'transactions_per_month',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 100,
-      featureType: FeatureType.CONSUMABLE,
-      limitPeriod: LimitPeriod.MONTHLY,
-    },
     // BOOLEAN features (on/off)
     {
       featureCode: 'advanced_reports',
@@ -661,68 +546,12 @@ const features: Record<string, FeatureSeedData[]> = {
       limitValue: 0,
     },
     {
-      featureCode: 'multi_currency',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 0,
-    },
-    {
-      featureCode: 'budget_alerts',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 0,
-    },
-    {
       featureCode: 'ai_insights',
       limitType: FeatureLimitType.BOOLEAN,
       limitValue: 0,
     },
   ],
   pro: [
-    // RESOURCE limits
-    {
-      featureCode: 'accounts',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 10,
-      featureType: FeatureType.RESOURCE,
-    },
-    {
-      featureCode: 'goals',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 5,
-      featureType: FeatureType.RESOURCE,
-    },
-    {
-      featureCode: 'debts',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 10,
-      featureType: FeatureType.RESOURCE,
-    },
-    {
-      featureCode: 'loans',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 5,
-      featureType: FeatureType.RESOURCE,
-    },
-    {
-      featureCode: 'custom_categories',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 20,
-      featureType: FeatureType.RESOURCE,
-    },
-    {
-      featureCode: 'recurring_payments',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 20,
-      featureType: FeatureType.RESOURCE,
-    },
-    // CONSUMABLE limits
-    {
-      featureCode: 'transactions_per_month',
-      limitType: FeatureLimitType.COUNT,
-      limitValue: 1000,
-      featureType: FeatureType.CONSUMABLE,
-      limitPeriod: LimitPeriod.MONTHLY,
-    },
-    // BOOLEAN features
     {
       featureCode: 'advanced_reports',
       limitType: FeatureLimitType.BOOLEAN,
@@ -730,16 +559,6 @@ const features: Record<string, FeatureSeedData[]> = {
     },
     {
       featureCode: 'export_data',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 1,
-    },
-    {
-      featureCode: 'multi_currency',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 0,
-    },
-    {
-      featureCode: 'budget_alerts',
       limitType: FeatureLimitType.BOOLEAN,
       limitValue: 1,
     },
@@ -750,43 +569,6 @@ const features: Record<string, FeatureSeedData[]> = {
     },
   ],
   premium: [
-    // UNLIMITED resources
-    {
-      featureCode: 'accounts',
-      limitType: FeatureLimitType.UNLIMITED,
-      limitValue: -1,
-    },
-    {
-      featureCode: 'goals',
-      limitType: FeatureLimitType.UNLIMITED,
-      limitValue: -1,
-    },
-    {
-      featureCode: 'debts',
-      limitType: FeatureLimitType.UNLIMITED,
-      limitValue: -1,
-    },
-    {
-      featureCode: 'loans',
-      limitType: FeatureLimitType.UNLIMITED,
-      limitValue: -1,
-    },
-    {
-      featureCode: 'custom_categories',
-      limitType: FeatureLimitType.UNLIMITED,
-      limitValue: -1,
-    },
-    {
-      featureCode: 'recurring_payments',
-      limitType: FeatureLimitType.UNLIMITED,
-      limitValue: -1,
-    },
-    {
-      featureCode: 'transactions_per_month',
-      limitType: FeatureLimitType.UNLIMITED,
-      limitValue: -1,
-    },
-    // BOOLEAN features (all enabled)
     {
       featureCode: 'advanced_reports',
       limitType: FeatureLimitType.BOOLEAN,
@@ -794,16 +576,6 @@ const features: Record<string, FeatureSeedData[]> = {
     },
     {
       featureCode: 'export_data',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 1,
-    },
-    {
-      featureCode: 'multi_currency',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 1,
-    },
-    {
-      featureCode: 'budget_alerts',
       limitType: FeatureLimitType.BOOLEAN,
       limitValue: 1,
     },
@@ -950,16 +722,16 @@ async function main() {
           update: {
             limitType: featureData.limitType,
             limitValue: featureData.limitValue,
-            featureType: featureData.featureType ?? FeatureType.RESOURCE,
-            limitPeriod: featureData.limitPeriod,
+            featureType: FeatureType.RESOURCE,
+            limitPeriod: null,
           },
           create: {
             planId: plan.id,
             featureCode: featureData.featureCode,
             limitType: featureData.limitType,
             limitValue: featureData.limitValue,
-            featureType: featureData.featureType ?? FeatureType.RESOURCE,
-            limitPeriod: featureData.limitPeriod,
+            featureType: FeatureType.RESOURCE,
+            limitPeriod: null,
           },
         });
       }
@@ -970,115 +742,7 @@ async function main() {
   console.log('\n✅ Main seed completed successfully!');
 }
 
-// =============================================================================
-// Reference Data: System Categories (default categories for all workspaces)
-// =============================================================================
-
-/**
- * System categories are shared by ALL workspaces (workspaceId = null, isSystem = true).
- * Workspaces can create their own custom categories in addition to these.
- *
- * Design: Two-level hierarchy maximum (parent → children).
- * Every major finance app follows this pattern:
- * - YNAB: 2 levels
- * - Mint: 2 levels
- * - Money Manager: 2 levels
- */
-const systemCategories = SYSTEM_CATEGORIES;
-
-async function seedSystemCategories() {
-  console.log('\n📂 Seeding system categories...');
-
-  let parentCount = 0;
-  let childCount = 0;
-
-  for (const catData of systemCategories) {
-    // Create parent category (system category: workspaceId = null)
-    // We use create + catch for idempotency since upsert with nullable
-    // compound unique fields is tricky in Prisma
-    let parent;
-    const existingParent = await prisma.category.findFirst({
-      where: {
-        name: catData.name,
-        type: catData.type,
-        isSystem: true,
-        parentId: null,
-      },
-    });
-
-    if (existingParent) {
-      parent = await prisma.category.update({
-        where: { id: existingParent.id },
-        data: {
-          icon: catData.icon,
-          color: catData.color,
-          sortOrder: catData.sortOrder,
-          isActive: true,
-        },
-      });
-    } else {
-      parent = await prisma.category.create({
-        data: {
-          name: catData.name,
-          type: catData.type,
-          icon: catData.icon,
-          color: catData.color,
-          sortOrder: catData.sortOrder,
-          isSystem: true,
-          isActive: true,
-        },
-      });
-    }
-    parentCount++;
-
-    // Seed children
-    if (catData.children) {
-      for (const childData of catData.children) {
-        const existingChild = await prisma.category.findFirst({
-          where: {
-            name: childData.name,
-            type: catData.type,
-            isSystem: true,
-            parentId: parent.id,
-          },
-        });
-
-        if (existingChild) {
-          await prisma.category.update({
-            where: { id: existingChild.id },
-            data: {
-              icon: childData.icon,
-              color: childData.color,
-              sortOrder: childData.sortOrder,
-              isActive: true,
-            },
-          });
-        } else {
-          await prisma.category.create({
-            data: {
-              name: childData.name,
-              type: catData.type,
-              parentId: parent.id,
-              icon: childData.icon,
-              color: childData.color,
-              sortOrder: childData.sortOrder,
-              isSystem: true,
-              isActive: true,
-            },
-          });
-        }
-        childCount++;
-      }
-    }
-  }
-
-  console.log(
-    `  ✓ ${parentCount} parent categories + ${childCount} subcategories seeded`,
-  );
-}
-
 main()
-  .then(() => seedSystemCategories())
   .then(() => {
     console.log('\n✅ All seeds completed successfully!');
   })

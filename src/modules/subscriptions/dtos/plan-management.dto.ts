@@ -38,7 +38,7 @@ export class CancelSubscriptionDto {
 export class ResourceOverageDto {
   @ApiProperty({
     description: 'Feature code with overage',
-    example: 'accounts',
+    example: 'advanced_reports',
   })
   featureCode: string;
 

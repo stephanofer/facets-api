@@ -21,12 +21,6 @@ describe('file-purpose.config', () => {
       );
     });
 
-    it('should expose the configured transaction receipt rule', () => {
-      expect(getFilePurposeRule(FilePurpose.TRANSACTION_RECEIPT)).toEqual(
-        FILE_PURPOSE_CONFIG[FilePurpose.TRANSACTION_RECEIPT],
-      );
-    });
-
     it('should expose the configured voucher analysis rule', () => {
       expect(
         getUploadPurposeRule(TRANSIENT_UPLOAD_PURPOSES.VOUCHER_ANALYSIS),
@@ -55,8 +49,8 @@ describe('file-purpose.config', () => {
       ).toBe(2 * 1024 * 1024);
     });
 
-    it('should allow only the configured mime types for transaction receipts', () => {
-      const pipe = createFileValidators(FilePurpose.TRANSACTION_RECEIPT);
+    it('should allow only the configured mime types for avatars', () => {
+      const pipe = createFileValidators(FilePurpose.AVATAR);
       const validators = pipe.getValidators();
       const mimeTypeValidator = validators[1] as FileValidator;
 
@@ -67,12 +61,12 @@ describe('file-purpose.config', () => {
       ).toBe(true);
       expect(
         mimeTypeValidator.isValid({
-          mimetype: 'application/pdf',
+          mimetype: 'image/webp',
         } as Express.Multer.File),
       ).toBe(true);
       expect(
         mimeTypeValidator.isValid({
-          mimetype: 'image/svg+xml',
+          mimetype: 'application/pdf',
         } as Express.Multer.File),
       ).toBe(false);
     });

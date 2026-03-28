@@ -104,7 +104,6 @@ describe('AuthService', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     deletedAt: null,
-    transactionId: null,
   };
 
   beforeEach(async () => {

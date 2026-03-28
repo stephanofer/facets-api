@@ -8,7 +8,7 @@ import {
   createTestUser,
   createWorkspaceMember,
 } from './helpers/test-app.helper';
-import { LimitPeriod, WorkspaceRole } from '../src/generated/prisma/client';
+import { WorkspaceRole } from '../src/generated/prisma/client';
 
 describe('Subscriptions (e2e)', () => {
   let app: INestApplication<App>;
@@ -71,9 +71,6 @@ describe('Subscriptions (e2e)', () => {
     adminWorkspaceBUserId = workspaceBAdmin.userId;
     adminWorkspaceBToken = workspaceBAdmin.accessToken;
     workspaceBId = workspaceBAdmin.workspaceId;
-
-    await seedMonthlyUsage(workspaceAId, 7);
-    await seedMonthlyUsage(workspaceBId, 2);
   }, 30000);
 
   afterAll(async () => {
@@ -84,7 +81,7 @@ describe('Subscriptions (e2e)', () => {
     await app.close();
   });
 
-  it('isolates workspace subscription and usage data across workspaces', async () => {
+  it('isolates workspace subscription data across workspaces', async () => {
     const workspaceABeforeUpgrade = await request(app.getHttpServer())
       .get('/api/subscriptions/current')
       .set('Authorization', `Bearer ${adminWorkspaceAToken}`)
@@ -138,30 +135,27 @@ describe('Subscriptions (e2e)', () => {
       .set('Authorization', `Bearer ${adminWorkspaceBToken}`)
       .expect(200);
 
-    const workspaceATransactionsUsage = findFeatureUsage(
-      workspaceAUsage.body.data.features,
-      'transactions_per_month',
-    );
-    const workspaceBTransactionsUsage = findFeatureUsage(
-      workspaceBUsage.body.data.features,
-      'transactions_per_month',
-    );
-
     expect(workspaceAUsage.body.success).toBe(true);
     expect(workspaceAUsage.body.data.planCode).toBe('pro');
-    expect(workspaceATransactionsUsage).toMatchObject({
-      current: 7,
-      limit: 1000,
-      limitReached: false,
-    });
+    expect(workspaceAUsage.body.data.features).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          featureCode: 'advanced_reports',
+          limit: 1,
+        }),
+      ]),
+    );
 
     expect(workspaceBUsage.body.success).toBe(true);
     expect(workspaceBUsage.body.data.planCode).toBe('free');
-    expect(workspaceBTransactionsUsage).toMatchObject({
-      current: 2,
-      limit: 100,
-      limitReached: false,
-    });
+    expect(workspaceBUsage.body.data.features).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          featureCode: 'advanced_reports',
+          limit: 0,
+        }),
+      ]),
+    );
   });
 
   async function assertBillingDenied(accessToken: string): Promise<void> {
@@ -272,65 +266,4 @@ describe('Subscriptions (e2e)', () => {
     );
     expect(workspaceBLogs).toEqual([]);
   });
-
-  async function seedMonthlyUsage(
-    workspaceId: string,
-    count: number,
-  ): Promise<void> {
-    const now = new Date();
-    const periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const periodEnd = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999,
-    );
-
-    await prisma.usageRecord.upsert({
-      where: {
-        workspaceId_featureCode_periodStart: {
-          workspaceId,
-          featureCode: 'transactions_per_month',
-          periodStart,
-        },
-      },
-      update: {
-        count,
-        periodType: LimitPeriod.MONTHLY,
-        periodEnd,
-      },
-      create: {
-        workspaceId,
-        featureCode: 'transactions_per_month',
-        periodType: LimitPeriod.MONTHLY,
-        periodStart,
-        periodEnd,
-        count,
-      },
-    });
-  }
-
-  function findFeatureUsage(
-    features: Array<{
-      featureCode: string;
-      current: number;
-      limit: number;
-      limitReached: boolean;
-    }>,
-    featureCode: string,
-  ): {
-    featureCode: string;
-    current: number;
-    limit: number;
-    limitReached: boolean;
-  } {
-    const feature = features.find((item) => item.featureCode === featureCode);
-
-    expect(feature).toBeDefined();
-
-    return feature!;
-  }
 });

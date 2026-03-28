@@ -11,8 +11,6 @@ import { PlansRepository } from '@modules/subscriptions/repositories/plans.repos
 import { SubscriptionsRepository } from '@modules/subscriptions/repositories/subscriptions.repository';
 import {
   FeatureLimitType,
-  FeatureType,
-  LimitPeriod,
   PlanChangeType,
   PlatformRole,
   SubscriptionStatus,
@@ -61,13 +59,13 @@ describe('PlanManagementService', () => {
       {
         id: 'feature-pro-1',
         planId: 'plan-pro',
-        featureCode: 'accounts',
-        featureName: 'Accounts',
+        featureCode: 'advanced_reports',
+        featureName: 'Advanced reports',
         featureDescription: null,
-        featureType: FeatureType.RESOURCE,
-        limitType: FeatureLimitType.COUNT,
-        limitValue: 10,
-        limitPeriod: LimitPeriod.MONTHLY,
+        featureType: null,
+        limitType: FeatureLimitType.BOOLEAN,
+        limitValue: 1,
+        limitPeriod: null,
         sortOrder: 0,
         createdAt: now,
         updatedAt: now,

@@ -16,10 +16,6 @@ import {
 import { FileRepository } from '@storage/repositories/file.repository';
 import { File, FilePurpose } from '../../generated/prisma/client';
 
-export interface UploadFileOptions {
-  transactionId?: string;
-}
-
 export interface FileOwnershipContext {
   workspaceId: string;
   uploadedByUserId?: string;
@@ -48,7 +44,6 @@ export class FileService {
     file: Express.Multer.File,
     purpose: FilePurpose,
     ownership: FileOwnershipContext,
-    options: UploadFileOptions = {},
   ): Promise<File> {
     const rule = getFilePurposeRule(purpose);
     const mimeType = detectMimeTypeFromBuffer(file.buffer);
@@ -75,7 +70,6 @@ export class FileService {
         size: file.size,
         originalName: file.originalname,
         publicUrl,
-        transactionId: options.transactionId,
       });
     } catch (error) {
       await this.rollbackUploadedFile(bucket, key, error);
@@ -136,7 +130,7 @@ export class FileService {
   }
 
   resolveUrl(file: File): Promise<string> {
-    const rule = FILE_PURPOSE_CONFIG[file.purpose];
+    const rule = getFilePurposeRule(file.purpose);
 
     if (rule.bucket === 'public') {
       return Promise.resolve(file.publicUrl ?? this.buildPublicUrl(file.key));

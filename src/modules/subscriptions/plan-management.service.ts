@@ -577,10 +577,7 @@ export class PlanManagementService {
   }
 
   private featureHasGracePeriod(featureCode: string): boolean {
-    const gracePeriodFeatures: readonly string[] = [
-      FEATURES.GOALS,
-      FEATURES.CUSTOM_CATEGORIES,
-    ];
+    const gracePeriodFeatures: readonly string[] = [];
 
     return gracePeriodFeatures.includes(featureCode);
   }

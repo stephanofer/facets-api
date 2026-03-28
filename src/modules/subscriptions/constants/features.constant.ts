@@ -11,35 +11,6 @@
  */
 export const FEATURES = {
   // ==========================================================================
-  // RESOURCE Features (count from actual tables - deletable)
-  // ==========================================================================
-
-  /** Bank/financial accounts limit */
-  ACCOUNTS: 'accounts',
-
-  /** Financial goals limit */
-  GOALS: 'goals',
-
-  /** Debt tracking limit */
-  DEBTS: 'debts',
-
-  /** Loan management limit */
-  LOANS: 'loans',
-
-  /** Custom categories limit */
-  CUSTOM_CATEGORIES: 'custom_categories',
-
-  /** Recurring payments limit */
-  RECURRING_PAYMENTS: 'recurring_payments',
-
-  // ==========================================================================
-  // CONSUMABLE Features (count from UsageRecord - period-based, not restored on delete)
-  // ==========================================================================
-
-  /** Transactions per month limit */
-  TRANSACTIONS_PER_MONTH: 'transactions_per_month',
-
-  // ==========================================================================
   // BOOLEAN Features (on/off toggles)
   // ==========================================================================
 
@@ -48,12 +19,6 @@ export const FEATURES = {
 
   /** Ability to export data (CSV, PDF, Excel) */
   EXPORT_DATA: 'export_data',
-
-  /** Multi-currency support */
-  MULTI_CURRENCY: 'multi_currency',
-
-  /** Budget alerts and notifications */
-  BUDGET_ALERTS: 'budget_alerts',
 
   /** AI-powered financial insights */
   AI_INSIGHTS: 'ai_insights',

@@ -32,9 +32,8 @@ describe('FileCleanupService', () => {
       createdAt: new Date('2026-03-01T00:00:00.000Z'),
       updatedAt: new Date('2026-03-01T00:00:00.000Z'),
       deletedAt: new Date('2026-03-03T00:00:00.000Z'),
-      transactionId: null,
       ...overrides,
-    };
+    } as StoredFile;
   }
 
   beforeEach(async () => {

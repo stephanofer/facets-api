@@ -31,7 +31,7 @@ export interface RequireFeatureOptions {
  *
  * @example
  * // Usage for count-based features
- * @RequireFeature(FEATURES.ACCOUNTS)
+ * @RequireFeature(FEATURES.EXPORT_DATA)
  *
  * The FeatureGuard will:
  * 1. Check if the feature exists in the user's plan

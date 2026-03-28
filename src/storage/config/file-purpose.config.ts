@@ -27,24 +27,14 @@ export type TransientUploadPurpose =
 
 export type UploadPurpose = FilePurpose | TransientUploadPurpose;
 
-export const FILE_PURPOSE_CONFIG: Record<FilePurpose, FilePurposeRule> = {
+export const FILE_PURPOSE_CONFIG: Partial<
+  Record<FilePurpose, FilePurposeRule>
+> = {
   [FilePurpose.AVATAR]: {
     maxSizeBytes: 2 * 1024 * 1024,
     allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
     bucket: 'public',
     pathPrefix: 'avatars',
-  },
-  [FilePurpose.TRANSACTION_RECEIPT]: {
-    maxSizeBytes: 5 * 1024 * 1024,
-    allowedMimeTypes: [
-      'image/jpeg',
-      'image/png',
-      'image/webp',
-      'application/pdf',
-    ],
-    bucket: 'private',
-    pathPrefix: 'receipts',
-    presignedUrlTtl: 900,
   },
 };
 
@@ -59,14 +49,20 @@ export const TRANSIENT_UPLOAD_PURPOSE_CONFIG: Record<
 };
 
 export function getFilePurposeRule(purpose: FilePurpose): FilePurposeRule {
-  return FILE_PURPOSE_CONFIG[purpose];
+  const rule = FILE_PURPOSE_CONFIG[purpose];
+
+  if (!rule) {
+    throw new Error(`Unsupported persisted file purpose: ${purpose}`);
+  }
+
+  return rule;
 }
 
 export function getUploadPurposeRule(
   purpose: UploadPurpose,
 ): UploadPurposeRule {
   if (purpose in FILE_PURPOSE_CONFIG) {
-    return FILE_PURPOSE_CONFIG[purpose as FilePurpose];
+    return getFilePurposeRule(purpose as FilePurpose);
   }
 
   return TRANSIENT_UPLOAD_PURPOSE_CONFIG[purpose as TransientUploadPurpose];

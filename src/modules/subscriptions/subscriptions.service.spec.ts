@@ -3,15 +3,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { HttpStatus } from '@nestjs/common';
 import { ERROR_CODES } from '@common/constants/app.constants';
 import { BusinessException } from '@common/exceptions/business.exception';
-import { FEATURES } from '@modules/subscriptions/constants/features.constant';
 import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
 import { PlansRepository } from '@modules/subscriptions/repositories/plans.repository';
 import { SubscriptionsRepository } from '@modules/subscriptions/repositories/subscriptions.repository';
 import { UsageRepository } from '@modules/subscriptions/repositories/usage.repository';
 import {
   FeatureLimitType,
-  FeatureType,
-  LimitPeriod,
   SubscriptionStatus,
 } from '../../generated/prisma/client';
 
@@ -43,13 +40,13 @@ describe('SubscriptionsService', () => {
   const countPlanFeature = {
     id: 'feature-1',
     planId: freePlan.id,
-    featureCode: FEATURES.TRANSACTIONS_PER_MONTH,
-    featureName: 'Transactions per month',
+    featureCode: 'advanced_reports',
+    featureName: 'Advanced reports',
     featureDescription: null,
-    featureType: FeatureType.CONSUMABLE,
-    limitType: FeatureLimitType.COUNT,
-    limitValue: 100,
-    limitPeriod: LimitPeriod.MONTHLY,
+    featureType: null,
+    limitType: FeatureLimitType.BOOLEAN,
+    limitValue: 1,
+    limitPeriod: null,
     sortOrder: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -130,7 +127,7 @@ describe('SubscriptionsService', () => {
     expect(result).toBe(createdSubscription);
   });
 
-  it('isolates consumable feature usage per workspace', async () => {
+  it('isolates boolean feature access per workspace', async () => {
     subscriptionsRepository.getWorkspacePlanFeature.mockImplementation(
       async (requestedWorkspaceId: string) => {
         if (requestedWorkspaceId === workspaceId) {
@@ -139,54 +136,31 @@ describe('SubscriptionsService', () => {
 
         return {
           ...countPlanFeature,
-          limitValue: 5,
+          limitValue: 0,
         } as never;
-      },
-    );
-
-    usageRepository.getCurrentUsage.mockImplementation(
-      async (requestedWorkspaceId: string) => {
-        if (requestedWorkspaceId === workspaceId) {
-          return 100;
-        }
-
-        return 2;
       },
     );
 
     const blockedWorkspace = await service.checkWorkspaceFeatureAccess(
       workspaceId,
-      FEATURES.TRANSACTIONS_PER_MONTH,
+      'advanced_reports' as never,
     );
     const allowedWorkspace = await service.checkWorkspaceFeatureAccess(
       otherWorkspaceId,
-      FEATURES.TRANSACTIONS_PER_MONTH,
+      'advanced_reports' as never,
     );
 
     expect(blockedWorkspace).toEqual({
-      allowed: false,
-      reason: 'FEATURE_LIMIT_EXCEEDED',
-      current: 100,
-      limit: 100,
+      allowed: true,
+      current: 0,
+      limit: 1,
     });
     expect(allowedWorkspace).toEqual({
-      allowed: true,
-      reason: undefined,
-      current: 2,
-      limit: 5,
+      allowed: false,
+      reason: 'FEATURE_NOT_AVAILABLE',
+      current: 0,
+      limit: 0,
     });
-    expect(usageRepository.getCurrentUsage).toHaveBeenNthCalledWith(
-      1,
-      workspaceId,
-      FEATURES.TRANSACTIONS_PER_MONTH,
-      LimitPeriod.MONTHLY,
-    );
-    expect(usageRepository.getCurrentUsage).toHaveBeenNthCalledWith(
-      2,
-      otherWorkspaceId,
-      FEATURES.TRANSACTIONS_PER_MONTH,
-      LimitPeriod.MONTHLY,
-    );
   });
 
   it('fails when a workspace has no active subscription', async () => {

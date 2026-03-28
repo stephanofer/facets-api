@@ -47,9 +47,8 @@ describe('FileService', () => {
       createdAt: new Date('2026-03-05T00:00:00.000Z'),
       updatedAt: new Date('2026-03-05T00:00:00.000Z'),
       deletedAt: null,
-      transactionId: null,
       ...overrides,
-    };
+    } as StoredFile;
   }
 
   function createMulterFile(
@@ -153,38 +152,8 @@ describe('FileService', () => {
       expect(result).toBe(persistedFile);
     });
 
-    it('should upload private receipt files without storing a public URL', async () => {
-      const file = createMulterFile(Buffer.from('%PDF-1.7'), {
-        originalname: 'receipt.pdf',
-      });
-
-      fileRepository.create.mockResolvedValue(
-        createStoredFile({
-          purpose: FilePurpose.TRANSACTION_RECEIPT,
-          bucket: 'facets-private',
-          publicUrl: null,
-        }),
-      );
-
-      await service.upload(
-        file,
-        FilePurpose.TRANSACTION_RECEIPT,
-        { workspaceId, uploadedByUserId },
-        { transactionId: 'txn-1' },
-      );
-
-      expect(fileRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workspaceId,
-          uploadedByUserId,
-          transactionId: 'txn-1',
-          publicUrl: undefined,
-        }),
-      );
-    });
-
     it('should rollback the uploaded object when metadata persistence fails', async () => {
-      const file = createMulterFile(Buffer.from('%PDF-1.7'));
+      const file = createMulterFile(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
       const persistenceError = new Error('db failed');
 
       jest
@@ -193,7 +162,7 @@ describe('FileService', () => {
       fileRepository.create.mockRejectedValue(persistenceError);
 
       await expect(
-        service.upload(file, FilePurpose.TRANSACTION_RECEIPT, {
+        service.upload(file, FilePurpose.AVATAR, {
           workspaceId,
           uploadedByUserId,
         }),
@@ -227,13 +196,8 @@ describe('FileService', () => {
 
   describe('deleteWorkspaceFile', () => {
     it('should soft delete files from the active workspace', async () => {
-      const file = createStoredFile({
-        purpose: FilePurpose.TRANSACTION_RECEIPT,
-      });
-      const deletedFile = createStoredFile({
-        purpose: FilePurpose.TRANSACTION_RECEIPT,
-        deletedAt: new Date(),
-      });
+      const file = createStoredFile();
+      const deletedFile = createStoredFile({ deletedAt: new Date() });
 
       fileRepository.findActiveWorkspaceFileById.mockResolvedValue(file);
       fileRepository.markDeletedWorkspaceFile.mockResolvedValue(deletedFile);
