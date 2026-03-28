@@ -8,17 +8,13 @@ datasource db {
   provider = "postgresql"
 }
 
-// =============================================================================
-// PHASE 1: Core Authentication
-// =============================================================================
-
 model User {
-  id              String     @id @default(cuid(2))
-  email           String     @unique
-  password        String // bcrypt hashed
+  id              String       @id @default(cuid(2))
+  email           String       @unique
+  password        String
   firstName       String
   lastName        String
-  emailVerified   Boolean    @default(false)
+  emailVerified   Boolean      @default(false)
   emailVerifiedAt DateTime?
   status          UserStatus   @default(PENDING_VERIFICATION)
   platformRole    PlatformRole @default(USER)
@@ -27,14 +23,15 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  refreshTokens        RefreshToken[]
-  otpCodes             OtpCode[]
-  profile              UserProfile?
-  preferences          UserPreference[]
-  memberships          WorkspaceMembership[] @relation("WorkspaceMembershipUser")
-  invitedMemberships   WorkspaceMembership[] @relation("WorkspaceMembershipInviter")
-  requestedPlanChanges PlanChangeLog[]       @relation("PlanChangeRequestedBy")
-  uploadedFiles        File[]                @relation("UploadedFiles")
+  refreshTokens          RefreshToken[]
+  otpCodes               OtpCode[]
+  profile                UserProfile?
+  memberships            WorkspaceMembership[]   @relation("WorkspaceMembershipUser")
+  invitedMemberships     WorkspaceMembership[]   @relation("WorkspaceMembershipInviter")
+  requestedPlanChanges   PlanChangeLog[]         @relation("PlanChangeRequestedBy")
+  uploadedFiles          File[]                  @relation("UploadedFiles")
+  createdTransactions    Transaction[]           @relation("TransactionCreatedBy")
+  createdReconciliations AccountReconciliation[] @relation("AccountReconciliationCreatedBy")
 
   @@index([email])
   @@index([status])
@@ -53,31 +50,6 @@ enum PlatformRole {
   SUPER_ADMIN
 }
 
-enum WorkspaceRole {
-  ADMIN
-  MEMBER
-  GUEST
-}
-
-enum WorkspaceMembershipStatus {
-  ACTIVE
-  INVITED
-  SUSPENDED
-  REMOVED
-}
-
-enum WorkspaceType {
-  PERSONAL
-  FAMILY
-  GROUP
-}
-
-enum WorkspaceStatus {
-  ACTIVE
-  SUSPENDED
-  ARCHIVED
-}
-
 model RefreshToken {
   id        String    @id @default(cuid(2))
   token     String    @unique // hashed
@@ -94,10 +66,6 @@ model RefreshToken {
   @@index([expiresAt])
   @@map("refresh_tokens")
 }
-
-// =============================================================================
-// PHASE 2: Email Verification & Password Recovery
-// =============================================================================
 
 model OtpCode {
   id          String    @id @default(cuid(2))
@@ -130,21 +98,34 @@ enum OtpType {
 /// When the user applies migrations manually, local/test databases should be reset
 /// to this new truth instead of preserving fake backwards compatibility.
 model Workspace {
-  id     String          @id @default(cuid(2))
-  name   String          @db.VarChar(120)
-  slug   String?         @unique @db.VarChar(120)
-  type   WorkspaceType   @default(PERSONAL)
-  status WorkspaceStatus @default(ACTIVE)
+  id                     String          @id @default(cuid(2))
+  name                   String          @db.VarChar(120)
+  slug                   String?         @unique @db.VarChar(120)
+  type                   WorkspaceType   @default(PERSONAL)
+  status                 WorkspaceStatus @default(ACTIVE)
+  financialDataUpdatedAt DateTime        @default(now())
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships       WorkspaceMembership[]
-  settings          WorkspaceSettings?
-  subscription      Subscription?
-  usageRecords      UsageRecord[]
-  planChangeLogs    PlanChangeLog[]
-  files             File[]
+  memberships        WorkspaceMembership[]
+  settings           WorkspaceSettings?
+  // Prisma cannot enforce requiredness on the back side of a 1:1 relation.
+  // Backend must create one subscription row per workspace from day 0.
+  // Free workspaces also get a subscription row pointing to the Free plan.
+  subscription       Subscription?
+  usageEvents        UsageEvent[]
+  usageRecords       UsageRecord[]
+  planChangeLogs     PlanChangeLog[]
+  files              File[]
+  accounts           Account[]
+  categories         Category[]
+  workspaceMerchants WorkspaceMerchant[]
+  tags               Tag[]
+  transactions       Transaction[]
+  transfers          Transfer[]
+  budgets            Budget[]
+  recurringReminders RecurringReminder[]
 
   @@index([status])
   @@index([type, status])
@@ -152,9 +133,8 @@ model Workspace {
 }
 
 /// Membership joins identity to tenant context. Role and status live HERE, not on User.
-/// Partial unique indexes require Prisma's `partialIndexes` preview feature.
-/// If a specific Prisma workflow cannot materialize them yet, keep this schema truth and
-/// create the matching database constraints manually when the user runs migrations.
+/// There is exactly ONE canonical membership row per workspace-user pair.
+/// Status mutates over time on that row instead of creating duplicate rows for invite/remove/rejoin.
 model WorkspaceMembership {
   id              String                    @id @default(cuid(2))
   workspaceId     String
@@ -163,46 +143,99 @@ model WorkspaceMembership {
   user            User                      @relation("WorkspaceMembershipUser", fields: [userId], references: [id], onDelete: Cascade)
   role            WorkspaceRole
   status          WorkspaceMembershipStatus @default(ACTIVE)
-  joinedAt        DateTime                  @default(now())
+  invitedAt       DateTime?
+  joinedAt        DateTime?
   invitedByUserId String?
   invitedByUser   User?                     @relation("WorkspaceMembershipInviter", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+  preference      WorkspaceUserPreference?
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
 
+  @@unique([workspaceId, userId], name: "workspace_memberships_workspace_user_unique")
   @@index([workspaceId, status])
+  @@index([workspaceId, role, status])
   @@index([userId, status])
   @@index([invitedByUserId])
-  @@unique([workspaceId, userId], name: "workspace_memberships_active_workspace_user_unique", where: { status: "ACTIVE" })
-  @@unique([workspaceId], name: "workspace_memberships_single_active_admin_unique", where: { role: "ADMIN", status: "ACTIVE" })
   @@map("workspace_memberships")
 }
 
-/// Shared workspace configuration. Personal UI preferences stay on UserPreference.
+/// Shared workspace configuration.
+/// This stores tenant-wide defaults and domain rules, NOT personal UI behavior.
 model WorkspaceSettings {
-  id               String    @id @default(cuid(2))
-  workspaceId      String    @unique
-  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  baseCurrencyCode String    @default("USD") @db.VarChar(3)
-  baseLanguage     String    @default("en") @db.VarChar(10)
-  dateFormat       String    @default("DD/MM/YYYY") @db.VarChar(30)
-  monthStartDay    Int       @default(1)
-  weekStartDay     Int       @default(1)
-  timezone         String    @default("UTC") @db.VarChar(50)
-  locale           String    @default("en-US") @db.VarChar(10)
-  displayLabel     String    @db.VarChar(100)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                String    @id @default(cuid(2))
+  workspaceId       String    @unique
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  baseCurrencyCode  String    @default("USD") @db.VarChar(3)
+  baseCurrency      Currency  @relation(fields: [baseCurrencyCode], references: [code])
+  contentLocale     String    @default("en-US") @db.VarChar(10)
+  dateFormat        String    @default("DD/MM/YYYY") @db.VarChar(30)
+  financialTimezone String    @default("UTC") @db.VarChar(50)
+  monthStartDay     Int       @default(1)
+  weekStartDay      Int       @default(1)
+  displayLabel      String    @db.VarChar(100)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
+  @@index([baseCurrencyCode])
   @@map("workspace_settings")
 }
 
-// =============================================================================
-// PHASE 3: Subscription System & Feature Access
-// =============================================================================
+/// Personal preferences scoped to ONE user inside ONE workspace.
+/// Typed columns cover stable preferences; JSON buckets cover view-specific UI state.
+model WorkspaceUserPreference {
+  id                     String              @id @default(cuid(2))
+  workspaceId            String
+  userId                 String
+  membership             WorkspaceMembership @relation(fields: [workspaceId, userId], references: [workspaceId, userId], onDelete: Cascade)
+  uiLocale               String?             @db.VarChar(10)
+  theme                  ThemePreference     @default(SYSTEM)
+  dateFormat             String?             @db.VarChar(30)
+  dashboardPreferences   Json                @default("{}")
+  reportPreferences      Json                @default("{}")
+  transactionPreferences Json                @default("{}")
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("workspace_user_preferences")
+}
+
+enum ThemePreference {
+  SYSTEM
+  LIGHT
+  DARK
+}
+
+enum WorkspaceRole {
+  ADMIN
+  MEMBER
+  GUEST
+}
+
+enum WorkspaceMembershipStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  REMOVED
+}
+
+enum WorkspaceType {
+  PERSONAL
+  FAMILY
+  GROUP
+}
+
+enum WorkspaceStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
 
 model Plan {
   id            String   @id @default(cuid(2))
-  code          String   @unique // 'free', 'pro', 'premium'
+  code          String   @unique
   name          String
   description   String?
   priceMonthly  Decimal  @db.Decimal(10, 2)
@@ -214,41 +247,60 @@ model Plan {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  subscriptions          Subscription[]
-  scheduledSubscriptions Subscription[]  @relation("ScheduledPlan")
-  planFeatures           PlanFeature[]
-  fromChangeLogs         PlanChangeLog[] @relation("FromPlan")
-  toChangeLogs           PlanChangeLog[] @relation("ToPlan")
+  subscriptions  Subscription[]
+  planFeatures   PlanFeature[]
+  fromChangeLogs PlanChangeLog[] @relation("FromPlan")
+  toChangeLogs   PlanChangeLog[] @relation("ToPlan")
 
   @@index([code])
   @@index([isActive, sortOrder])
   @@map("plans")
 }
 
-model Subscription {
-  id                 String             @id @default(cuid(2))
-  workspaceId        String             @unique
-  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  planId             String
-  plan               Plan               @relation(fields: [planId], references: [id])
-  status             SubscriptionStatus @default(ACTIVE)
-  currentPeriodStart DateTime           @default(now())
-  currentPeriodEnd   DateTime? // null for free plan
+/// Canonical catalog of billable/gated features.
+/// This avoids string drift across plans, usage events, and usage rollups.
+model FeatureDefinition {
+  code               String           @id @db.VarChar(100)
+  name               String           @db.VarChar(120)
+  description        String?
+  featureType        FeatureType
+  defaultLimitType   FeatureLimitType @default(BOOLEAN)
+  defaultLimitPeriod LimitPeriod?
+  isActive           Boolean          @default(true)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 
-  // Trial
+  planFeatures PlanFeature[]
+  usageEvents  UsageEvent[]
+  usageRecords UsageRecord[]
+
+  @@index([isActive, featureType])
+  @@map("feature_definitions")
+}
+
+model Subscription {
+  id                     String             @id @default(cuid(2))
+  workspaceId            String             @unique
+  workspace              Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  planId                 String
+  plan                   Plan               @relation(fields: [planId], references: [id])
+  planCodeSnapshot       String             @db.VarChar(100)
+  planNameSnapshot       String             @db.VarChar(120)
+  billingInterval        BillingInterval?
+  billingAmount          Decimal            @default(0) @db.Decimal(10, 2)
+  billingCurrency        String             @default("USD") @db.VarChar(3)
+  providerCustomerId     String?            @db.VarChar(191)
+  providerSubscriptionId String?            @unique @db.VarChar(191)
+  status                 SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart     DateTime           @default(now())
+  currentPeriodEnd       DateTime? // null for free plan or while no paid cycle exists yet
+
   trialStart DateTime?
   trialEnd   DateTime?
 
-  // Phase 4: Scheduled changes (for downgrades)
-  scheduledPlanId   String?
-  scheduledPlan     Plan?     @relation("ScheduledPlan", fields: [scheduledPlanId], references: [id])
-  scheduledChangeAt DateTime?
-
-  // Phase 4: Cancellation
   cancelledAt  DateTime?
   cancelReason String?
 
-  // Phase 4: Grace period (for overages after downgrade)
   graceOverages  Json?
   gracePeriodEnd DateTime?
 
@@ -258,9 +310,14 @@ model Subscription {
   @@index([workspaceId])
   @@index([planId])
   @@index([status])
-  @@index([scheduledChangeAt])
-  @@index([gracePeriodEnd])
+  @@index([status, currentPeriodEnd])
+  @@index([status, gracePeriodEnd])
   @@map("subscriptions")
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
 }
 
 enum SubscriptionStatus {
@@ -271,55 +328,73 @@ enum SubscriptionStatus {
   EXPIRED
 }
 
-// =============================================================================
-// PHASE 4: Plan Management (Upgrade/Downgrade)
-// =============================================================================
-
 model PlanChangeLog {
-  id              String         @id @default(cuid(2))
-  workspaceId     String
-  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  requestedByUserId String?
-  requestedByUser User?          @relation("PlanChangeRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
-  fromPlanId      String
-  fromPlan        Plan           @relation("FromPlan", fields: [fromPlanId], references: [id])
-  toPlanId        String
-  toPlan          Plan           @relation("ToPlan", fields: [toPlanId], references: [id])
-  changeType      PlanChangeType
-  requestedAt     DateTime       @default(now())
-  effectiveAt     DateTime?
-  scheduledFor    DateTime?
-  prorationAmount Decimal?       @db.Decimal(10, 2)
-  reason          String?
-  metadata        Json?
-  createdAt       DateTime       @default(now())
+  id                          String              @id @default(cuid(2))
+  workspaceId                 String
+  workspace                   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  requestedByUserId           String?
+  requestedByUser             User?               @relation("PlanChangeRequestedBy", fields: [requestedByUserId], references: [id], onDelete: SetNull)
+  fromPlanId                  String?
+  fromPlan                    Plan?               @relation("FromPlan", fields: [fromPlanId], references: [id])
+  fromPlanCodeSnapshot        String?             @db.VarChar(100)
+  toPlanId                    String?
+  toPlan                      Plan?               @relation("ToPlan", fields: [toPlanId], references: [id])
+  toPlanCodeSnapshot          String?             @db.VarChar(100)
+  changeType                  PlanChangeType
+  status                      PlanChangeStatus    @default(REQUESTED)
+  source                      PlanChangeSource    @default(USER)
+  billingInterval             BillingInterval?
+  billingAmount               Decimal?            @db.Decimal(10, 2)
+  billingCurrency             String?             @db.VarChar(3)
+  requestedAt                 DateTime            @default(now())
+  effectiveAt                 DateTime?
+  scheduledFor                DateTime?
+  prorationAmount             Decimal?            @db.Decimal(10, 2)
+  resultingSubscriptionStatus SubscriptionStatus?
+  reason                      String?
+  metadata                    Json?
+  createdAt                   DateTime            @default(now())
 
   @@index([workspaceId])
   @@index([workspaceId, createdAt])
   @@index([requestedByUserId])
+  @@index([status, scheduledFor])
   @@map("plan_change_logs")
 }
 
 enum PlanChangeType {
   UPGRADE
-  DOWNGRADE_SCHEDULED
-  DOWNGRADE_APPLIED
+  DOWNGRADE
   CANCELLATION
-  CANCELLATION_APPLIED
   REACTIVATION
 }
 
+enum PlanChangeStatus {
+  REQUESTED
+  SCHEDULED
+  APPLIED
+  CANCELLED
+  FAILED
+}
+
+enum PlanChangeSource {
+  USER
+  ADMIN
+  SYSTEM
+}
+
 model PlanFeature {
-  id          String           @id @default(cuid(2))
-  planId      String
-  plan        Plan             @relation(fields: [planId], references: [id], onDelete: Cascade)
-  featureCode String
-  limitType   FeatureLimitType @default(BOOLEAN)
-  limitValue  Int              @default(1)
-  limitPeriod LimitPeriod?
-  featureType FeatureType      @default(RESOURCE)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  id           String            @id @default(cuid(2))
+  planId       String
+  plan         Plan              @relation(fields: [planId], references: [id], onDelete: Cascade)
+  featureCode  String            @db.VarChar(100)
+  feature      FeatureDefinition @relation(fields: [featureCode], references: [code], onDelete: Restrict)
+  limitType    FeatureLimitType  @default(BOOLEAN)
+  limitValue   Int               @default(1)
+  limitPeriod  LimitPeriod?
+  overrideType FeatureType?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   @@unique([planId, featureCode])
   @@index([featureCode])
@@ -334,7 +409,7 @@ enum FeatureLimitType {
 
 enum FeatureType {
   RESOURCE // Count from actual table (accounts, goals) - deletable
-  CONSUMABLE // Count from UsageRecord (transactions) - period-based
+  CONSUMABLE // Count from UsageEvent + UsageRecord rollups - period-based
 }
 
 enum LimitPeriod {
@@ -344,27 +419,55 @@ enum LimitPeriod {
   YEARLY
 }
 
+enum UsageEventSource {
+  APP
+  IMPORT
+  SYSTEM
+  BACKFILL
+}
+
+/// Append-only source of truth for metered usage.
+/// Retries should reuse the same `idempotencyKey` within the same workspace
+/// so the same logical operation is only recorded once.
+model UsageEvent {
+  id             String            @id @default(cuid(2))
+  workspaceId    String
+  workspace      Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  featureCode    String            @db.VarChar(100)
+  feature        FeatureDefinition @relation(fields: [featureCode], references: [code], onDelete: Restrict)
+  quantity       Int               @default(1)
+  source         UsageEventSource  @default(APP)
+  idempotencyKey String?           @db.VarChar(191)
+  occurredAt     DateTime          @default(now())
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, featureCode, occurredAt])
+  @@index([workspaceId, source, occurredAt])
+  @@map("usage_events")
+}
+
+/// Period rollup derived from usage events for consumable features.
+/// Resource-style features should prefer counting from their source tables directly.
 model UsageRecord {
-  id          String      @id @default(cuid(2))
+  id          String            @id @default(cuid(2))
   workspaceId String
-  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  featureCode String
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  featureCode String            @db.VarChar(100)
+  feature     FeatureDefinition @relation(fields: [featureCode], references: [code], onDelete: Restrict)
   periodType  LimitPeriod
   periodStart DateTime
   periodEnd   DateTime
-  count       Int         @default(0)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  count       Int               @default(0)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
-  @@unique([workspaceId, featureCode, periodStart])
-  @@index([workspaceId, featureCode])
+  @@unique([workspaceId, featureCode, periodType, periodStart])
+  @@index([workspaceId, featureCode, periodType, periodEnd])
   @@index([periodEnd])
   @@map("usage_records")
 }
-
-// =============================================================================
-// PHASE 5: User Profile, Preferences & Reference Data
-// =============================================================================
 
 // -----------------------------------------------------------------------------
 // Reference Tables (low-cardinality, high-read → cacheable)
@@ -380,7 +483,16 @@ model Currency {
   decimalScale Int     @default(2) // Most currencies have 2 decimal places, JPY has 0, BHD has 3
   isActive     Boolean @default(true)
 
-  userProfiles  UserProfile[]
+  userProfiles         UserProfile[]
+  workspaceSettings    WorkspaceSettings[]
+  accounts             Account[]
+  accountDailyBalances AccountDailyBalance[]
+  transactions         Transaction[]
+  budgets              Budget[]
+  recurringReminders   RecurringReminder[]
+  exchangeRatesFrom    ExchangeRate[]        @relation("ExchangeRateFrom")
+  exchangeRatesTo      ExchangeRate[]        @relation("ExchangeRateTo")
+  countries            Country[]
 
   @@index([isActive])
   @@map("currencies")
@@ -390,12 +502,13 @@ model Currency {
 /// Seeded with ~50 most common countries. Extensible via INSERT.
 /// Used for user localization, tax rules (future), and regional features.
 model Country {
-  code         String  @id @db.VarChar(2) // ISO 3166-1 alpha-2: US, AR, BR, etc.
-  name         String  @db.VarChar(100) // "United States", "Argentina", "Brazil"
-  currencyCode String  @db.VarChar(3) // Default currency for this country
-  phoneCode    String  @db.VarChar(10) // "+1", "+54", "+55"
-  locale       String  @default("en-US") @db.VarChar(10) // BCP 47 locale tag
-  isActive     Boolean @default(true)
+  code         String   @id @db.VarChar(2) // ISO 3166-1 alpha-2: US, AR, BR, etc.
+  name         String   @db.VarChar(100) // "United States", "Argentina", "Brazil"
+  currencyCode String   @db.VarChar(3) // Default currency for this country
+  currency     Currency @relation(fields: [currencyCode], references: [code])
+  phoneCode    String   @db.VarChar(10) // "+1", "+54", "+55"
+  locale       String   @default("en-US") @db.VarChar(10) // BCP 47 locale tag
+  isActive     Boolean  @default(true)
 
   userProfiles UserProfile[]
 
@@ -421,99 +534,23 @@ model UserProfile {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Personal details
-  phone        String? @db.VarChar(20) // E.164 format: +5491155557777
-  avatarFileId String? @unique
-  avatarFile   File?   @relation("ProfileAvatar", fields: [avatarFileId], references: [id], onDelete: SetNull)
+  phone     String? @db.VarChar(20) // E.164 format: +5491155557777
+  avatarUrl String? @db.VarChar(500)
 
-  // Localization
-  countryCode  String?  @db.VarChar(2)
-  country      Country? @relation(fields: [countryCode], references: [code])
-  currencyCode String   @default("USD") @db.VarChar(3) // User's default/preferred currency
-  currency     Currency @relation(fields: [currencyCode], references: [code])
-  timezone     String   @default("UTC") @db.VarChar(50) // IANA timezone: America/Argentina/Buenos_Aires
-  locale       String   @default("en-US") @db.VarChar(10) // BCP 47: es-AR, en-US, pt-BR
+  // Profile context
+  countryCode String?  @db.VarChar(2)
+  country     Country? @relation(fields: [countryCode], references: [code])
 
   // Onboarding
   onboardingCompletedAt DateTime?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  currency     Currency? @relation(fields: [currencyCode], references: [code])
+  currencyCode String?   @db.VarChar(3)
 
   @@index([countryCode])
-  @@index([currencyCode])
   @@map("user_profiles")
-}
-
-// -----------------------------------------------------------------------------
-// User Preferences (extensible per-user configuration system)
-// -----------------------------------------------------------------------------
-
-/// Registry of all available preferences with their defaults and validation.
-/// This table acts as a "schema" for preferences — it defines WHAT can be configured.
-///
-/// WHY a separate definition table?
-/// 1. Single source of truth for all available preferences
-/// 2. Default values live in the DB, not scattered across code
-/// 3. New preferences = INSERT, not a code deployment
-/// 4. Frontend can query this to dynamically render settings screens
-/// 5. Cacheable (low-cardinality, rarely changes → perfect cache candidate)
-model PreferenceDefinition {
-  id           String             @id @default(cuid(2))
-  category     PreferenceCategory
-  key          String             @db.VarChar(100) // e.g. "show_balance", "default_view", "date_format"
-  dataType     PreferenceDataType // Tells the app how to interpret the JSON value
-  defaultValue Json // Default value for this preference
-  label        String             @db.VarChar(200) // Human-readable: "Show balance on dashboard"
-  description  String? // Extended description for UI tooltips
-  sortOrder    Int                @default(0) // Display order within category
-  isActive     Boolean            @default(true) // Soft-disable without migration
-
-  userPreferences UserPreference[]
-
-  @@unique([category, key])
-  @@index([category, isActive])
-  @@map("preference_definitions")
-}
-
-/// Per-user preference values. Only stores preferences that DIFFER from the default.
-/// If a user hasn't customized a preference, it's NOT in this table — the app
-/// falls back to the default from PreferenceDefinition.
-///
-/// WHY this pattern?
-/// - Storage efficient: most users won't customize most preferences
-/// - Fast reads: one query gets ALL user overrides, merge with cached defaults
-/// - Extensible: adding a new preference is just an INSERT in PreferenceDefinition
-/// - No schema changes needed when adding/removing preferences
-model UserPreference {
-  id           String               @id @default(cuid(2))
-  userId       String
-  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  preferenceId String
-  preference   PreferenceDefinition @relation(fields: [preferenceId], references: [id], onDelete: Cascade)
-  value        Json // The user's custom value (type determined by PreferenceDefinition.dataType)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, preferenceId])
-  @@index([userId])
-  @@map("user_preferences")
-}
-
-enum PreferenceCategory {
-  DASHBOARD // What widgets/cards appear on home screen
-  APPEARANCE // Theme, font size, etc.
-  NOTIFICATIONS // Push notifications, email digests
-  PRIVACY // Data sharing, analytics opt-in
-  REGIONAL // Number format, date format, first day of week
-}
-
-enum PreferenceDataType {
-  BOOLEAN // true/false toggles
-  STRING // text values, selections
-  NUMBER // numeric values
-  JSON // complex objects (e.g., dashboard widget layout)
-  STRING_ARRAY // list of strings (e.g., visible dashboard sections)
 }
 
 // =============================================================================
@@ -521,7 +558,7 @@ enum PreferenceDataType {
 // =============================================================================
 
 enum FilePurpose {
-  AVATAR
+  ATTACHMENT
   // Agregar futuros propósitos acá
 }
 
@@ -538,20 +575,20 @@ enum FilePurpose {
 ///   to a background cron job, avoiding coupling HTTP requests to external calls.
 /// - `workspaceId` is required on every file for tenant scoping and ownership checks.
 ///
-/// CONTEXT RELATIONS (optional FKs, at most one will be set per file):
-/// - `profileAvatar` — inverse side of UserProfile.avatarFileId (no FK on File side)
+/// CONTEXT RELATIONS:
+/// - Reserved for future workspace-owned file attachments (receipts, statements, etc.)
 model File {
-  id             String    @id @default(cuid(2))
-  workspaceId    String
-  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id               String    @id @default(cuid(2))
+  workspaceId      String
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   uploadedByUserId String?
-  uploadedByUser User?     @relation("UploadedFiles", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  uploadedByUser   User?     @relation("UploadedFiles", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
 
   purpose      FilePurpose
   bucket       String      @db.VarChar(100) // "facets-public" | "facets-private"
   key          String      @db.VarChar(500) // path en R2: "avatars/<uuid>.webp"
   mimeType     String      @db.VarChar(100) // detectado por magic bytes en el servidor
-  size         Int         // tamaño en bytes
+  size         Int // tamaño en bytes
   originalName String      @db.VarChar(255) // nombre original del cliente (solo display)
 
   publicUrl String? @db.VarChar(500) // solo si bucket público; NULL para privados
@@ -560,13 +597,430 @@ model File {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // soft delete — R2 cleanup via cron job
 
-  // Relación inversa con UserProfile (un file puede ser avatar de un perfil, o de ninguno)
-  profileAvatar UserProfile? @relation("ProfileAvatar")
-
   @@unique([bucket, key])
   @@index([workspaceId])
   @@index([workspaceId, purpose])
   @@index([uploadedByUserId])
   @@index([deletedAt])
   @@map("files")
+}
+
+// =============================================================================
+// PHASE 14: Financial Core (Cashflow-first MVP)
+// =============================================================================
+
+enum AccountType {
+  CASH
+  BANK
+  CREDIT_CARD
+  DEBT
+  LOAN
+  LENT_MONEY
+}
+
+enum AccountStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum LentMoneyStatus {
+  OPEN
+  SETTLED
+  FORGIVEN
+}
+
+enum CategoryKind {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionDirection {
+  INFLOW
+  OUTFLOW
+}
+
+enum TransactionKind {
+  STANDARD
+  FUNDS_MOVEMENT
+  CC_PAYMENT
+  LOAN_PAYMENT
+  DEBT_PAYMENT
+  ONE_TIME
+}
+
+enum BudgetStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ReminderAmountType {
+  FIXED
+  RANGE
+}
+
+model Account {
+  id                   String        @id @default(cuid(2))
+  workspaceId          String
+  workspace            Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name                 String        @db.VarChar(120)
+  type                 AccountType
+  currencyCode         String        @db.VarChar(3)
+  currency             Currency      @relation(fields: [currencyCode], references: [code])
+  initialBalance       Decimal       @default(0) @db.Decimal(19, 4)
+  currentBalanceCached Decimal       @default(0) @db.Decimal(19, 4)
+  status               AccountStatus @default(ACTIVE)
+  includeInReports     Boolean       @default(true)
+  notes                String?       @db.Text
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  loanProfile       LoanProfile?
+  creditCardProfile CreditCardProfile?
+  debtProfile       DebtProfile?
+  lentMoneyProfile  LentMoneyProfile?
+  transactions      Transaction[]
+  reconciliations   AccountReconciliation[]
+  dailyBalances     AccountDailyBalance[]
+
+  @@unique([workspaceId, id])
+  @@index([workspaceId, type, status])
+  @@index([workspaceId, includeInReports])
+  @@index([workspaceId, currencyCode])
+  @@map("accounts")
+}
+
+model AccountDailyBalance {
+  id                String   @id @default(cuid(2))
+  accountId         String
+  account           Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  date              DateTime @db.Date
+  currencyCode      String   @db.VarChar(3)
+  currency          Currency @relation(fields: [currencyCode], references: [code])
+  openingBalance    Decimal  @default(0) @db.Decimal(19, 4)
+  inflowsAmount     Decimal  @default(0) @db.Decimal(19, 4)
+  outflowsAmount    Decimal  @default(0) @db.Decimal(19, 4)
+  adjustmentsAmount Decimal  @default(0) @db.Decimal(19, 4)
+  closingBalance    Decimal  @default(0) @db.Decimal(19, 4)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([accountId, date])
+  @@index([accountId, date])
+  @@index([date])
+  @@map("account_daily_balances")
+}
+
+model LoanProfile {
+  id                         String    @id @default(cuid(2))
+  accountId                  String    @unique
+  account                    Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  lenderName                 String?   @db.VarChar(120)
+  interestRate               Decimal?  @db.Decimal(8, 4)
+  estimatedInstallmentAmount Decimal?  @db.Decimal(19, 4)
+  termMonths                 Int?
+  dueDayOfMonth              Int?
+  startedAt                  DateTime? @db.Date
+  maturityDate               DateTime? @db.Date
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  @@map("loan_profiles")
+}
+
+model CreditCardProfile {
+  id                String   @id @default(cuid(2))
+  accountId         String   @unique
+  account           Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  issuerName        String?  @db.VarChar(120)
+  last4             String?  @db.VarChar(4)
+  creditLimit       Decimal? @db.Decimal(19, 4)
+  closingDayOfMonth Int?
+  dueDayOfMonth     Int?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("credit_card_profiles")
+}
+
+model DebtProfile {
+  id           String    @id @default(cuid(2))
+  accountId    String    @unique
+  account      Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  creditorName String?   @db.VarChar(120)
+  dueDate      DateTime? @db.Date
+  reference    String?   @db.VarChar(120)
+  notes        String?   @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@map("debt_profiles")
+}
+
+model LentMoneyProfile {
+  id                    String          @id @default(cuid(2))
+  accountId             String          @unique
+  account               Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  borrowerName          String?         @db.VarChar(120)
+  expectedRepaymentDate DateTime?       @db.Date
+  status                LentMoneyStatus @default(OPEN)
+  notes                 String?         @db.Text
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  @@map("lent_money_profiles")
+}
+
+model AccountReconciliation {
+  id              String   @id @default(cuid(2))
+  accountId       String
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  createdByUserId String?
+  createdByUser   User?    @relation("AccountReconciliationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  date            DateTime @db.Date
+  targetBalance   Decimal  @db.Decimal(19, 4)
+  reason          String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([accountId, date, createdAt])
+  @@index([createdByUserId])
+  @@map("account_reconciliations")
+}
+
+model Category {
+  id          String       @id @default(cuid(2))
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parentId    String?
+  parent      Category?    @relation("CategoryHierarchy", fields: [workspaceId, parentId], references: [workspaceId, id], onDelete: Restrict)
+  children    Category[]   @relation("CategoryHierarchy")
+  kind        CategoryKind
+  key         String?      @db.VarChar(100)
+  name        String       @db.VarChar(120)
+  color       String?      @db.VarChar(20)
+  icon        String?      @db.VarChar(100)
+  isActive    Boolean      @default(true)
+  sortOrder   Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  transactions       Transaction[]
+  budgetLines        BudgetLine[]
+  recurringReminders RecurringReminder[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, key])
+  @@unique([workspaceId, parentId, name, kind])
+  @@index([workspaceId, kind, isActive])
+  @@map("categories")
+}
+
+model SystemMerchant {
+  id                   String   @id @default(cuid(2))
+  name                 String   @db.VarChar(160)
+  normalizedName       String   @db.VarChar(160)
+  logoUrl              String?  @db.VarChar(500)
+  suggestedCategoryKey String?  @db.VarChar(100)
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  transactions Transaction[]
+
+  @@unique([normalizedName])
+  @@index([isActive])
+  @@map("system_merchants")
+}
+
+model WorkspaceMerchant {
+  id             String    @id @default(cuid(2))
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name           String    @db.VarChar(160)
+  normalizedName String    @db.VarChar(160)
+  logoUrl        String?   @db.VarChar(500)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  transactions Transaction[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, normalizedName])
+  @@index([workspaceId, isActive])
+  @@map("workspace_merchants")
+}
+
+model Tag {
+  id             String    @id @default(cuid(2))
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name           String    @db.VarChar(80)
+  normalizedName String    @db.VarChar(80)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  transactions TransactionTag[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, normalizedName])
+  @@index([workspaceId])
+  @@map("tags")
+}
+
+model Transaction {
+  id                    String               @id @default(cuid(2))
+  workspaceId           String
+  workspace             Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  accountId             String
+  account               Account              @relation(fields: [workspaceId, accountId], references: [workspaceId, id], onDelete: Restrict)
+  date                  DateTime             @db.Date
+  amount                Decimal              @db.Decimal(19, 4)
+  direction             TransactionDirection
+  currencyCode          String               @db.VarChar(3)
+  currency              Currency             @relation(fields: [currencyCode], references: [code])
+  description           String               @db.VarChar(255)
+  kind                  TransactionKind      @default(STANDARD)
+  categoryId            String?
+  category              Category?            @relation(fields: [workspaceId, categoryId], references: [workspaceId, id], onDelete: Restrict)
+  systemMerchantId      String?
+  systemMerchant        SystemMerchant?      @relation(fields: [systemMerchantId], references: [id], onDelete: SetNull)
+  workspaceMerchantId   String?
+  workspaceMerchant     WorkspaceMerchant?   @relation(fields: [workspaceId, workspaceMerchantId], references: [workspaceId, id], onDelete: Restrict)
+  notes                 String?              @db.Text
+  isExcludedFromReports Boolean              @default(false)
+  sourceProvider        String?              @db.VarChar(50)
+  sourceExternalId      String?              @db.VarChar(191)
+  sourceDedupKey        String?              @db.VarChar(255)
+  createdByUserId       String?
+  createdByUser         User?                @relation("TransactionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  outgoingTransfer Transfer?        @relation("TransferFromTransaction")
+  incomingTransfer Transfer?        @relation("TransferToTransaction")
+  tags             TransactionTag[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, sourceDedupKey])
+  @@unique([workspaceId, sourceProvider, sourceExternalId])
+  @@index([workspaceId, date])
+  @@index([accountId, date])
+  @@index([workspaceId, date, direction])
+  @@index([workspaceId, date, kind])
+  @@index([systemMerchantId])
+  @@index([workspaceId, workspaceMerchantId])
+  @@index([workspaceId, sourceProvider])
+  @@map("transactions")
+}
+
+model TransactionTag {
+  id            String      @id @default(cuid(2))
+  workspaceId   String
+  transactionId String
+  transaction   Transaction @relation(fields: [workspaceId, transactionId], references: [workspaceId, id], onDelete: Cascade)
+  tagId         String
+  tag           Tag         @relation(fields: [workspaceId, tagId], references: [workspaceId, id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+
+  @@unique([transactionId, tagId])
+  @@index([workspaceId])
+  @@index([tagId])
+  @@map("transaction_tags")
+}
+
+model Transfer {
+  id                String      @id @default(cuid(2))
+  workspaceId       String
+  workspace         Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  fromTransactionId String
+  fromTransaction   Transaction @relation("TransferFromTransaction", fields: [workspaceId, fromTransactionId], references: [workspaceId, id], onDelete: Restrict)
+  toTransactionId   String
+  toTransaction     Transaction @relation("TransferToTransaction", fields: [workspaceId, toTransactionId], references: [workspaceId, id], onDelete: Restrict)
+  fxRateUsed        Decimal?    @db.Decimal(20, 10)
+  notes             String?     @db.Text
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  @@unique([workspaceId, fromTransactionId])
+  @@unique([workspaceId, toTransactionId])
+  @@index([workspaceId])
+  @@map("transfers")
+}
+
+model ExchangeRate {
+  id               String   @id @default(cuid(2))
+  fromCurrencyCode String   @db.VarChar(3)
+  fromCurrency     Currency @relation("ExchangeRateFrom", fields: [fromCurrencyCode], references: [code])
+  toCurrencyCode   String   @db.VarChar(3)
+  toCurrency       Currency @relation("ExchangeRateTo", fields: [toCurrencyCode], references: [code])
+  date             DateTime @db.Date
+  rate             Decimal  @db.Decimal(20, 10)
+  source           String?  @db.VarChar(50)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([fromCurrencyCode, toCurrencyCode, date])
+  @@index([fromCurrencyCode, toCurrencyCode])
+  @@map("exchange_rates")
+}
+
+model Budget {
+  id           String       @id @default(cuid(2))
+  workspaceId  String
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  currencyCode String       @db.VarChar(3)
+  currency     Currency     @relation(fields: [currencyCode], references: [code])
+  periodStart  DateTime     @db.Date
+  periodEnd    DateTime     @db.Date
+  status       BudgetStatus @default(ACTIVE)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  lines BudgetLine[]
+
+  @@unique([workspaceId, id])
+  @@unique([workspaceId, periodStart, periodEnd])
+  @@index([workspaceId, periodStart])
+  @@map("budgets")
+}
+
+model BudgetLine {
+  id          String   @id @default(cuid(2))
+  workspaceId String
+  budgetId    String
+  budget      Budget   @relation(fields: [workspaceId, budgetId], references: [workspaceId, id], onDelete: Cascade)
+  categoryId  String
+  category    Category @relation(fields: [workspaceId, categoryId], references: [workspaceId, id], onDelete: Restrict)
+  amount      Decimal  @db.Decimal(19, 4)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([budgetId, categoryId])
+  @@index([workspaceId, categoryId])
+  @@map("budget_lines")
+}
+
+model RecurringReminder {
+  id                 String               @id @default(cuid(2))
+  workspaceId        String
+  workspace          Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name               String               @db.VarChar(120)
+  direction          TransactionDirection
+  expectedDayOfMonth Int
+  amountType         ReminderAmountType
+  amount             Decimal?             @db.Decimal(19, 4)
+  amountMin          Decimal?             @db.Decimal(19, 4)
+  amountMax          Decimal?             @db.Decimal(19, 4)
+  currencyCode       String               @db.VarChar(3)
+  currency           Currency             @relation(fields: [currencyCode], references: [code])
+  categoryId         String?
+  category           Category?            @relation(fields: [workspaceId, categoryId], references: [workspaceId, id], onDelete: Restrict)
+  isActive           Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([workspaceId, isActive])
+  @@index([workspaceId, expectedDayOfMonth])
+  @@map("recurring_reminders")
 }
