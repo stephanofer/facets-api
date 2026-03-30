@@ -13,7 +13,6 @@ import {
 } from './helpers/test-app.helper';
 import {
   PlatformRole,
-  SubscriptionStatus,
   UserStatus,
   WorkspaceMembershipStatus,
   WorkspaceRole,
@@ -71,10 +70,8 @@ describe('Auth workspace-first flows (e2e)', () => {
         role: WorkspaceRole.ADMIN,
         status: WorkspaceMembershipStatus.ACTIVE,
       },
-      plan: {
-        code: 'free',
-      },
     });
+    expect(response.body.data.user).not.toHaveProperty('plan');
 
     const persistedUser = await prisma.user.findUniqueOrThrow({
       where: { email: payload.email.toLowerCase() },
@@ -100,9 +97,7 @@ describe('Auth workspace-first flows (e2e)', () => {
     expect(persistedUser.memberships[0].workspace.settings).toMatchObject({
       displayLabel: 'Workspace Owner Workspace',
     });
-    expect(persistedUser.memberships[0].workspace.subscription).toMatchObject({
-      status: SubscriptionStatus.ACTIVE,
-    });
+    expect(persistedUser.memberships[0].workspace.subscription).toBeNull();
 
     expect(mailProviderMock.sendTemplate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -167,6 +162,7 @@ describe('Auth workspace-first flows (e2e)', () => {
         role: WorkspaceRole.ADMIN,
       },
     });
+    expect(verifyResponse.body.data.user).not.toHaveProperty('plan');
     expect(verifyResponse.headers['set-cookie']).toEqual(
       expect.arrayContaining([
         expect.stringContaining('refreshToken='),
@@ -186,6 +182,7 @@ describe('Auth workspace-first flows (e2e)', () => {
     expect(loginResponse.body.data.user.membership.id).toBe(
       createdUser.memberships[0].id,
     );
+    expect(loginResponse.body.data.user).not.toHaveProperty('plan');
 
     const accessPayload = await jwtService.verifyAsync<JwtPayload>(
       loginResponse.body.data.tokens.accessToken,
@@ -220,10 +217,8 @@ describe('Auth workspace-first flows (e2e)', () => {
         id: createdUser.memberships[0].id,
         role: WorkspaceRole.ADMIN,
       },
-      plan: {
-        code: 'free',
-      },
     });
+    expect(meResponse.body.data).not.toHaveProperty('plan');
 
     const refreshCookies = loginResponse.headers['set-cookie'];
 

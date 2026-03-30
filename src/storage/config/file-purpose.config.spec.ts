@@ -15,9 +15,9 @@ import { FilePurpose } from '../../generated/prisma/client';
 
 describe('file-purpose.config', () => {
   describe('getFilePurposeRule', () => {
-    it('should expose the configured avatar rule', () => {
-      expect(getFilePurposeRule(FilePurpose.AVATAR)).toEqual(
-        FILE_PURPOSE_CONFIG[FilePurpose.AVATAR],
+    it('should expose the configured attachment rule', () => {
+      expect(getFilePurposeRule(FilePurpose.ATTACHMENT)).toEqual(
+        FILE_PURPOSE_CONFIG[FilePurpose.ATTACHMENT],
       );
     });
 
@@ -33,7 +33,7 @@ describe('file-purpose.config', () => {
 
   describe('createFileValidators', () => {
     it('should build a parse file pipe for avatars with size and type validators', () => {
-      const pipe = createFileValidators(FilePurpose.AVATAR);
+      const pipe = createFileValidators(TRANSIENT_UPLOAD_PURPOSES.AVATAR);
       const validators = pipe.getValidators();
 
       expect(pipe).toBeInstanceOf(ParseFilePipe);
@@ -50,7 +50,7 @@ describe('file-purpose.config', () => {
     });
 
     it('should allow only the configured mime types for avatars', () => {
-      const pipe = createFileValidators(FilePurpose.AVATAR);
+      const pipe = createFileValidators(TRANSIENT_UPLOAD_PURPOSES.AVATAR);
       const validators = pipe.getValidators();
       const mimeTypeValidator = validators[1] as FileValidator;
 
@@ -72,7 +72,7 @@ describe('file-purpose.config', () => {
     });
 
     it('should require a file by default', async () => {
-      const pipe = createFileValidators(FilePurpose.AVATAR);
+      const pipe = createFileValidators(TRANSIENT_UPLOAD_PURPOSES.AVATAR);
 
       await expect(pipe.transform(undefined)).rejects.toThrow(
         'File is required',

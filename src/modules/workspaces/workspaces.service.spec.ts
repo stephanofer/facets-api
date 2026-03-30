@@ -47,6 +47,7 @@ describe('WorkspacesService', () => {
       slug: null,
       type: WorkspaceType.PERSONAL,
       status: WorkspaceStatus.ACTIVE,
+      financialDataUpdatedAt: new Date(),
       createdAt: new Date(),
       updatedAt: new Date(),
     },
@@ -56,6 +57,7 @@ describe('WorkspacesService', () => {
       userId: 'user-id',
       role: WorkspaceRole.ADMIN,
       status: WorkspaceMembershipStatus.ACTIVE,
+      invitedAt: null,
       joinedAt: new Date('2026-03-12T00:00:00.000Z'),
       invitedByUserId: null,
       createdAt: new Date(),
@@ -69,18 +71,18 @@ describe('WorkspacesService', () => {
     slug: null,
     type: WorkspaceType.PERSONAL,
     status: WorkspaceStatus.ACTIVE,
+    financialDataUpdatedAt: new Date('2026-03-12T00:00:00.000Z'),
     createdAt: new Date('2026-03-12T00:00:00.000Z'),
     updatedAt: new Date('2026-03-12T00:00:00.000Z'),
     settings: {
       id: 'settings-id',
       workspaceId,
       baseCurrencyCode: 'USD',
-      baseLanguage: 'en',
+      contentLocale: 'en-US',
       dateFormat: 'DD/MM/YYYY',
       monthStartDay: 1,
       weekStartDay: 1,
-      timezone: 'UTC',
-      locale: 'en-US',
+      financialTimezone: 'UTC',
       displayLabel: 'Primary Workspace',
       createdAt: new Date('2026-03-12T00:00:00.000Z'),
       updatedAt: new Date('2026-03-12T00:00:00.000Z'),
@@ -122,7 +124,7 @@ describe('WorkspacesService', () => {
     const result = await service.getCurrentWorkspaceSettings(principal);
 
     expect(result.settings.displayLabel).toBe('Primary Workspace');
-    expect(result.settings.timezone).toBe('UTC');
+    expect(result.settings.financialTimezone).toBe('UTC');
   });
 
   it('updates workspace type and shared settings without touching membership context', async () => {
@@ -132,9 +134,10 @@ describe('WorkspacesService', () => {
       settings: {
         ...workspaceWithSettings.settings,
         baseCurrencyCode: 'ARS',
-        baseLanguage: 'es',
+        contentLocale: 'es-AR',
         dateFormat: 'YYYY-MM-DD',
         monthStartDay: 5,
+        financialTimezone: 'America/Argentina/Buenos_Aires',
         displayLabel: 'Casa',
       },
     };
@@ -143,9 +146,10 @@ describe('WorkspacesService', () => {
     const result = await service.updateWorkspaceSettings(principal, {
       workspaceType: WorkspaceType.FAMILY,
       baseCurrencyCode: 'ARS',
-      baseLanguage: 'es',
+      contentLocale: 'es-AR',
       dateFormat: 'YYYY-MM-DD',
       monthStartDay: 5,
+      financialTimezone: 'America/Argentina/Buenos_Aires',
       displayLabel: 'Casa',
     });
 
@@ -153,9 +157,10 @@ describe('WorkspacesService', () => {
       workspaceType: WorkspaceType.FAMILY,
       settings: expect.objectContaining({
         baseCurrencyCode: 'ARS',
-        baseLanguage: 'es',
+        contentLocale: 'es-AR',
         dateFormat: 'YYYY-MM-DD',
         monthStartDay: 5,
+        financialTimezone: 'America/Argentina/Buenos_Aires',
         displayLabel: 'Casa',
       }),
     });

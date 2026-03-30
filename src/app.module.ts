@@ -10,7 +10,6 @@ import { HealthModule } from '@health/health.module';
 import { MailModule } from '@mail/mail.module';
 import { StorageModule } from '@storage/storage.module';
 import { AuthModule } from '@modules/auth/auth.module';
-import { SubscriptionsModule } from '@modules/subscriptions/subscriptions.module';
 import { VoucherAnalyzerModule } from '@modules/voucher-analyzer/voucher-analyzer.module';
 import { WorkspacesModule } from '@modules/workspaces/workspaces.module';
 import { ActiveMembershipGuard } from '@common/guards/active-membership.guard';
@@ -51,7 +50,7 @@ import { WorkspaceRoleGuard } from '@common/guards/workspace-role.guard';
       ],
     }),
 
-    // In-memory cache (plans, features — near-static data)
+    // In-memory cache for shared application data
     CacheModule.register({
       ttl: 300_000, // 5 minutes default TTL (in ms)
       isGlobal: true,
@@ -60,7 +59,6 @@ import { WorkspaceRoleGuard } from '@common/guards/workspace-role.guard';
     // Feature modules
     HealthModule,
     AuthModule,
-    SubscriptionsModule,
     WorkspacesModule,
     VoucherAnalyzerModule,
   ],

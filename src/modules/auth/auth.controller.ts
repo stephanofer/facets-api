@@ -48,8 +48,10 @@ import {
 import { Public } from '@common/decorators/public.decorator';
 import { CurrentPrincipal } from '@common/decorators/current-principal.decorator';
 import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
-import { createFileValidators } from '@storage/config/file-purpose.config';
-import { FilePurpose } from '../../generated/prisma/client';
+import {
+  createFileValidators,
+  TRANSIENT_UPLOAD_PURPOSES,
+} from '@storage/config/file-purpose.config';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -68,7 +70,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Register new user',
     description:
-      'Create a new user account and atomically bootstrap a personal workspace, admin membership, workspace settings, and free workspace subscription. A verification OTP will be sent to the provided email.',
+      'Create a new user account and atomically bootstrap a personal workspace, admin membership, and workspace settings. A verification OTP will be sent to the provided email.',
   })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -462,7 +464,7 @@ export class AuthController {
   })
   async uploadAvatar(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
-    @UploadedFile(createFileValidators(FilePurpose.AVATAR))
+    @UploadedFile(createFileValidators(TRANSIENT_UPLOAD_PURPOSES.AVATAR))
     file: Express.Multer.File,
   ): Promise<AuthUserDto> {
     return this.authService.uploadAvatar(principal, file);

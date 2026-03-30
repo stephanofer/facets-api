@@ -2,13 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { BusinessException } from '@common/exceptions/business.exception';
 import { ERROR_CODES } from '@common/constants/app.constants';
 import { PrismaService } from '@database/prisma.service';
-import {
-  File as StoredFile,
-  FilePurpose,
-  Prisma,
-  User,
-  UserStatus,
-} from '../../generated/prisma/client';
+import { Prisma, User, UserStatus } from '../../generated/prisma/client';
 
 export type UserWithoutPassword = Omit<User, 'password'>;
 
@@ -17,6 +11,20 @@ export interface CreateUserData {
   password: string;
   firstName: string;
   lastName: string;
+}
+
+export interface UserAvatarProfile {
+  avatarUrl: string;
+  avatarStorageKey: string;
+}
+
+export interface ReplaceAvatarResult {
+  avatar: UserAvatarProfile;
+  previousAvatarStorageKey: string | null;
+}
+
+export interface RemoveAvatarResult {
+  previousAvatarStorageKey: string | null;
 }
 
 @Injectable()
@@ -125,79 +133,43 @@ export class UsersRepository {
     });
   }
 
-  /**
-   * Find the active avatar file for a user profile
-   */
-  async findAvatarByUserId(userId: string): Promise<StoredFile | null> {
+  async findAvatarByUserId(userId: string): Promise<string | null> {
     const profile = await this.prisma.userProfile.findUnique({
       where: { userId },
-      include: {
-        avatarFile: true,
-      },
+      select: { avatarUrl: true },
     });
 
-    if (!profile?.avatarFile || profile.avatarFile.deletedAt) {
-      return null;
-    }
-
-    return profile.avatarFile;
+    return profile?.avatarUrl ?? null;
   }
 
-  /**
-   * Replace the current avatar atomically and soft-delete the previous file
-   */
   async replaceAvatar(
     userId: string,
-    newAvatarFileId: string,
-  ): Promise<StoredFile> {
+    avatar: UserAvatarProfile,
+  ): Promise<ReplaceAvatarResult> {
     return this.prisma.$transaction(
       async (tx) => {
-        const newAvatar = await tx.file.findFirst({
-          where: {
-            id: newAvatarFileId,
-            uploadedByUserId: userId,
-            purpose: FilePurpose.AVATAR,
-            deletedAt: null,
-          },
-        });
-
-        if (!newAvatar) {
-          throw new BusinessException(
-            ERROR_CODES.AVATAR_FILE_NOT_FOUND,
-            'Avatar file not found for user',
-            HttpStatus.NOT_FOUND,
-          );
-        }
-
         const currentProfile = await tx.userProfile.findUnique({
           where: { userId },
-          select: { avatarFileId: true },
+          select: { avatarStorageKey: true },
         });
 
         await tx.userProfile.upsert({
           where: { userId },
           create: {
             userId,
-            avatarFileId: newAvatarFileId,
+            avatarUrl: avatar.avatarUrl,
+            avatarStorageKey: avatar.avatarStorageKey,
           },
           update: {
-            avatarFileId: newAvatarFileId,
+            avatarUrl: avatar.avatarUrl,
+            avatarStorageKey: avatar.avatarStorageKey,
           },
         });
 
-        if (
-          currentProfile?.avatarFileId &&
-          currentProfile.avatarFileId !== newAvatarFileId
-        ) {
-          await tx.file.update({
-            where: { id: currentProfile.avatarFileId },
-            data: {
-              deletedAt: new Date(),
-            },
-          });
-        }
-
-        return newAvatar;
+        return {
+          avatar,
+          previousAvatarStorageKey: currentProfile?.avatarStorageKey ?? null,
+        };
       },
       {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -205,34 +177,29 @@ export class UsersRepository {
     );
   }
 
-  /**
-   * Remove the current avatar association and soft-delete the file if present
-   */
-  async removeAvatar(userId: string): Promise<void> {
-    await this.prisma.$transaction(
+  async removeAvatar(userId: string): Promise<RemoveAvatarResult> {
+    return this.prisma.$transaction(
       async (tx) => {
         const profile = await tx.userProfile.findUnique({
           where: { userId },
-          select: { avatarFileId: true },
+          select: { avatarStorageKey: true },
         });
 
-        if (!profile?.avatarFileId) {
-          return;
+        if (!profile?.avatarStorageKey) {
+          return { previousAvatarStorageKey: null };
         }
 
         await tx.userProfile.update({
           where: { userId },
           data: {
-            avatarFileId: null,
+            avatarUrl: null,
+            avatarStorageKey: null,
           },
         });
 
-        await tx.file.update({
-          where: { id: profile.avatarFileId },
-          data: {
-            deletedAt: new Date(),
-          },
-        });
+        return {
+          previousAvatarStorageKey: profile.avatarStorageKey,
+        };
       },
       {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,

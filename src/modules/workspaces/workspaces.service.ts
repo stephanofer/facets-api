@@ -63,8 +63,8 @@ export class WorkspacesService {
           ...(dto.baseCurrencyCode !== undefined && {
             baseCurrencyCode: dto.baseCurrencyCode,
           }),
-          ...(dto.baseLanguage !== undefined && {
-            baseLanguage: dto.baseLanguage,
+          ...(dto.contentLocale !== undefined && {
+            contentLocale: dto.contentLocale,
           }),
           ...(dto.dateFormat !== undefined && { dateFormat: dto.dateFormat }),
           ...(dto.monthStartDay !== undefined && {
@@ -73,8 +73,9 @@ export class WorkspacesService {
           ...(dto.weekStartDay !== undefined && {
             weekStartDay: dto.weekStartDay,
           }),
-          ...(dto.timezone !== undefined && { timezone: dto.timezone }),
-          ...(dto.locale !== undefined && { locale: dto.locale }),
+          ...(dto.financialTimezone !== undefined && {
+            financialTimezone: dto.financialTimezone,
+          }),
           ...(dto.displayLabel !== undefined && {
             displayLabel: dto.displayLabel,
           }),
@@ -130,12 +131,11 @@ export class WorkspacesService {
 
     return {
       baseCurrencyCode: workspace.settings.baseCurrencyCode,
-      baseLanguage: workspace.settings.baseLanguage,
+      contentLocale: workspace.settings.contentLocale,
       dateFormat: workspace.settings.dateFormat,
       monthStartDay: workspace.settings.monthStartDay,
       weekStartDay: workspace.settings.weekStartDay,
-      timezone: workspace.settings.timezone,
-      locale: workspace.settings.locale,
+      financialTimezone: workspace.settings.financialTimezone,
       displayLabel: workspace.settings.displayLabel,
     };
   }

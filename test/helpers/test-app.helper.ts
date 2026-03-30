@@ -25,9 +25,7 @@ import { PrismaService } from '@database/prisma.service';
 import { ConfigService } from '@config/config.service';
 import { STORAGE_PROVIDER } from '@storage/interfaces/storage-provider.interface';
 import {
-  FeatureLimitType,
   PlatformRole,
-  SubscriptionStatus,
   UserStatus,
   WorkspaceMembershipStatus,
   WorkspaceRole,
@@ -54,106 +52,6 @@ export interface TestUserContext {
 }
 
 const DEFAULT_TEST_PASSWORD = 'TestP@ss123';
-
-interface TestPlanSeed {
-  code: string;
-  name: string;
-  description: string;
-  priceMonthly: number;
-  priceYearly: number | null;
-  isDefault: boolean;
-  sortOrder: number;
-}
-
-interface TestFeatureSeed {
-  featureCode: string;
-  limitType: FeatureLimitType;
-  limitValue: number;
-}
-
-const TEST_PLAN_SEEDS: TestPlanSeed[] = [
-  {
-    code: 'free',
-    name: 'Free',
-    description: 'Default workspace plan for automated tests',
-    priceMonthly: 0,
-    priceYearly: null,
-    isDefault: true,
-    sortOrder: 0,
-  },
-  {
-    code: 'pro',
-    name: 'Pro',
-    description: 'Pro workspace plan for automated tests',
-    priceMonthly: 4.99,
-    priceYearly: 49.99,
-    isDefault: false,
-    sortOrder: 1,
-  },
-  {
-    code: 'premium',
-    name: 'Premium',
-    description: 'Premium workspace plan for automated tests',
-    priceMonthly: 9.99,
-    priceYearly: 99.99,
-    isDefault: false,
-    sortOrder: 2,
-  },
-];
-
-const TEST_PLAN_FEATURE_SEEDS: Record<string, TestFeatureSeed[]> = {
-  free: [
-    {
-      featureCode: 'advanced_reports',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 0,
-    },
-    {
-      featureCode: 'export_data',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 0,
-    },
-    {
-      featureCode: 'ai_insights',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 0,
-    },
-  ],
-  pro: [
-    {
-      featureCode: 'advanced_reports',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 1,
-    },
-    {
-      featureCode: 'export_data',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 1,
-    },
-    {
-      featureCode: 'ai_insights',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 0,
-    },
-  ],
-  premium: [
-    {
-      featureCode: 'advanced_reports',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 1,
-    },
-    {
-      featureCode: 'export_data',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 1,
-    },
-    {
-      featureCode: 'ai_insights',
-      limitType: FeatureLimitType.BOOLEAN,
-      limitValue: 1,
-    },
-  ],
-};
 
 /**
  * No-op throttler guard for E2E tests.
@@ -216,7 +114,6 @@ export async function createTestApp(): Promise<INestApplication> {
  * - personal workspace
  * - active workspace membership
  * - workspace settings
- * - active free subscription
  * - JWT access token with workspace-aware claims
  */
 export async function createTestUser(
@@ -239,14 +136,6 @@ export async function createTestUser(
   const workspaceName = `${overrides.firstName ?? 'E2E'} ${overrides.lastName ?? 'TestUser'} Workspace`;
 
   const result = await prisma.$transaction(async (tx) => {
-    const freePlan = await tx.plan.findFirst({
-      where: { isDefault: true, isActive: true },
-    });
-
-    if (!freePlan) {
-      throw new Error('Default plan not configured for E2E tests');
-    }
-
     const workspace = await tx.workspace.create({
       data: {
         name: workspaceName,
@@ -280,16 +169,6 @@ export async function createTestUser(
       data: {
         workspaceId: workspace.id,
         displayLabel: workspaceName,
-      },
-    });
-
-    await tx.subscription.create({
-      data: {
-        workspaceId: workspace.id,
-        planId: freePlan.id,
-        status: SubscriptionStatus.ACTIVE,
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: null,
       },
     });
 
@@ -436,6 +315,8 @@ export async function cleanupTestUser(
 
     await prisma.$transaction([
       prisma.usageRecord.deleteMany({ where: { workspaceId } }),
+      prisma.usageEvent.deleteMany({ where: { workspaceId } }),
+      prisma.planChangeLog.deleteMany({ where: { workspaceId } }),
       prisma.subscription.deleteMany({ where: { workspaceId } }),
       prisma.workspaceSettings.deleteMany({ where: { workspaceId } }),
       prisma.workspace.deleteMany({ where: { id: workspaceId } }),
@@ -449,73 +330,26 @@ export async function cleanDatabase(prisma: PrismaService): Promise<void> {
 }
 
 async function ensureReferenceSeedData(prisma: PrismaService): Promise<void> {
-  await prisma.currency.upsert({
-    where: { code: 'USD' },
-    update: {
-      name: 'US Dollar',
-      symbol: '$',
-      decimalScale: 2,
-      isActive: true,
-    },
-    create: {
-      code: 'USD',
-      name: 'US Dollar',
-      symbol: '$',
-      decimalScale: 2,
-      isActive: true,
-    },
-  });
-
-  for (const planSeed of TEST_PLAN_SEEDS) {
-    const plan = await prisma.plan.upsert({
-      where: { code: planSeed.code },
+  for (const currency of [
+    { code: 'USD', name: 'US Dollar', symbol: '$', decimalScale: 2 },
+    { code: 'ARS', name: 'Argentine Peso', symbol: '$', decimalScale: 2 },
+  ]) {
+    await prisma.currency.upsert({
+      where: { code: currency.code },
       update: {
-        name: planSeed.name,
-        description: planSeed.description,
-        priceMonthly: planSeed.priceMonthly,
-        priceYearly: planSeed.priceYearly,
+        name: currency.name,
+        symbol: currency.symbol,
+        decimalScale: currency.decimalScale,
         isActive: true,
-        isDefault: planSeed.isDefault,
-        sortOrder: planSeed.sortOrder,
       },
       create: {
-        code: planSeed.code,
-        name: planSeed.name,
-        description: planSeed.description,
-        priceMonthly: planSeed.priceMonthly,
-        priceYearly: planSeed.priceYearly,
+        code: currency.code,
+        name: currency.name,
+        symbol: currency.symbol,
+        decimalScale: currency.decimalScale,
         isActive: true,
-        isDefault: planSeed.isDefault,
-        sortOrder: planSeed.sortOrder,
       },
     });
-
-    const featureSeeds = TEST_PLAN_FEATURE_SEEDS[planSeed.code] ?? [];
-
-    for (const featureSeed of featureSeeds) {
-      await prisma.planFeature.upsert({
-        where: {
-          planId_featureCode: {
-            planId: plan.id,
-            featureCode: featureSeed.featureCode,
-          },
-        },
-        update: {
-          limitType: featureSeed.limitType,
-          limitValue: featureSeed.limitValue,
-          featureType: 'RESOURCE',
-          limitPeriod: null,
-        },
-        create: {
-          planId: plan.id,
-          featureCode: featureSeed.featureCode,
-          limitType: featureSeed.limitType,
-          limitValue: featureSeed.limitValue,
-          featureType: 'RESOURCE',
-          limitPeriod: null,
-        },
-      });
-    }
   }
 }
 

@@ -35,18 +35,14 @@ import { ACCESS_TOKEN_COOKIE_NAME } from '@modules/auth/strategies/jwt.strategy'
 import { REFRESH_TOKEN_COOKIE_NAME } from '@modules/auth/strategies/jwt-refresh.strategy';
 import { UsersService } from '@modules/users/users.service';
 import { OtpService } from '@modules/otp/otp.service';
-import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
 import { ConfigService } from '@config/config.service';
 import { PrismaService } from '@database/prisma.service';
 import { MailService } from '@mail/mail.service';
 import { FileService } from '@storage/services/file.service';
 import {
-  File as StoredFile,
-  FilePurpose,
   OtpType,
   PlatformRole,
   Prisma,
-  SubscriptionStatus,
   User,
   UserStatus,
   Workspace,
@@ -65,10 +61,6 @@ interface RequestMetadata {
 interface WorkspaceSessionContext {
   workspace: Workspace;
   membership: WorkspaceMembership;
-  plan?: {
-    code: string;
-    name: string;
-  };
 }
 
 @Injectable()
@@ -86,7 +78,6 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly otpService: OtpService,
     private readonly mailService: MailService,
-    private readonly subscriptionsService: SubscriptionsService,
   ) {
     this.accessTokenExpiry = this.parseExpiryToSeconds(
       this.configService.jwt.accessExpires || '1h',
@@ -109,19 +100,6 @@ export class AuthService {
 
     const { user, context } = await this.prisma.$transaction(
       async (tx) => {
-        const defaultPlan = await tx.plan.findFirst({
-          where: { isDefault: true, isActive: true },
-          include: { planFeatures: true },
-        });
-
-        if (!defaultPlan) {
-          throw new BusinessException(
-            ERROR_CODES.INTERNAL_ERROR,
-            'Default plan not configured',
-            HttpStatus.INTERNAL_SERVER_ERROR,
-          );
-        }
-
         const workspaceName = this.buildDefaultWorkspaceName(dto);
 
         const workspace = await tx.workspace.create({
@@ -160,25 +138,11 @@ export class AuthService {
           },
         });
 
-        await tx.subscription.create({
-          data: {
-            workspaceId: workspace.id,
-            planId: defaultPlan.id,
-            status: SubscriptionStatus.ACTIVE,
-            currentPeriodStart: new Date(),
-            currentPeriodEnd: null,
-          },
-        });
-
         return {
           user,
           context: {
             workspace,
             membership,
-            plan: {
-              code: defaultPlan.code,
-              name: defaultPlan.name,
-            },
           },
         };
       },
@@ -199,7 +163,7 @@ export class AuthService {
     return {
       message:
         'Registration successful. Please check your email to verify your account.',
-      user: await this.toAuthUserDto(principal, context.plan),
+      user: await this.toAuthUserDto(principal),
     };
   }
 
@@ -234,7 +198,7 @@ export class AuthService {
 
     return {
       tokens,
-      user: await this.toAuthUserDto(principal, context.plan),
+      user: await this.toAuthUserDto(principal),
     };
   }
 
@@ -277,7 +241,7 @@ export class AuthService {
     return {
       message: 'Email verified successfully. You are now logged in.',
       tokens,
-      user: await this.toAuthUserDto(principal, context.plan),
+      user: await this.toAuthUserDto(principal),
     };
   }
 
@@ -429,12 +393,9 @@ export class AuthService {
   }
 
   async getMe(principal: AuthenticatedPrincipal): Promise<AuthUserDto> {
-    const [plan, avatar] = await Promise.all([
-      this.getWorkspacePlan(principal.workspaceId),
-      this.usersService.findAvatarByUserId(principal.sub),
-    ]);
+    const avatar = await this.usersService.findAvatarByUserId(principal.sub);
 
-    return this.toAuthUserDto(principal, plan, avatar);
+    return this.toAuthUserDto(principal, avatar);
   }
 
   async uploadAvatar(
@@ -451,30 +412,30 @@ export class AuthService {
       );
     }
 
-    const uploadedAvatar = await this.fileService.upload(
+    const uploadedAvatar = await this.fileService.uploadPublicObject(
       file,
-      FilePurpose.AVATAR,
-      {
-        workspaceId: principal.workspaceId,
-        uploadedByUserId: principal.sub,
-      },
+      'avatars',
     );
 
-    let avatar: StoredFile;
-
     try {
-      avatar = await this.usersService.replaceAvatar(
-        principal.sub,
-        uploadedAvatar.id,
-      );
+      const { avatar, previousAvatarStorageKey } =
+        await this.usersService.replaceAvatar(principal.sub, {
+          avatarUrl: uploadedAvatar.publicUrl,
+          avatarStorageKey: uploadedAvatar.key,
+        });
+
+      if (
+        previousAvatarStorageKey &&
+        previousAvatarStorageKey !== avatar.avatarStorageKey
+      ) {
+        await this.safeDeleteStorageObject(previousAvatarStorageKey);
+      }
+
+      return this.toAuthUserDto({ ...principal, user }, avatar.avatarUrl);
     } catch (error) {
-      await this.safeDeleteUploadedAvatar(uploadedAvatar.id, principal.sub);
+      await this.safeDeleteStorageObject(uploadedAvatar.key);
       throw error;
     }
-
-    const plan = await this.getWorkspacePlan(principal.workspaceId);
-
-    return this.toAuthUserDto({ ...principal, user }, plan, avatar);
   }
 
   async removeAvatar(userId: string): Promise<void> {
@@ -488,22 +449,11 @@ export class AuthService {
       );
     }
 
-    await this.usersService.removeAvatar(userId);
-  }
+    const { previousAvatarStorageKey } =
+      await this.usersService.removeAvatar(userId);
 
-  private async getWorkspacePlan(
-    workspaceId: string,
-  ): Promise<{ code: string; name: string } | undefined> {
-    try {
-      const subscription =
-        await this.subscriptionsService.getWorkspaceSubscription(workspaceId);
-
-      return {
-        code: subscription.plan.code,
-        name: subscription.plan.name,
-      };
-    } catch {
-      return undefined;
+    if (previousAvatarStorageKey) {
+      await this.safeDeleteStorageObject(previousAvatarStorageKey);
     }
   }
 
@@ -600,8 +550,7 @@ export class AuthService {
 
   private async toAuthUserDto(
     principal: AuthenticatedPrincipal,
-    plan?: { code: string; name: string },
-    avatar?: StoredFile | null,
+    avatarUrl?: string | null,
   ): Promise<AuthUserDto> {
     const { user, workspace, membership } = principal;
 
@@ -613,8 +562,7 @@ export class AuthService {
       emailVerified: user.emailVerified,
       status: user.status,
       createdAt: user.createdAt,
-      avatar: avatar ? await this.fileService.toResponseDto(avatar) : undefined,
-      plan,
+      avatarUrl: avatarUrl ?? undefined,
       workspace: {
         id: workspace.id,
         name: workspace.name,
@@ -630,20 +578,29 @@ export class AuthService {
     };
   }
 
-  private async safeDeleteUploadedAvatar(
-    fileId: string,
-    uploadedByUserId: string,
-  ): Promise<void> {
+  private async safeDeleteStorageObject(key: string): Promise<void> {
     try {
-      await this.fileService.deleteAvatar(fileId, { uploadedByUserId });
+      await this.fileService.deleteObject(this.getPublicBucketOrThrow(), key);
     } catch (cleanupError) {
       this.logger.error(
-        `Failed to cleanup uploaded avatar ${fileId} for user ${uploadedByUserId}`,
+        `Failed to cleanup avatar object ${key}`,
         cleanupError instanceof Error
           ? cleanupError.stack
           : String(cleanupError),
       );
     }
+  }
+
+  private getPublicBucketOrThrow(): string {
+    const publicBucket = this.configService.storage.publicBucket;
+
+    if (!publicBucket) {
+      throw new Error(
+        'Missing required storage configuration: R2_PUBLIC_BUCKET',
+      );
+    }
+
+    return publicBucket;
   }
 
   private buildAuthenticatedPrincipal(
@@ -692,7 +649,6 @@ export class AuthService {
     return {
       workspace: membership.workspace,
       membership,
-      plan: await this.getWorkspacePlan(membership.workspaceId),
     };
   }
 
@@ -726,7 +682,6 @@ export class AuthService {
     return {
       workspace: membership.workspace,
       membership,
-      plan: await this.getWorkspacePlan(membership.workspaceId),
     };
   }
 

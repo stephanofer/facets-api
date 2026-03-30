@@ -10,8 +10,8 @@ export class WorkspaceSettingsDto {
   @ApiProperty({ example: 'USD' })
   baseCurrencyCode: string;
 
-  @ApiProperty({ example: 'en' })
-  baseLanguage: string;
+  @ApiProperty({ example: 'en-US' })
+  contentLocale: string;
 
   @ApiProperty({ example: 'DD/MM/YYYY' })
   dateFormat: string;
@@ -23,10 +23,7 @@ export class WorkspaceSettingsDto {
   weekStartDay: number;
 
   @ApiProperty({ example: 'UTC' })
-  timezone: string;
-
-  @ApiProperty({ example: 'en-US' })
-  locale: string;
+  financialTimezone: string;
 
   @ApiProperty({ example: 'John Workspace' })
   displayLabel: string;
@@ -66,7 +63,7 @@ export class WorkspaceMembershipSummaryDto {
   status: WorkspaceMembershipStatus;
 
   @ApiProperty({ example: '2026-03-12T00:00:00.000Z' })
-  joinedAt: Date;
+  joinedAt: Date | null;
 }
 
 export class CurrentWorkspaceResponseDto {

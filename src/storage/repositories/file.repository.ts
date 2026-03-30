@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
-import { File, FilePurpose, Prisma } from '../../generated/prisma/client';
+import { File, Prisma } from '../../generated/prisma/client';
 
 const DEFAULT_CLEANUP_BATCH_SIZE = 100;
 
@@ -16,20 +16,6 @@ export class FileRepository {
     return this.prisma.file.findFirst({
       where: {
         id,
-        deletedAt: null,
-      },
-    });
-  }
-
-  findActiveAvatarById(
-    id: string,
-    uploadedByUserId: string,
-  ): Promise<File | null> {
-    return this.prisma.file.findFirst({
-      where: {
-        id,
-        purpose: FilePurpose.AVATAR,
-        uploadedByUserId,
         deletedAt: null,
       },
     });
@@ -51,17 +37,6 @@ export class FileRepository {
   markDeleted(id: string): Promise<File> {
     return this.prisma.file.update({
       where: { id },
-      data: {
-        deletedAt: new Date(),
-      },
-    });
-  }
-
-  async markDeletedAvatar(id: string, uploadedByUserId: string): Promise<File> {
-    const file = await this.findActiveAvatarById(id, uploadedByUserId);
-
-    return this.prisma.file.update({
-      where: { id: file?.id ?? id },
       data: {
         deletedAt: new Date(),
       },

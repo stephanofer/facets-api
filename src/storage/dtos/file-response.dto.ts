@@ -19,7 +19,7 @@ export class FileResponseDto {
 
   @ApiProperty({
     enum: FilePurpose,
-    example: FilePurpose.AVATAR,
+    example: FilePurpose.ATTACHMENT,
   })
   purpose: FilePurpose;
 }

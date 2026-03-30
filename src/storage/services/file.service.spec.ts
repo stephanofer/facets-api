@@ -37,7 +37,7 @@ describe('FileService', () => {
       id: 'file-1',
       workspaceId,
       uploadedByUserId,
-      purpose: FilePurpose.AVATAR,
+      purpose: FilePurpose.ATTACHMENT,
       bucket: 'facets-public',
       key: 'avatars/file-1.webp',
       mimeType: 'image/webp',
@@ -80,10 +80,8 @@ describe('FileService', () => {
     fileRepository = {
       create: jest.fn(),
       findActiveById: jest.fn(),
-      findActiveAvatarById: jest.fn(),
       findActiveWorkspaceFileById: jest.fn(),
       markDeleted: jest.fn(),
-      markDeletedAvatar: jest.fn(),
       markDeletedWorkspaceFile: jest.fn(),
       findPendingCleanup: jest.fn(),
       hardDelete: jest.fn(),
@@ -117,7 +115,7 @@ describe('FileService', () => {
   });
 
   describe('upload', () => {
-    it('should upload public avatar files and persist workspace ownership metadata', async () => {
+    it('should upload persisted attachment files and persist workspace ownership metadata', async () => {
       const file = createMulterFile(
         Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]),
         {
@@ -137,7 +135,7 @@ describe('FileService', () => {
         .mockReturnValue('11111111-1111-4111-8111-111111111111');
       fileRepository.create.mockResolvedValue(persistedFile);
 
-      const result = await service.upload(file, FilePurpose.AVATAR, {
+      const result = await service.upload(file, FilePurpose.ATTACHMENT, {
         workspaceId,
         uploadedByUserId,
       });
@@ -146,7 +144,7 @@ describe('FileService', () => {
         expect.objectContaining({
           workspaceId,
           uploadedByUserId,
-          purpose: FilePurpose.AVATAR,
+          purpose: FilePurpose.ATTACHMENT,
         }),
       );
       expect(result).toBe(persistedFile);
@@ -162,7 +160,7 @@ describe('FileService', () => {
       fileRepository.create.mockRejectedValue(persistenceError);
 
       await expect(
-        service.upload(file, FilePurpose.AVATAR, {
+        service.upload(file, FilePurpose.ATTACHMENT, {
           workspaceId,
           uploadedByUserId,
         }),
@@ -172,25 +170,29 @@ describe('FileService', () => {
     });
   });
 
-  describe('deleteAvatar', () => {
-    it('should soft delete files uploaded by the current user', async () => {
-      const file = createStoredFile();
-      const deletedFile = createStoredFile({ deletedAt: new Date() });
+  describe('uploadPublicObject', () => {
+    it('should upload transient avatar objects without persisting file rows', async () => {
+      const file = createMulterFile(Buffer.from([0x89, 0x50, 0x4e, 0x47]), {
+        originalname: 'avatar.png',
+      });
 
-      fileRepository.findActiveAvatarById.mockResolvedValue(file);
-      fileRepository.markDeletedAvatar.mockResolvedValue(deletedFile);
+      jest
+        .spyOn(crypto, 'randomUUID')
+        .mockReturnValue('11111111-1111-4111-8111-111111111111');
 
-      const result = await service.deleteAvatar(file.id, { uploadedByUserId });
+      const result = await service.uploadPublicObject(file, 'avatars');
 
-      expect(result).toBe(deletedFile);
-    });
-
-    it('should throw when the file does not exist', async () => {
-      fileRepository.findActiveAvatarById.mockResolvedValue(null);
-
-      await expect(
-        service.deleteAvatar('missing-file', { uploadedByUserId }),
-      ).rejects.toThrow(NotFoundException);
+      expect(storageProvider.upload).toHaveBeenCalledWith(
+        expect.objectContaining({
+          bucket: 'facets-public',
+          key: 'avatars/11111111-1111-4111-8111-111111111111.png',
+          mimeType: 'image/png',
+        }),
+      );
+      expect(fileRepository.create).not.toHaveBeenCalled();
+      expect(result.publicUrl).toBe(
+        'https://cdn.facets.test/avatars/11111111-1111-4111-8111-111111111111.png',
+      );
     });
   });
 

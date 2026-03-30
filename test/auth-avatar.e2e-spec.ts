@@ -49,11 +49,8 @@ describe('Auth avatar (e2e)', () => {
         .expect(200);
 
       expect(res.body.success).toBe(true);
-      expect(res.body.data.avatar).toMatchObject({
-        mimeType: 'image/png',
-        purpose: 'AVATAR',
-      });
-      expect(res.body.data.avatar.url).toContain('/avatars/');
+      expect(res.body.data.avatarUrl).toContain('/avatars/');
+      expect(res.body.data).not.toHaveProperty('plan');
     });
 
     it('should replace previous avatar and keep only one active profile reference', async () => {
@@ -75,21 +72,17 @@ describe('Auth avatar (e2e)', () => {
         })
         .expect(200);
 
-      expect(secondUpload.body.data.avatar.id).not.toBe(
-        firstUpload.body.data.avatar.id,
+      expect(secondUpload.body.data.avatarUrl).not.toBe(
+        firstUpload.body.data.avatarUrl,
       );
 
       const profile = await prisma.userProfile.findUnique({
         where: { userId },
+        select: { avatarUrl: true, avatarStorageKey: true },
       });
 
-      expect(profile?.avatarFileId).toBe(secondUpload.body.data.avatar.id);
-
-      const previousFile = await prisma.file.findUnique({
-        where: { id: firstUpload.body.data.avatar.id },
-      });
-
-      expect(previousFile?.deletedAt).not.toBeNull();
+      expect(profile?.avatarUrl).toBe(secondUpload.body.data.avatarUrl);
+      expect(profile?.avatarStorageKey).toContain('avatars/');
     });
 
     it('should reject invalid file type', async () => {
@@ -131,12 +124,8 @@ describe('Auth avatar (e2e)', () => {
         id: membershipId,
         role: WorkspaceRole.ADMIN,
       });
-      expect(res.body.data.avatar).toMatchObject({
-        id: uploadRes.body.data.avatar.id,
-        mimeType: 'image/png',
-        purpose: 'AVATAR',
-      });
-      expect(res.body.data.avatar.url).toContain('/avatars/');
+      expect(res.body.data.avatarUrl).toBe(uploadRes.body.data.avatarUrl);
+      expect(res.body.data).not.toHaveProperty('plan');
     });
   });
 
@@ -158,15 +147,11 @@ describe('Auth avatar (e2e)', () => {
 
       const profile = await prisma.userProfile.findUnique({
         where: { userId },
+        select: { avatarUrl: true, avatarStorageKey: true },
       });
 
-      expect(profile?.avatarFileId).toBeNull();
-
-      const deletedFile = await prisma.file.findUnique({
-        where: { id: uploadRes.body.data.avatar.id },
-      });
-
-      expect(deletedFile?.deletedAt).not.toBeNull();
+      expect(profile?.avatarUrl).toBeNull();
+      expect(profile?.avatarStorageKey).toBeNull();
     });
 
     it('should be idempotent when user has no avatar', async () => {
@@ -197,7 +182,7 @@ describe('Auth avatar (e2e)', () => {
         .expect(200);
 
       expect(meRes.body.success).toBe(true);
-      expect(meRes.body.data.avatar).toBeUndefined();
+      expect(meRes.body.data.avatarUrl).toBeUndefined();
     });
   });
 });

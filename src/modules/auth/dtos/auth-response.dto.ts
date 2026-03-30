@@ -1,5 +1,4 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { FileResponseDto } from '@storage/dtos/file-response.dto';
 import {
   PlatformRole,
   WorkspaceMembershipStatus,
@@ -59,23 +58,6 @@ export class TokensResponseDto {
     example: 3600,
   })
   expiresIn: number;
-}
-
-/**
- * Simplified plan info for auth responses
- */
-export class AuthPlanDto {
-  @ApiProperty({
-    description: 'Plan code',
-    example: 'free',
-  })
-  code: string;
-
-  @ApiProperty({
-    description: 'Plan display name',
-    example: 'Free',
-  })
-  name: string;
 }
 
 export class AuthWorkspaceDto {
@@ -176,16 +158,10 @@ export class AuthUserDto {
   createdAt: Date;
 
   @ApiPropertyOptional({
-    type: FileResponseDto,
-    description: 'Current user avatar file metadata',
+    description: 'Current user avatar public URL',
+    example: 'https://cdn.facets.test/avatars/avatar-123.webp',
   })
-  avatar?: FileResponseDto;
-
-  @ApiPropertyOptional({
-    type: AuthPlanDto,
-    description: 'Current workspace subscription plan',
-  })
-  plan?: AuthPlanDto;
+  avatarUrl?: string;
 
   @ApiProperty({
     type: AuthWorkspaceDto,

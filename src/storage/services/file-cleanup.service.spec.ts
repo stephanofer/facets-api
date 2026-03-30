@@ -22,7 +22,7 @@ describe('FileCleanupService', () => {
       id: 'file-1',
       workspaceId: 'workspace-1',
       uploadedByUserId: 'user-1',
-      purpose: FilePurpose.AVATAR,
+      purpose: FilePurpose.ATTACHMENT,
       bucket: 'facets-public',
       key: 'avatars/file-1.webp',
       mimeType: 'image/webp',

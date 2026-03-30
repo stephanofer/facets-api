@@ -8,12 +8,7 @@ import {
   createTestUser,
   createWorkspaceMember,
 } from './helpers/test-app.helper';
-import {
-  PreferenceCategory,
-  PreferenceDataType,
-  WorkspaceRole,
-  WorkspaceType,
-} from '../src/generated/prisma/client';
+import { WorkspaceRole, WorkspaceType } from '../src/generated/prisma/client';
 
 describe('Workspaces (e2e)', () => {
   let app: INestApplication<App>;
@@ -25,7 +20,6 @@ describe('Workspaces (e2e)', () => {
   let memberToken: string;
   let guestUserId: string;
   let guestToken: string;
-  let preferenceDefinitionId: string;
 
   beforeAll(async () => {
     app = await createTestApp();
@@ -57,34 +51,9 @@ describe('Workspaces (e2e)', () => {
     );
     guestUserId = guestUser.userId;
     guestToken = guestUser.accessToken;
-
-    const preferenceDefinition = await prisma.preferenceDefinition.create({
-      data: {
-        category: PreferenceCategory.REGIONAL,
-        key: `personal-date-format-${Date.now()}`,
-        dataType: PreferenceDataType.STRING,
-        defaultValue: 'MM/DD/YYYY',
-        label: 'Personal date format',
-      },
-    });
-    preferenceDefinitionId = preferenceDefinition.id;
-
-    await prisma.userPreference.create({
-      data: {
-        userId: adminUserId,
-        preferenceId: preferenceDefinition.id,
-        value: 'MM/DD/YYYY',
-      },
-    });
   }, 30000);
 
   afterAll(async () => {
-    await prisma.userPreference.deleteMany({
-      where: { preferenceId: preferenceDefinitionId },
-    });
-    await prisma.preferenceDefinition.deleteMany({
-      where: { id: preferenceDefinitionId },
-    });
     await cleanupTestUser(app, memberUserId);
     await cleanupTestUser(app, guestUserId);
     await cleanupTestUser(app, adminUserId);
@@ -105,7 +74,8 @@ describe('Workspaces (e2e)', () => {
     expect(res.body.data.membership.role).toBe(WorkspaceRole.ADMIN);
     expect(res.body.data.settings).toMatchObject({
       baseCurrencyCode: 'USD',
-      baseLanguage: 'en',
+      contentLocale: 'en-US',
+      financialTimezone: 'UTC',
       monthStartDay: 1,
     });
   });
@@ -123,12 +93,11 @@ describe('Workspaces (e2e)', () => {
   it('lets admins update shared workspace settings without mutating personal preferences', async () => {
     const payload = {
       baseCurrencyCode: 'ARS',
-      baseLanguage: 'es',
+      contentLocale: 'es-AR',
       dateFormat: 'YYYY-MM-DD',
       monthStartDay: 5,
       weekStartDay: 1,
-      timezone: 'America/Argentina/Buenos_Aires',
-      locale: 'es-AR',
+      financialTimezone: 'America/Argentina/Buenos_Aires',
       displayLabel: 'Casa',
       workspaceType: WorkspaceType.FAMILY,
     };
@@ -143,11 +112,10 @@ describe('Workspaces (e2e)', () => {
     expect(res.body.data.workspace.type).toBe(WorkspaceType.FAMILY);
     expect(res.body.data.settings).toMatchObject({
       baseCurrencyCode: 'ARS',
-      baseLanguage: 'es',
+      contentLocale: 'es-AR',
       dateFormat: 'YYYY-MM-DD',
       monthStartDay: 5,
-      timezone: 'America/Argentina/Buenos_Aires',
-      locale: 'es-AR',
+      financialTimezone: 'America/Argentina/Buenos_Aires',
       displayLabel: 'Casa',
     });
 
@@ -158,16 +126,10 @@ describe('Workspaces (e2e)', () => {
     expect(persistedWorkspace.type).toBe(WorkspaceType.FAMILY);
     expect(persistedWorkspace.settings).toMatchObject({
       baseCurrencyCode: 'ARS',
+      contentLocale: 'es-AR',
+      financialTimezone: 'America/Argentina/Buenos_Aires',
       displayLabel: 'Casa',
     });
-
-    const personalPreference = await prisma.userPreference.findFirstOrThrow({
-      where: {
-        userId: adminUserId,
-        preferenceId: preferenceDefinitionId,
-      },
-    });
-    expect(personalPreference.value).toBe('MM/DD/YYYY');
   });
 
   it('denies members from updating shared workspace settings', async () => {

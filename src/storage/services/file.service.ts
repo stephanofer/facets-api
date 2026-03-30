@@ -1,9 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@config/config.service';
-import {
-  FILE_PURPOSE_CONFIG,
-  getFilePurposeRule,
-} from '@storage/config/file-purpose.config';
+import { getFilePurposeRule } from '@storage/config/file-purpose.config';
 import { FileResponseDto } from '@storage/dtos/file-response.dto';
 import {
   buildFileKey,
@@ -21,12 +18,16 @@ export interface FileOwnershipContext {
   uploadedByUserId?: string;
 }
 
-export interface AvatarDeletionContext {
-  uploadedByUserId: string;
-}
-
 export interface WorkspaceFileDeletionContext {
   workspaceId: string;
+}
+
+export interface DirectUploadResult {
+  bucket: string;
+  key: string;
+  mimeType: string;
+  size: number;
+  publicUrl: string;
 }
 
 @Injectable()
@@ -77,23 +78,33 @@ export class FileService {
     }
   }
 
-  async deleteAvatar(
-    fileId: string,
-    context: AvatarDeletionContext,
-  ): Promise<File> {
-    const file = await this.fileRepository.findActiveAvatarById(
-      fileId,
-      context.uploadedByUserId,
-    );
+  async uploadPublicObject(
+    file: Express.Multer.File,
+    pathPrefix: string,
+  ): Promise<DirectUploadResult> {
+    const mimeType = detectMimeTypeFromBuffer(file.buffer);
+    const bucket = this.resolveBucketName('public');
+    const key = buildFileKey(pathPrefix, mimeType);
+    const publicUrl = this.buildPublicUrl(key);
 
-    if (!file) {
-      throw new NotFoundException('File not found');
-    }
+    await this.storageProvider.upload({
+      bucket,
+      key,
+      body: file.buffer,
+      mimeType,
+    });
 
-    return this.fileRepository.markDeletedAvatar(
-      fileId,
-      context.uploadedByUserId,
-    );
+    return {
+      bucket,
+      key,
+      mimeType,
+      size: file.size,
+      publicUrl,
+    };
+  }
+
+  async deleteObject(bucket: string, key: string): Promise<void> {
+    await this.storageProvider.delete(bucket, key);
   }
 
   async deleteWorkspaceFile(

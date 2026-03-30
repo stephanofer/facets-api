@@ -30,17 +30,15 @@ export class UpdateWorkspaceSettingsDto {
   baseCurrencyCode?: string;
 
   @ApiPropertyOptional({
-    description: 'Workspace base language shared by all members',
-    example: 'es',
+    description: 'Workspace content locale shared by all members',
+    example: 'es-AR',
   })
   @IsOptional()
   @IsString()
   @MinLength(2)
   @MaxLength(10)
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim().toLowerCase() : value,
-  )
-  baseLanguage?: string;
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  contentLocale?: string;
 
   @ApiPropertyOptional({
     description: 'Workspace-wide default date format',
@@ -73,24 +71,14 @@ export class UpdateWorkspaceSettingsDto {
   weekStartDay?: number;
 
   @ApiPropertyOptional({
-    description: 'Workspace default timezone',
+    description: 'Workspace financial timezone',
     example: 'America/Argentina/Buenos_Aires',
   })
   @IsOptional()
   @IsString()
   @MaxLength(50)
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  timezone?: string;
-
-  @ApiPropertyOptional({
-    description: 'Workspace default locale',
-    example: 'es-AR',
-  })
-  @IsOptional()
-  @IsString()
-  @MaxLength(10)
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  locale?: string;
+  financialTimezone?: string;
 
   @ApiPropertyOptional({
     description:

@@ -8,12 +8,11 @@ export type WorkspaceWithSettings = Workspace & {
 
 export interface WorkspaceSettingsUpdateData {
   baseCurrencyCode?: string;
-  baseLanguage?: string;
+  contentLocale?: string;
   dateFormat?: string;
   monthStartDay?: number;
   weekStartDay?: number;
-  timezone?: string;
-  locale?: string;
+  financialTimezone?: string;
   displayLabel?: string;
 }
 

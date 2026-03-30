@@ -9,7 +9,6 @@ import { ConfigService } from '@config/config.service';
 import { PrismaService } from '@database/prisma.service';
 import { MailService } from '@mail/mail.service';
 import { OtpService } from '@modules/otp/otp.service';
-import { SubscriptionsService } from '@modules/subscriptions/subscriptions.service';
 import { UsersService } from '@modules/users/users.service';
 import { FileService } from '@storage/services/file.service';
 import {
@@ -32,7 +31,6 @@ describe('AuthService', () => {
   let otpService: jest.Mocked<OtpService>;
   let mailService: jest.Mocked<MailService>;
   let prismaService: jest.Mocked<PrismaService>;
-  let subscriptionsService: jest.Mocked<SubscriptionsService>;
   let fileService: jest.Mocked<FileService>;
 
   const mockWorkspace = {
@@ -41,6 +39,7 @@ describe('AuthService', () => {
     slug: null,
     type: WorkspaceType.PERSONAL,
     status: WorkspaceStatus.ACTIVE,
+    financialDataUpdatedAt: new Date(),
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -66,6 +65,7 @@ describe('AuthService', () => {
     userId: mockUser.id,
     role: WorkspaceRole.ADMIN,
     status: WorkspaceMembershipStatus.ACTIVE,
+    invitedAt: null,
     joinedAt: new Date(),
     invitedByUserId: null,
     createdAt: new Date(),
@@ -90,20 +90,9 @@ describe('AuthService', () => {
     otpId: 'otp-123',
   };
 
-  const mockAvatarFile = {
-    id: 'file-1',
-    workspaceId: mockWorkspace.id,
-    uploadedByUserId: mockUser.id,
-    purpose: 'AVATAR',
-    bucket: 'facets-public',
-    key: 'avatars/file-1.png',
-    mimeType: 'image/png',
-    size: 128,
-    originalName: 'avatar.png',
-    publicUrl: 'https://cdn.facets.test/avatars/file-1.png',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    deletedAt: null,
+  const mockAvatar = {
+    avatarUrl: 'https://cdn.facets.test/avatars/file-1.png',
+    avatarStorageKey: 'avatars/file-1.png',
   };
 
   beforeEach(async () => {
@@ -180,23 +169,10 @@ describe('AuthService', () => {
           },
         },
         {
-          provide: SubscriptionsService,
-          useValue: {
-            getWorkspaceSubscription: jest.fn(),
-          },
-        },
-        {
           provide: FileService,
           useValue: {
-            upload: jest.fn(),
-            deleteAvatar: jest.fn(),
-            toResponseDto: jest.fn().mockResolvedValue({
-              id: mockAvatarFile.id,
-              url: mockAvatarFile.publicUrl,
-              mimeType: mockAvatarFile.mimeType,
-              size: mockAvatarFile.size,
-              purpose: mockAvatarFile.purpose,
-            }),
+            uploadPublicObject: jest.fn(),
+            deleteObject: jest.fn(),
           },
         },
       ],
@@ -209,7 +185,6 @@ describe('AuthService', () => {
     otpService = module.get(OtpService);
     mailService = module.get(MailService);
     prismaService = module.get(PrismaService);
-    subscriptionsService = module.get(SubscriptionsService);
     fileService = module.get(FileService);
   });
 
@@ -235,16 +210,6 @@ describe('AuthService', () => {
       (argon2.hash as jest.Mock).mockResolvedValue('hashed-password');
       prismaService.$transaction.mockImplementation(async (callback: any) => {
         const tx = {
-          plan: {
-            findFirst: jest.fn().mockResolvedValue({
-              id: 'plan-id',
-              code: 'FREE',
-              name: 'Free',
-              isDefault: true,
-              isActive: true,
-              planFeatures: [],
-            }),
-          },
           workspace: {
             create: jest.fn().mockResolvedValue(mockWorkspace),
           },
@@ -260,9 +225,6 @@ describe('AuthService', () => {
           workspaceSettings: {
             create: jest.fn().mockResolvedValue({ id: 'settings-id' }),
           },
-          subscription: {
-            create: jest.fn().mockResolvedValue({ id: 'subscription-id' }),
-          },
         };
 
         return callback(tx);
@@ -276,6 +238,7 @@ describe('AuthService', () => {
       expect(result.user.workspace.id).toBe(mockWorkspace.id);
       expect(result.user.membership.role).toBe(WorkspaceRole.ADMIN);
       expect(result.user.platformRole).toBe(PlatformRole.USER);
+      expect(result.user).not.toHaveProperty('plan');
     });
 
     it('should throw ConflictException when email already exists', async () => {
@@ -300,9 +263,6 @@ describe('AuthService', () => {
       (
         prismaService.workspaceMembership.findFirst as jest.Mock
       ).mockResolvedValue(mockMembership as never);
-      subscriptionsService.getWorkspaceSubscription.mockResolvedValue({
-        plan: { code: 'FREE', name: 'Free' },
-      } as never);
       jwtService.signAsync.mockResolvedValue('mock-token');
       refreshTokensRepository.create.mockResolvedValue(
         mockRefreshToken as never,
@@ -313,6 +273,7 @@ describe('AuthService', () => {
       expect(result.tokens.accessToken).toBe('mock-token');
       expect(result.user.workspace.id).toBe(mockWorkspace.id);
       expect(result.user.membership.id).toBe(mockMembership.id);
+      expect(result.user).not.toHaveProperty('plan');
     });
 
     it('should deny login when no active workspace membership exists', async () => {
@@ -358,9 +319,6 @@ describe('AuthService', () => {
       (
         prismaService.workspaceMembership.findFirst as jest.Mock
       ).mockResolvedValue(mockMembership as never);
-      subscriptionsService.getWorkspaceSubscription.mockResolvedValue({
-        plan: { code: 'FREE', name: 'Free' },
-      } as never);
       jwtService.signAsync.mockResolvedValue('new-token');
       refreshTokensRepository.create.mockResolvedValue(
         mockRefreshToken as never,
@@ -401,9 +359,6 @@ describe('AuthService', () => {
 
   describe('getMe', () => {
     it('should return workspace-aware user info', async () => {
-      subscriptionsService.getWorkspaceSubscription.mockResolvedValue({
-        plan: { code: 'FREE', name: 'Free' },
-      } as never);
       usersService.findAvatarByUserId.mockResolvedValue(null);
 
       const result = await authService.getMe({
@@ -421,6 +376,7 @@ describe('AuthService', () => {
 
       expect(result.workspace.id).toBe(mockWorkspace.id);
       expect(result.membership.role).toBe(WorkspaceRole.ADMIN);
+      expect(result).not.toHaveProperty('plan');
     });
   });
 
@@ -440,11 +396,17 @@ describe('AuthService', () => {
 
     it('should upload avatar using workspace-aware ownership metadata', async () => {
       usersService.findById.mockResolvedValue(mockUser);
-      usersService.replaceAvatar.mockResolvedValue(mockAvatarFile as never);
-      subscriptionsService.getWorkspaceSubscription.mockResolvedValue({
-        plan: { code: 'FREE', name: 'Free' },
+      usersService.replaceAvatar.mockResolvedValue({
+        avatar: mockAvatar,
+        previousAvatarStorageKey: null,
       } as never);
-      fileService.upload.mockResolvedValue(mockAvatarFile as never);
+      fileService.uploadPublicObject.mockResolvedValue({
+        bucket: 'facets-public',
+        key: mockAvatar.avatarStorageKey,
+        mimeType: 'image/png',
+        size: 128,
+        publicUrl: mockAvatar.avatarUrl,
+      });
 
       const result = await authService.uploadAvatar(
         {
@@ -462,11 +424,12 @@ describe('AuthService', () => {
         uploadFile,
       );
 
-      expect(fileService.upload).toHaveBeenCalledWith(uploadFile, 'AVATAR', {
-        workspaceId: mockWorkspace.id,
-        uploadedByUserId: mockUser.id,
-      });
-      expect(result.avatar?.id).toBe(mockAvatarFile.id);
+      expect(fileService.uploadPublicObject).toHaveBeenCalledWith(
+        uploadFile,
+        'avatars',
+      );
+      expect(result.avatarUrl).toBe(mockAvatar.avatarUrl);
+      expect(result).not.toHaveProperty('plan');
     });
   });
 
@@ -493,9 +456,6 @@ describe('AuthService', () => {
       (
         prismaService.workspaceMembership.findFirst as jest.Mock
       ).mockResolvedValue(mockMembership as never);
-      subscriptionsService.getWorkspaceSubscription.mockResolvedValue({
-        plan: { code: 'FREE', name: 'Free' },
-      } as never);
       jwtService.signAsync.mockResolvedValue('mock-token');
       refreshTokensRepository.create.mockResolvedValue(
         mockRefreshToken as never,
@@ -508,6 +468,7 @@ describe('AuthService', () => {
 
       expect(result.user.workspace.id).toBe(mockWorkspace.id);
       expect(result.tokens.accessToken).toBe('mock-token');
+      expect(result.user).not.toHaveProperty('plan');
       expect(otpService.verify).toHaveBeenCalledWith(
         '123456',
         mockUser.id,

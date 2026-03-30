@@ -49,4 +49,13 @@ describe('Health (e2e)', () => {
         });
     });
   });
+
+  describe('Removed billing routes', () => {
+    it('should not expose legacy billing endpoints', async () => {
+      await request(app.getHttpServer()).get('/api/plans').expect(404);
+      await request(app.getHttpServer())
+        .get('/api/subscriptions/current')
+        .expect(404);
+    });
+  });
 });

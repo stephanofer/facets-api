@@ -19,6 +19,7 @@ export interface FilePurposeRule extends UploadPurposeRule {
 }
 
 export const TRANSIENT_UPLOAD_PURPOSES = {
+  AVATAR: 'AVATAR',
   VOUCHER_ANALYSIS: 'VOUCHER_ANALYSIS',
 } as const;
 
@@ -30,11 +31,17 @@ export type UploadPurpose = FilePurpose | TransientUploadPurpose;
 export const FILE_PURPOSE_CONFIG: Partial<
   Record<FilePurpose, FilePurposeRule>
 > = {
-  [FilePurpose.AVATAR]: {
-    maxSizeBytes: 2 * 1024 * 1024,
-    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
-    bucket: 'public',
-    pathPrefix: 'avatars',
+  [FilePurpose.ATTACHMENT]: {
+    maxSizeBytes: 10 * 1024 * 1024,
+    allowedMimeTypes: [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'application/pdf',
+    ],
+    bucket: 'private',
+    pathPrefix: 'attachments',
+    presignedUrlTtl: 900,
   },
 };
 
@@ -42,6 +49,10 @@ export const TRANSIENT_UPLOAD_PURPOSE_CONFIG: Record<
   TransientUploadPurpose,
   UploadPurposeRule
 > = {
+  [TRANSIENT_UPLOAD_PURPOSES.AVATAR]: {
+    maxSizeBytes: 2 * 1024 * 1024,
+    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  },
   [TRANSIENT_UPLOAD_PURPOSES.VOUCHER_ANALYSIS]: {
     maxSizeBytes: 5 * 1024 * 1024,
     allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],

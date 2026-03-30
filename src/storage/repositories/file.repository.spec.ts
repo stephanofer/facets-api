@@ -32,7 +32,7 @@ describe('FileRepository', () => {
     const data = {
       workspaceId: 'workspace-1',
       uploadedByUserId: 'user-1',
-      purpose: FilePurpose.AVATAR,
+      purpose: FilePurpose.ATTACHMENT,
       bucket: 'facets-public',
       key: 'avatars/file.webp',
       mimeType: 'image/webp',
@@ -51,19 +51,6 @@ describe('FileRepository', () => {
     expect(prismaService.file.findFirst).toHaveBeenCalledWith({
       where: {
         id: 'file-1',
-        deletedAt: null,
-      },
-    });
-  });
-
-  it('should find active avatars by id and uploader', async () => {
-    await repository.findActiveAvatarById('file-1', 'user-1');
-
-    expect(prismaService.file.findFirst).toHaveBeenCalledWith({
-      where: {
-        id: 'file-1',
-        purpose: FilePurpose.AVATAR,
-        uploadedByUserId: 'user-1',
         deletedAt: null,
       },
     });
@@ -90,27 +77,6 @@ describe('FileRepository', () => {
 
     expect(updateArgs.where).toEqual({ id: 'file-1' });
     expect(updateArgs.data.deletedAt).toBeInstanceOf(Date);
-  });
-
-  it('should mark avatars as deleted after validating uploader ownership', async () => {
-    prismaService.file.findFirst.mockResolvedValue({ id: 'file-1' });
-
-    await repository.markDeletedAvatar('file-1', 'user-1');
-
-    expect(prismaService.file.findFirst).toHaveBeenCalledWith({
-      where: {
-        id: 'file-1',
-        purpose: FilePurpose.AVATAR,
-        uploadedByUserId: 'user-1',
-        deletedAt: null,
-      },
-    });
-    expect(prismaService.file.update).toHaveBeenCalledWith({
-      where: { id: 'file-1' },
-      data: {
-        deletedAt: expect.any(Date),
-      },
-    });
   });
 
   it('should mark workspace files as deleted after validating workspace ownership', async () => {

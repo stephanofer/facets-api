@@ -8,7 +8,6 @@ import { JwtStrategy } from '@modules/auth/strategies/jwt.strategy';
 import { JwtRefreshStrategy } from '@modules/auth/strategies/jwt-refresh.strategy';
 import { UsersModule } from '@modules/users/users.module';
 import { OtpModule } from '@modules/otp/otp.module';
-import { SubscriptionsModule } from '@modules/subscriptions/subscriptions.module';
 import { MailModule } from '@mail/mail.module';
 import { StorageModule } from '@storage/storage.module';
 
@@ -18,7 +17,6 @@ import { StorageModule } from '@storage/storage.module';
     JwtModule.register({}), // Secrets are provided per-sign in AuthService
     UsersModule,
     OtpModule,
-    SubscriptionsModule,
     MailModule,
     StorageModule,
   ],

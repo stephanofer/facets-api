@@ -534,8 +534,9 @@ model UserProfile {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // Personal details
-  phone     String? @db.VarChar(20) // E.164 format: +5491155557777
-  avatarUrl String? @db.VarChar(500)
+  phone            String? @db.VarChar(20) // E.164 format: +5491155557777
+  avatarUrl        String? @db.VarChar(500)
+  avatarStorageKey String? @db.VarChar(500)
 
   // Profile context
   countryCode String?  @db.VarChar(2)
