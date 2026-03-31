@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
-import { Workspace, WorkspaceSettings } from '../../generated/prisma/client';
+import { Workspace, WorkspaceSettings } from '@/generated/prisma/client';
 
 export type WorkspaceWithSettings = Workspace & {
   settings: WorkspaceSettings | null;

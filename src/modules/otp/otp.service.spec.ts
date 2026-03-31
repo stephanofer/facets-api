@@ -3,7 +3,7 @@ import { HttpStatus } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { OtpService } from '@modules/otp/otp.service';
 import { OtpRepository } from '@modules/otp/otp.repository';
-import { OtpType } from '../../generated/prisma/client';
+import { OtpType } from '@/generated/prisma/client';
 import { BusinessException } from '@common/exceptions/business.exception';
 import { ERROR_CODES, OTP_CONSTANTS } from '@common/constants/app.constants';
 

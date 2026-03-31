@@ -2,7 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { BusinessException } from '@common/exceptions/business.exception';
 import { ERROR_CODES } from '@common/constants/app.constants';
 import { PrismaService } from '@database/prisma.service';
-import { Prisma, User, UserStatus } from '../../generated/prisma/client';
+import { Prisma, User, UserStatus } from '@/generated/prisma/client';
 
 export type UserWithoutPassword = Omit<User, 'password'>;
 

@@ -1,5 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
-import { PlatformRole } from '../../generated/prisma/client';
+import { PlatformRole } from '@/generated/prisma/client';
 
 export const PLATFORM_ROLE_KEY = 'platformRoles';
 

@@ -8,7 +8,7 @@ import {
   createTestUser,
   createWorkspaceMember,
 } from './helpers/test-app.helper';
-import { WorkspaceRole, WorkspaceType } from '../src/generated/prisma/client';
+import { WorkspaceRole, WorkspaceType } from '@/generated/prisma/client';
 
 describe('Workspaces (e2e)', () => {
   let app: INestApplication<App>;

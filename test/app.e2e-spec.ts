@@ -3,7 +3,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import * as request from 'supertest';
 import { App } from 'supertest/types';
-import { AppModule } from './../src/app.module';
+import { AppModule } from '@/app.module';
 import { AllExceptionsFilter } from '@common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from '@common/interceptors/transform-response.interceptor';
 

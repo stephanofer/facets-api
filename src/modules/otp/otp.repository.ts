@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
-import { OtpCode, OtpType } from '../../generated/prisma/client';
+import { OtpCode, OtpType } from '@/generated/prisma/client';
 import { OTP_CONSTANTS } from '@common/constants/app.constants';
 
 export interface CreateOtpData {

@@ -7,7 +7,7 @@ import {
   cleanupTestUser,
 } from './helpers/test-app.helper';
 import { PrismaService } from '@database/prisma.service';
-import { WorkspaceRole } from '../src/generated/prisma/client';
+import { WorkspaceRole } from '@/generated/prisma/client';
 
 describe('Auth avatar (e2e)', () => {
   let app: INestApplication<App>;

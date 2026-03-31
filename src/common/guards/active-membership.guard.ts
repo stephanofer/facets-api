@@ -13,7 +13,7 @@ import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-p
 import {
   WorkspaceMembershipStatus,
   WorkspaceStatus,
-} from '../../generated/prisma/client';
+} from '@/generated/prisma/client';
 
 @Injectable()
 export class ActiveMembershipGuard implements CanActivate {

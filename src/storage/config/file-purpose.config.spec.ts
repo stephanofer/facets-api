@@ -11,7 +11,7 @@ import {
   getUploadPurposeRule,
   TRANSIENT_UPLOAD_PURPOSES,
 } from '@storage/config/file-purpose.config';
-import { FilePurpose } from '../../generated/prisma/client';
+import { FilePurpose } from '@/generated/prisma/client';
 
 describe('file-purpose.config', () => {
   describe('getFilePurposeRule', () => {

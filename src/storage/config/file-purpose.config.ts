@@ -5,7 +5,7 @@ import {
   ParseFilePipe,
 } from '@nestjs/common';
 import { detectMimeTypeFromBuffer } from '@storage/helpers/file-key.helper';
-import { FilePurpose } from '../../generated/prisma/client';
+import { FilePurpose } from '@/generated/prisma/client';
 
 export interface UploadPurposeRule {
   maxSizeBytes: number;

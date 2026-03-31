@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
-import { File, Prisma } from '../../generated/prisma/client';
+import { File, Prisma } from '@/generated/prisma/client';
 
 const DEFAULT_CLEANUP_BATCH_SIZE = 100;
 

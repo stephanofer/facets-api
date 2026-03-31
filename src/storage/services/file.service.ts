@@ -11,7 +11,7 @@ import {
   StorageProvider,
 } from '@storage/interfaces/storage-provider.interface';
 import { FileRepository } from '@storage/repositories/file.repository';
-import { File, FilePurpose } from '../../generated/prisma/client';
+import { File, FilePurpose } from '@/generated/prisma/client';
 
 export interface FileOwnershipContext {
   workspaceId: string;

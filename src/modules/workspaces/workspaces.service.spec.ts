@@ -11,7 +11,7 @@ import {
   WorkspaceRole,
   WorkspaceStatus,
   WorkspaceType,
-} from '../../generated/prisma/client';
+} from '@/generated/prisma/client';
 
 describe('WorkspacesService', () => {
   let service: WorkspacesService;

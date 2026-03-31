@@ -10,7 +10,7 @@ import {
 } from '@storage/interfaces/storage-provider.interface';
 import { FileRepository } from '@storage/repositories/file.repository';
 import { FileService } from '@storage/services/file.service';
-import { File as StoredFile, FilePurpose } from '../../generated/prisma/client';
+import { File as StoredFile, FilePurpose } from '@/generated/prisma/client';
 
 describe('FileService', () => {
   let service: FileService;

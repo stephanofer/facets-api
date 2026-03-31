@@ -5,7 +5,7 @@ import {
   WorkspaceRole,
   WorkspaceStatus,
   WorkspaceType,
-} from '../../../generated/prisma/client';
+} from '@/generated/prisma/client';
 
 /**
  * JWT Payload structure for access tokens

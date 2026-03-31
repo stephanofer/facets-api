@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { FilePurpose } from '../../generated/prisma/client';
+import { FilePurpose } from '@/generated/prisma/client';
 
 export class FileResponseDto {
   @ApiProperty({ example: 'cm8storage0001jn08abc12345' })

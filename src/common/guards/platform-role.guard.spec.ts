@@ -4,7 +4,7 @@ import { IS_PUBLIC_KEY } from '@common/decorators/public.decorator';
 import { PLATFORM_ROLE_KEY } from '@common/decorators/platform-role.decorator';
 import { BusinessException } from '@common/exceptions/business.exception';
 import { PlatformRoleGuard } from '@common/guards/platform-role.guard';
-import { PlatformRole } from '../../generated/prisma/client';
+import { PlatformRole } from '@/generated/prisma/client';
 
 describe('PlatformRoleGuard', () => {
   let reflector: jest.Mocked<Reflector>;

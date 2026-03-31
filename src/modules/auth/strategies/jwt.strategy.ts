@@ -6,7 +6,7 @@ import { ConfigService } from '@config/config.service';
 import { PrismaService } from '@database/prisma.service';
 import { UsersService } from '@modules/users/users.service';
 import { JwtPayload } from '@modules/auth/dtos/auth-response.dto';
-import { WorkspaceMembershipStatus } from '../../../generated/prisma/client';
+import { WorkspaceMembershipStatus } from '@/generated/prisma/client';
 import {
   AuthenticatedPrincipal,
   AuthenticatedUser,

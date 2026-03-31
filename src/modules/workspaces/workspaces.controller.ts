@@ -14,7 +14,7 @@ import {
   WorkspaceSettingsResponseDto,
 } from '@modules/workspaces/dtos/workspace-response.dto';
 import { WorkspacesService } from '@modules/workspaces/workspaces.service';
-import { WorkspaceRole } from '../../generated/prisma/client';
+import { WorkspaceRole } from '@/generated/prisma/client';
 
 @ApiTags('Workspaces')
 @ApiBearerAuth()

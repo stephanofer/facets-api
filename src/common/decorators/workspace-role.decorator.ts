@@ -1,5 +1,5 @@
 import { SetMetadata } from '@nestjs/common';
-import { WorkspaceRole } from '../../generated/prisma/client';
+import { WorkspaceRole } from '@/generated/prisma/client';
 
 export const WORKSPACE_ROLE_KEY = 'workspaceRoles';
 

@@ -10,7 +10,7 @@ import { HttpAdapterHost, APP_GUARD } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import * as cookieParser from 'cookie-parser';
-import { AppModule } from '../../src/app.module';
+import { AppModule } from '@/app.module';
 import { AllExceptionsFilter } from '@common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from '@common/interceptors/transform-response.interceptor';
 import {

@@ -1,6 +1,6 @@
 import { FileRepository } from '@storage/repositories/file.repository';
 import { PrismaService } from '@database/prisma.service';
-import { FilePurpose } from '../../generated/prisma/client';
+import { FilePurpose } from '@/generated/prisma/client';
 
 describe('FileRepository', () => {
   let repository: FileRepository;

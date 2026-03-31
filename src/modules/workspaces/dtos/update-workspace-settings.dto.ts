@@ -11,7 +11,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { WorkspaceType } from '../../../generated/prisma/client';
+import { WorkspaceType } from '@/generated/prisma/client';
 
 export class UpdateWorkspaceSettingsDto {
   @ApiPropertyOptional({

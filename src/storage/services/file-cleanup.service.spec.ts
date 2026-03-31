@@ -7,7 +7,7 @@ import {
 } from '@storage/interfaces/storage-provider.interface';
 import { FileRepository } from '@storage/repositories/file.repository';
 import { FileCleanupService } from '@storage/services/file-cleanup.service';
-import { File as StoredFile, FilePurpose } from '../../generated/prisma/client';
+import { File as StoredFile, FilePurpose } from '@/generated/prisma/client';
 
 describe('FileCleanupService', () => {
   let service: FileCleanupService;

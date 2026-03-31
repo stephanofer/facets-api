@@ -10,7 +10,7 @@ import { PLATFORM_ROLE_KEY } from '@common/decorators/platform-role.decorator';
 import { ERROR_CODES } from '@common/constants/app.constants';
 import { BusinessException } from '@common/exceptions/business.exception';
 import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
-import { PlatformRole } from '../../generated/prisma/client';
+import { PlatformRole } from '@/generated/prisma/client';
 
 @Injectable()
 export class PlatformRoleGuard implements CanActivate {

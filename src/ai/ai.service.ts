@@ -1,9 +1,6 @@
 import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { AiCapabilityRegistry } from '@ai/registry/ai-capability.registry';
-import {
-  AiCapabilityDefinition,
-  AiExecutionContext,
-} from '@ai/interfaces/ai-capability.interface';
+import { AiExecutionContext } from '@ai/interfaces/ai-capability.interface';
 import {
   AI_GATEWAY_CLIENT,
   AiGatewayClient,

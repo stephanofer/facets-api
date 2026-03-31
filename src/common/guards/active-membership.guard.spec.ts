@@ -10,7 +10,7 @@ import {
   WorkspaceRole,
   WorkspaceStatus,
   WorkspaceType,
-} from '../../generated/prisma/client';
+} from '@/generated/prisma/client';
 
 describe('ActiveMembershipGuard', () => {
   let reflector: jest.Mocked<Reflector>;

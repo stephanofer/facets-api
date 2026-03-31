@@ -1,6 +1,6 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
-import { User } from '../../generated/prisma/client';
+import { User } from '@/generated/prisma/client';
 
 type CurrentUserData = keyof User;
 

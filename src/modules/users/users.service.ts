@@ -6,7 +6,7 @@ import {
   ReplaceAvatarResult,
   RemoveAvatarResult,
 } from '@modules/users/users.repository';
-import { User, UserStatus } from '../../generated/prisma/client';
+import { User, UserStatus } from '@/generated/prisma/client';
 
 @Injectable()
 export class UsersService {

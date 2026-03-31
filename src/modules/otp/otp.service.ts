@@ -1,7 +1,7 @@
 import { Injectable, HttpStatus } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { OtpRepository } from '@modules/otp/otp.repository';
-import { OtpType, OtpCode } from '../../generated/prisma/client';
+import { OtpType } from '@/generated/prisma/client';
 import { OTP_CONSTANTS, ERROR_CODES } from '@common/constants/app.constants';
 import { BusinessException } from '@common/exceptions/business.exception';
 

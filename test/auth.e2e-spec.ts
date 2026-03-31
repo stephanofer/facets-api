@@ -17,8 +17,8 @@ import {
   WorkspaceMembershipStatus,
   WorkspaceRole,
   WorkspaceType,
-} from '../src/generated/prisma/client';
-import { JwtPayload } from '../src/modules/auth/dtos/auth-response.dto';
+} from '@/generated/prisma/client';
+import { JwtPayload } from '@/modules/auth/dtos/auth-response.dto';
 
 describe('Auth workspace-first flows (e2e)', () => {
   let app: INestApplication<App>;

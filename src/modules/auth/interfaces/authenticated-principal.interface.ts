@@ -4,7 +4,7 @@ import {
   User,
   Workspace,
   WorkspaceMembership,
-} from '../../../generated/prisma/client';
+} from '@/generated/prisma/client';
 
 export interface AuthenticatedPrincipal
   extends JwtPayload, WorkspaceActorBoundary {
