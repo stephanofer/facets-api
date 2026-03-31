@@ -15,6 +15,7 @@ import {
 
 describe('WorkspacesService', () => {
   let service: WorkspacesService;
+  let moduleRef: TestingModule;
   let repository: jest.Mocked<WorkspacesRepository>;
 
   const workspaceId = 'workspace-id';
@@ -90,7 +91,7 @@ describe('WorkspacesService', () => {
   };
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       providers: [
         WorkspacesService,
         {
@@ -103,8 +104,12 @@ describe('WorkspacesService', () => {
       ],
     }).compile();
 
-    service = module.get(WorkspacesService);
-    repository = module.get(WorkspacesRepository);
+    service = moduleRef.get(WorkspacesService);
+    repository = moduleRef.get(WorkspacesRepository);
+  });
+
+  afterEach(async () => {
+    await moduleRef.close();
   });
 
   it('returns the current workspace summary with shared settings', async () => {

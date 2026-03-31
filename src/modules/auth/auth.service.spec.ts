@@ -25,6 +25,7 @@ jest.mock('argon2');
 
 describe('AuthService', () => {
   let authService: AuthService;
+  let moduleRef: TestingModule;
   let usersService: jest.Mocked<UsersService>;
   let refreshTokensRepository: jest.Mocked<RefreshTokensRepository>;
   let jwtService: jest.Mocked<JwtService>;
@@ -96,7 +97,7 @@ describe('AuthService', () => {
   };
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
         {
@@ -178,14 +179,18 @@ describe('AuthService', () => {
       ],
     }).compile();
 
-    authService = module.get(AuthService);
-    usersService = module.get(UsersService);
-    refreshTokensRepository = module.get(RefreshTokensRepository);
-    jwtService = module.get(JwtService);
-    otpService = module.get(OtpService);
-    mailService = module.get(MailService);
-    prismaService = module.get(PrismaService);
-    fileService = module.get(FileService);
+    authService = moduleRef.get(AuthService);
+    usersService = moduleRef.get(UsersService);
+    refreshTokensRepository = moduleRef.get(RefreshTokensRepository);
+    jwtService = moduleRef.get(JwtService);
+    otpService = moduleRef.get(OtpService);
+    mailService = moduleRef.get(MailService);
+    prismaService = moduleRef.get(PrismaService);
+    fileService = moduleRef.get(FileService);
+  });
+
+  afterEach(async () => {
+    await moduleRef.close();
   });
 
   describe('register', () => {

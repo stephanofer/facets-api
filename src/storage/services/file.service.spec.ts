@@ -14,6 +14,7 @@ import { File as StoredFile, FilePurpose } from '@/generated/prisma/client';
 
 describe('FileService', () => {
   let service: FileService;
+  let moduleRef: TestingModule;
   let storageProvider: jest.Mocked<StorageProvider>;
   let fileRepository: jest.Mocked<FileRepository>;
   let errorSpy: jest.SpyInstance;
@@ -89,7 +90,7 @@ describe('FileService', () => {
 
     errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
 
-    const module: TestingModule = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       providers: [
         FileService,
         {
@@ -107,10 +108,11 @@ describe('FileService', () => {
       ],
     }).compile();
 
-    service = module.get<FileService>(FileService);
+    service = moduleRef.get<FileService>(FileService);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await moduleRef.close();
     jest.restoreAllMocks();
   });
 

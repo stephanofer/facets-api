@@ -9,6 +9,7 @@ import { TEMPLATE_IDS } from '@mail/templates/template.registry';
 
 describe('MailService', () => {
   let service: MailService;
+  let moduleRef: TestingModule;
   let mockProvider: jest.Mocked<MailProvider>;
 
   beforeEach(async () => {
@@ -17,7 +18,7 @@ describe('MailService', () => {
       sendTemplate: jest.fn().mockResolvedValue(undefined),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       providers: [
         MailService,
         {
@@ -27,10 +28,11 @@ describe('MailService', () => {
       ],
     }).compile();
 
-    service = module.get<MailService>(MailService);
+    service = moduleRef.get<MailService>(MailService);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await moduleRef.close();
     jest.clearAllMocks();
   });
 

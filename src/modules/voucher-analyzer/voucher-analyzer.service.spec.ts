@@ -6,6 +6,7 @@ import { ConfigService } from '@config/config.service';
 
 describe('VoucherAnalyzerService', () => {
   let service: VoucherAnalyzerService;
+  let moduleRef: TestingModule;
   let aiService: jest.Mocked<AiService>;
 
   const configService = {
@@ -15,7 +16,7 @@ describe('VoucherAnalyzerService', () => {
   } as ConfigService;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       providers: [
         VoucherAnalyzerService,
         {
@@ -31,8 +32,12 @@ describe('VoucherAnalyzerService', () => {
       ],
     }).compile();
 
-    service = module.get(VoucherAnalyzerService);
-    aiService = module.get(AiService);
+    service = moduleRef.get(VoucherAnalyzerService);
+    aiService = moduleRef.get(AiService);
+  });
+
+  afterEach(async () => {
+    await moduleRef.close();
   });
 
   it('should map a voucher response into the stable public contract', async () => {

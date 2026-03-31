@@ -11,6 +11,7 @@ import { File as StoredFile, FilePurpose } from '@/generated/prisma/client';
 
 describe('FileCleanupService', () => {
   let service: FileCleanupService;
+  let moduleRef: TestingModule;
   let storageProvider: jest.Mocked<StorageProvider>;
   let fileRepository: jest.Mocked<FileRepository>;
   let debugSpy: jest.SpyInstance;
@@ -58,7 +59,7 @@ describe('FileCleanupService', () => {
       .spyOn(Date, 'now')
       .mockReturnValue(new Date('2026-03-05T12:00:00.000Z').getTime());
 
-    const module: TestingModule = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       providers: [
         FileCleanupService,
         {
@@ -72,10 +73,11 @@ describe('FileCleanupService', () => {
       ],
     }).compile();
 
-    service = module.get<FileCleanupService>(FileCleanupService);
+    service = moduleRef.get<FileCleanupService>(FileCleanupService);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await moduleRef.close();
     jest.restoreAllMocks();
   });
 

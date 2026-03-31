@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { HttpStatus } from '@nestjs/common';
+import { HttpStatus, Logger } from '@nestjs/common';
 import { AiService } from '@ai/ai.service';
 import { AiCapabilityRegistry } from '@ai/registry/ai-capability.registry';
 import { AiResponseNormalizer } from '@ai/utils/ai-response-normalizer';
@@ -10,9 +10,11 @@ import {
 
 describe('AiService', () => {
   let service: AiService;
+  let moduleRef: TestingModule;
   let registry: jest.Mocked<AiCapabilityRegistry>;
   let normalizer: jest.Mocked<AiResponseNormalizer>;
   let client: jest.Mocked<AiGatewayClient>;
+  let loggerErrorSpy: jest.SpyInstance;
 
   const capability = {
     key: 'voucher-analyzer',
@@ -32,7 +34,11 @@ describe('AiService', () => {
   };
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    moduleRef = await Test.createTestingModule({
       providers: [
         AiService,
         {
@@ -56,10 +62,15 @@ describe('AiService', () => {
       ],
     }).compile();
 
-    service = module.get(AiService);
-    registry = module.get(AiCapabilityRegistry);
-    normalizer = module.get(AiResponseNormalizer);
-    client = module.get(AI_GATEWAY_CLIENT);
+    service = moduleRef.get(AiService);
+    registry = moduleRef.get(AiCapabilityRegistry);
+    normalizer = moduleRef.get(AiResponseNormalizer);
+    client = moduleRef.get(AI_GATEWAY_CLIENT);
+  });
+
+  afterEach(async () => {
+    await moduleRef.close();
+    loggerErrorSpy.mockRestore();
   });
 
   it('should execute a registered capability and limit metadata to five keys', async () => {

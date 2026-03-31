@@ -14,6 +14,7 @@ function hashOtp(code: string): string {
 
 describe('OtpService', () => {
   let service: OtpService;
+  let moduleRef: TestingModule;
   let repository: jest.Mocked<OtpRepository>;
 
   const mockUserId = 'user-123';
@@ -47,7 +48,7 @@ describe('OtpService', () => {
       deleteExpired: jest.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       providers: [
         OtpService,
         {
@@ -57,8 +58,12 @@ describe('OtpService', () => {
       ],
     }).compile();
 
-    service = module.get<OtpService>(OtpService);
-    repository = module.get(OtpRepository);
+    service = moduleRef.get<OtpService>(OtpService);
+    repository = moduleRef.get(OtpRepository);
+  });
+
+  afterEach(async () => {
+    await moduleRef.close();
   });
 
   describe('generate', () => {

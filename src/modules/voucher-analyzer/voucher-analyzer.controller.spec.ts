@@ -6,10 +6,11 @@ import { VoucherAnalyzerService } from '@modules/voucher-analyzer/voucher-analyz
 
 describe('VoucherAnalyzerController', () => {
   let controller: VoucherAnalyzerController;
+  let moduleRef: TestingModule;
   let service: jest.Mocked<VoucherAnalyzerService>;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       controllers: [VoucherAnalyzerController],
       providers: [
         {
@@ -21,8 +22,12 @@ describe('VoucherAnalyzerController', () => {
       ],
     }).compile();
 
-    controller = module.get(VoucherAnalyzerController);
-    service = module.get(VoucherAnalyzerService);
+    controller = moduleRef.get(VoucherAnalyzerController);
+    service = moduleRef.get(VoucherAnalyzerService);
+  });
+
+  afterEach(async () => {
+    await moduleRef.close();
   });
 
   it('should expose POST /voucher-analyzer', () => {
