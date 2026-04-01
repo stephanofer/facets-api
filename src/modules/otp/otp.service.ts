@@ -25,18 +25,10 @@ export class OtpService {
    * Generate a new OTP code for a user
    *
    * This method:
-   * 1. Checks rate limit (max 5 OTPs per hour)
-   * 2. Checks cooldown (min 60s between requests)
-   * 3. Invalidates previous OTPs of the same type
-   * 4. Creates a new OTP with the code hashed (SHA-256)
+   * 1. Invalidates previous OTPs of the same type
+   * 2. Creates a new OTP with the code hashed (SHA-256)
    */
   async generate(userId: string, type: OtpType): Promise<OtpGenerationResult> {
-    // Check rate limit and cooldown in parallel (independent checks)
-    await Promise.all([
-      this.checkRateLimit(userId, type),
-      this.checkCooldown(userId, type),
-    ]);
-
     // Invalidate previous OTPs of this type
     await this.otpRepository.invalidateAllForUser(userId, type);
 
@@ -134,47 +126,6 @@ export class OtpService {
       userId: otp.userId,
       otpId: otp.id,
     };
-  }
-
-  /**
-   * Check if user has exceeded rate limit (5 OTPs per hour)
-   */
-  private async checkRateLimit(userId: string, type: OtpType): Promise<void> {
-    const recentCount = await this.otpRepository.countRecentOtps(userId, type);
-
-    if (recentCount >= OTP_CONSTANTS.RATE_LIMIT_PER_HOUR) {
-      throw new BusinessException(
-        ERROR_CODES.OTP_RATE_LIMITED,
-        'Too many verification requests. Please try again later.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-  }
-
-  /**
-   * Check cooldown period (60 seconds between requests)
-   */
-  private async checkCooldown(userId: string, type: OtpType): Promise<void> {
-    const mostRecent = await this.otpRepository.findMostRecent(userId, type);
-
-    if (!mostRecent) {
-      return; // No previous OTP, no cooldown needed
-    }
-
-    const cooldownEnd = new Date(
-      mostRecent.createdAt.getTime() + OTP_CONSTANTS.COOLDOWN_SECONDS * 1000,
-    );
-
-    if (cooldownEnd > new Date()) {
-      const remainingSeconds = Math.ceil(
-        (cooldownEnd.getTime() - Date.now()) / 1000,
-      );
-      throw new BusinessException(
-        ERROR_CODES.OTP_COOLDOWN,
-        `Please wait ${remainingSeconds} seconds before requesting a new code.`,
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
   }
 
   /**

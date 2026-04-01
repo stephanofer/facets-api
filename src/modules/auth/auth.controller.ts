@@ -21,7 +21,6 @@ import {
   ApiBody,
   ApiConsumes,
 } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -62,10 +61,6 @@ export class AuthController {
    * Register a new user account
    */
   @Public()
-  @Throttle({
-    short: { limit: 1, ttl: 2000 },
-    medium: { limit: 3, ttl: 60000 },
-  })
   @Post('register')
   @ApiOperation({
     summary: 'Register new user',
@@ -85,10 +80,6 @@ export class AuthController {
     status: HttpStatus.BAD_REQUEST,
     description: 'Validation error',
   })
-  @ApiResponse({
-    status: HttpStatus.TOO_MANY_REQUESTS,
-    description: 'Rate limit exceeded',
-  })
   async register(@Body() dto: RegisterDto): Promise<RegisterResponseDto> {
     return this.authService.register(dto);
   }
@@ -100,10 +91,6 @@ export class AuthController {
    * Mobile/native clients should use the refresh token from the response body.
    */
   @Public()
-  @Throttle({
-    short: { limit: 1, ttl: 1000 },
-    medium: { limit: 5, ttl: 60000 },
-  })
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -123,10 +110,6 @@ export class AuthController {
   @ApiResponse({
     status: HttpStatus.FORBIDDEN,
     description: 'Account not verified or suspended',
-  })
-  @ApiResponse({
-    status: HttpStatus.TOO_MANY_REQUESTS,
-    description: 'Rate limit exceeded',
   })
   async login(
     @Body() dto: LoginDto,
@@ -155,10 +138,6 @@ export class AuthController {
    * Sets refresh token as HttpOnly cookie for web clients (auto-login).
    */
   @Public()
-  @Throttle({
-    short: { limit: 1, ttl: 1000 },
-    medium: { limit: 5, ttl: 60000 },
-  })
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -200,25 +179,16 @@ export class AuthController {
    * Resend verification email
    */
   @Public()
-  @Throttle({
-    short: { limit: 1, ttl: 2000 },
-    medium: { limit: 3, ttl: 60000 },
-  })
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Resend verification email',
-    description:
-      'Request a new verification OTP. Rate limited to prevent abuse (60s cooldown, 5/hour max).',
+    description: 'Request a new verification OTP.',
   })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Verification email sent (if account exists)',
     type: MessageResponseDto,
-  })
-  @ApiResponse({
-    status: HttpStatus.TOO_MANY_REQUESTS,
-    description: 'Rate limit exceeded or cooldown period active',
   })
   @ApiResponse({
     status: HttpStatus.BAD_REQUEST,
@@ -238,10 +208,6 @@ export class AuthController {
    * Request password reset (forgot password)
    */
   @Public()
-  @Throttle({
-    short: { limit: 1, ttl: 3000 },
-    medium: { limit: 3, ttl: 300000 },
-  })
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -254,10 +220,6 @@ export class AuthController {
     description: 'Password reset email sent (if account exists)',
     type: MessageResponseDto,
   })
-  @ApiResponse({
-    status: HttpStatus.TOO_MANY_REQUESTS,
-    description: 'Rate limit exceeded',
-  })
   async forgotPassword(
     @Body() dto: ForgotPasswordDto,
   ): Promise<MessageResponseDto> {
@@ -268,10 +230,6 @@ export class AuthController {
    * Reset password with OTP
    */
   @Public()
-  @Throttle({
-    short: { limit: 1, ttl: 1000 },
-    medium: { limit: 5, ttl: 60000 },
-  })
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

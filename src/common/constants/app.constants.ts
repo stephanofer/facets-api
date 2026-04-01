@@ -13,10 +13,6 @@ export const OTP_CONSTANTS = {
   EXPIRY_MINUTES: 10,
   /** Maximum verification attempts before lockout */
   MAX_ATTEMPTS: 5,
-  /** Minimum seconds between OTP requests (cooldown) */
-  COOLDOWN_SECONDS: 60,
-  /** Maximum OTP requests per hour (rate limit) */
-  RATE_LIMIT_PER_HOUR: 5,
   /** Reset token expiration in minutes (for password reset flow) */
   RESET_TOKEN_EXPIRY_MINUTES: 5,
 } as const;
@@ -50,8 +46,6 @@ export const ERROR_CODES = {
   INVALID_OTP: 'INVALID_OTP',
   OTP_EXPIRED: 'OTP_EXPIRED',
   OTP_MAX_ATTEMPTS: 'OTP_MAX_ATTEMPTS',
-  OTP_RATE_LIMITED: 'OTP_RATE_LIMITED',
-  OTP_COOLDOWN: 'OTP_COOLDOWN',
   USER_NOT_FOUND: 'USER_NOT_FOUND',
   EMAIL_ALREADY_VERIFIED: 'EMAIL_ALREADY_VERIFIED',
   INVALID_RESET_TOKEN: 'INVALID_RESET_TOKEN',

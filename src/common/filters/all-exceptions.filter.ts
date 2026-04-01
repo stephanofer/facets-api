@@ -10,6 +10,7 @@ import { HttpAdapterHost } from '@nestjs/core';
 import { SentryExceptionCaptured } from '@sentry/nestjs';
 import { ERROR_CODES } from '@common/constants/app.constants';
 import { ErrorResponse } from '@common/interfaces/api-response.interface';
+import { SKIP_ERROR_ENVELOPE_KEY } from '@common/decorators/raw-response.decorator';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -21,7 +22,17 @@ export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const { httpAdapter } = this.httpAdapterHost;
     const ctx = host.switchToHttp();
-    const request = ctx.getRequest();
+    const request = ctx.getRequest<{
+      id?: string;
+      method?: string;
+      url?: string;
+      [key: string]: unknown;
+    }>();
+
+    if (request?.[SKIP_ERROR_ENVELOPE_KEY] === true) {
+      this.replyWithRawError(exception, ctx.getResponse());
+      return;
+    }
 
     const { status, code, message, details } = this.parseException(exception);
 
@@ -34,7 +45,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       },
       meta: {
         timestamp: new Date().toISOString(),
-        path: request.url,
+        path: request.url ?? '',
         requestId: request.id,
       },
     };
@@ -42,12 +53,48 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // Log 5xx errors
     if (status >= 500) {
       this.logger.error(
-        `${request.method} ${request.url} ${status} - ${message}`,
+        `${request.method ?? 'UNKNOWN'} ${request.url ?? ''} ${status} - ${message}`,
         exception instanceof Error ? exception.stack : undefined,
       );
     }
 
     httpAdapter.reply(ctx.getResponse(), responseBody, status);
+  }
+
+  private replyWithRawError(exception: unknown, response: unknown): void {
+    const { httpAdapter } = this.httpAdapterHost;
+
+    if (exception instanceof HttpException) {
+      const status = exception.getStatus();
+      const payload = exception.getResponse();
+
+      if (status >= 500) {
+        this.logger.error(
+          `Raw HTTP exception ${status}`,
+          exception instanceof Error ? exception.stack : undefined,
+        );
+      }
+
+      httpAdapter.reply(response, payload, status);
+      return;
+    }
+
+    this.logger.error(
+      'Unhandled raw exception',
+      exception instanceof Error ? exception.stack : undefined,
+    );
+
+    httpAdapter.reply(
+      response,
+      {
+        status: 'error',
+        message:
+          exception instanceof Error
+            ? exception.message
+            : 'Internal server error',
+      },
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
   }
 
   private parseException(exception: unknown): {

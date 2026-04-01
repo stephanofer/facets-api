@@ -2,8 +2,8 @@
 import './instrument';
 
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
-import { HttpAdapterHost } from '@nestjs/core';
+import { RequestMethod, ValidationPipe, VersioningType } from '@nestjs/common';
+import { HttpAdapterHost, Reflector } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import * as cookieParser from 'cookie-parser';
@@ -19,6 +19,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
   const httpAdapterHost = app.get(HttpAdapterHost);
+  const reflector = app.get(Reflector);
 
   // Security
   app.use(helmet());
@@ -35,7 +36,20 @@ async function bootstrap() {
   });
 
   // Global prefix
-  app.setGlobalPrefix(configService.api.prefix);
+  app.setGlobalPrefix(configService.api.prefix, {
+    exclude: [
+      {
+        path: 'health',
+        method: RequestMethod.GET,
+      },
+      {
+        path: 'health/details',
+        method: RequestMethod.GET,
+      },
+    ],
+  });
+
+  app.enableShutdownHooks();
 
   // Global pipes
   app.useGlobalPipes(
@@ -51,7 +65,7 @@ async function bootstrap() {
 
   // Global interceptors
   app.useGlobalInterceptors(
-    new TransformResponseInterceptor(),
+    new TransformResponseInterceptor(reflector),
     new LoggingInterceptor(),
     new TimeoutInterceptor(),
   );

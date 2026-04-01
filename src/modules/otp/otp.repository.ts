@@ -100,33 +100,6 @@ export class OtpRepository {
   }
 
   /**
-   * Count OTPs created for a user in the last hour (for rate limiting)
-   */
-  async countRecentOtps(userId: string, type: OtpType): Promise<number> {
-    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-    return this.prisma.otpCode.count({
-      where: {
-        userId,
-        type,
-        createdAt: { gte: oneHourAgo },
-      },
-    });
-  }
-
-  /**
-   * Get the most recent OTP for cooldown check
-   */
-  async findMostRecent(userId: string, type: OtpType): Promise<OtpCode | null> {
-    return this.prisma.otpCode.findFirst({
-      where: {
-        userId,
-        type,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  /**
    * Delete expired OTPs (for cleanup job)
    */
   async deleteExpired(): Promise<number> {

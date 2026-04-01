@@ -43,8 +43,6 @@ describe('OtpService', () => {
       incrementAttempts: jest.fn(),
       markAsUsed: jest.fn(),
       invalidateAllForUser: jest.fn(),
-      countRecentOtps: jest.fn(),
-      findMostRecent: jest.fn(),
       deleteExpired: jest.fn(),
     };
 
@@ -68,8 +66,6 @@ describe('OtpService', () => {
 
   describe('generate', () => {
     it('should generate a 6-digit OTP code and store it hashed', async () => {
-      repository.countRecentOtps.mockResolvedValue(0);
-      repository.findMostRecent.mockResolvedValue(null);
       repository.invalidateAllForUser.mockResolvedValue(0);
       repository.create.mockImplementation(async (data) => ({
         id: mockOtpId,
@@ -100,74 +96,6 @@ describe('OtpService', () => {
         mockUserId,
         OtpType.EMAIL_VERIFICATION,
       );
-    });
-
-    it('should throw rate limit error when max OTPs per hour exceeded', async () => {
-      repository.countRecentOtps.mockResolvedValue(
-        OTP_CONSTANTS.RATE_LIMIT_PER_HOUR,
-      );
-
-      await expect(
-        service.generate(mockUserId, OtpType.EMAIL_VERIFICATION),
-      ).rejects.toThrow(BusinessException);
-
-      try {
-        await service.generate(mockUserId, OtpType.EMAIL_VERIFICATION);
-      } catch (error) {
-        expect(error).toBeInstanceOf(BusinessException);
-        expect((error as BusinessException).code).toBe(
-          ERROR_CODES.OTP_RATE_LIMITED,
-        );
-      }
-    });
-
-    it('should throw cooldown error when requested too soon', async () => {
-      repository.countRecentOtps.mockResolvedValue(0);
-      repository.findMostRecent.mockResolvedValue(
-        createMockOtp({
-          createdAt: new Date(), // Just created
-        }),
-      );
-
-      await expect(
-        service.generate(mockUserId, OtpType.EMAIL_VERIFICATION),
-      ).rejects.toThrow(BusinessException);
-
-      try {
-        await service.generate(mockUserId, OtpType.EMAIL_VERIFICATION);
-      } catch (error) {
-        expect(error).toBeInstanceOf(BusinessException);
-        expect((error as BusinessException).code).toBe(
-          ERROR_CODES.OTP_COOLDOWN,
-        );
-      }
-    });
-
-    it('should allow generation after cooldown period', async () => {
-      repository.countRecentOtps.mockResolvedValue(0);
-      repository.findMostRecent.mockResolvedValue(
-        createMockOtp({
-          createdAt: new Date(
-            Date.now() - (OTP_CONSTANTS.COOLDOWN_SECONDS + 1) * 1000,
-          ),
-        }),
-      );
-      repository.invalidateAllForUser.mockResolvedValue(0);
-      repository.create.mockImplementation(async (data) => ({
-        id: mockOtpId,
-        ...data,
-        attempts: 0,
-        maxAttempts: OTP_CONSTANTS.MAX_ATTEMPTS,
-        usedAt: null,
-        createdAt: new Date(),
-      }));
-
-      const result = await service.generate(
-        mockUserId,
-        OtpType.EMAIL_VERIFICATION,
-      );
-
-      expect(result.code).toMatch(/^\d{6}$/);
     });
   });
 

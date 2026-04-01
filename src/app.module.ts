@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { CacheModule } from '@nestjs/cache-manager';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@config/config.module';
 import { DatabaseModule } from '@database/database.module';
@@ -28,27 +27,6 @@ import { WorkspaceRoleGuard } from '@common/guards/workspace-role.guard';
     MailModule,
     StorageModule,
     AiModule,
-
-    // Multi-tier rate limiting (protects all endpoints by default)
-    ThrottlerModule.forRoot({
-      throttlers: [
-        {
-          name: 'short', // Burst protection
-          ttl: 1000, // 1 second
-          limit: 3,
-        },
-        {
-          name: 'medium', // General protection
-          ttl: 60000, // 1 minute
-          limit: 30,
-        },
-        {
-          name: 'long', // Sustained abuse protection
-          ttl: 3600000, // 1 hour
-          limit: 500,
-        },
-      ],
-    }),
 
     // In-memory cache for shared application data
     CacheModule.register({
@@ -85,14 +63,6 @@ import { WorkspaceRoleGuard } from '@common/guards/workspace-role.guard';
     {
       provide: APP_GUARD,
       useExisting: WorkspaceRoleGuard,
-    },
-    // Global rate limiting - applies to all routes
-    // Use @Throttle() to override per-endpoint, @SkipThrottle() to skip
-    // Registered with useExisting so it can be overridden in E2E tests
-    ThrottlerGuard,
-    {
-      provide: APP_GUARD,
-      useExisting: ThrottlerGuard,
     },
   ],
 })

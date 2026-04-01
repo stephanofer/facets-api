@@ -5,10 +5,13 @@ process.env.AI_REQUEST_TIMEOUT_MS ??= '30000';
 process.env.AI_METADATA_ENVIRONMENT ??= 'test';
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { HttpAdapterHost, APP_GUARD } from '@nestjs/core';
+import {
+  INestApplication,
+  RequestMethod,
+  ValidationPipe,
+} from '@nestjs/common';
+import { HttpAdapterHost, APP_GUARD, Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import * as cookieParser from 'cookie-parser';
 import { AppModule } from '@/app.module';
 import { AllExceptionsFilter } from '@common/filters/all-exceptions.filter';
@@ -53,26 +56,24 @@ export interface TestUserContext {
 
 const DEFAULT_TEST_PASSWORD = 'TestP@ss123';
 
-/**
- * No-op throttler guard for E2E tests.
- * Disables rate limiting so tests can run without delays.
- */
-class NoopThrottlerGuard {
-  canActivate(): boolean {
-    return true;
-  }
+export interface TestAppOptions {
+  overrideProviders?: Array<{
+    provide: string | symbol | Function;
+    useValue: unknown;
+  }>;
+  skipReferenceSeedData?: boolean;
 }
 
-export async function createTestApp(): Promise<INestApplication> {
+export async function createTestApp(
+  options: TestAppOptions = {},
+): Promise<INestApplication> {
   aiGatewayClientMock.executeChatCompletion.mockReset();
   mailProviderMock.send.mockReset();
   mailProviderMock.sendTemplate.mockReset();
 
-  const moduleFixture: TestingModule = await Test.createTestingModule({
+  const testingModuleBuilder = Test.createTestingModule({
     imports: [AppModule],
   })
-    .overrideProvider(ThrottlerGuard)
-    .useClass(NoopThrottlerGuard)
     .overrideProvider(STORAGE_PROVIDER)
     .useValue({
       upload: async () => undefined,
@@ -83,13 +84,26 @@ export async function createTestApp(): Promise<INestApplication> {
     .overrideProvider(AI_GATEWAY_CLIENT)
     .useValue(aiGatewayClientMock)
     .overrideProvider(MAIL_PROVIDER)
-    .useValue(mailProviderMock)
-    .compile();
+    .useValue(mailProviderMock);
+
+  for (const provider of options.overrideProviders ?? []) {
+    testingModuleBuilder
+      .overrideProvider(provider.provide)
+      .useValue(provider.useValue);
+  }
+
+  const moduleFixture: TestingModule = await testingModuleBuilder.compile();
 
   const app = moduleFixture.createNestApplication();
   const httpAdapterHost = app.get(HttpAdapterHost);
+  const reflector = app.get(Reflector);
 
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', {
+    exclude: [
+      { path: 'health', method: RequestMethod.GET },
+      { path: 'health/details', method: RequestMethod.GET },
+    ],
+  });
   app.use(cookieParser());
   app.useGlobalPipes(
     new ValidationPipe({
@@ -99,10 +113,13 @@ export async function createTestApp(): Promise<INestApplication> {
     }),
   );
   app.useGlobalFilters(new AllExceptionsFilter(httpAdapterHost));
-  app.useGlobalInterceptors(new TransformResponseInterceptor());
+  app.useGlobalInterceptors(new TransformResponseInterceptor(reflector));
 
   await app.init();
-  await ensureReferenceSeedData(app.get(PrismaService));
+
+  if (!options.skipReferenceSeedData) {
+    await ensureReferenceSeedData(app.get(PrismaService));
+  }
 
   return app;
 }
@@ -122,6 +139,7 @@ export async function createTestUser(
     email?: string;
     firstName?: string;
     lastName?: string;
+    platformRole?: PlatformRole;
     role?: WorkspaceRole;
   } = {},
 ): Promise<TestUserContext> {
@@ -152,7 +170,7 @@ export async function createTestUser(
         lastName: overrides.lastName ?? 'TestUser',
         status: UserStatus.ACTIVE,
         emailVerified: true,
-        platformRole: PlatformRole.USER,
+        platformRole: overrides.platformRole ?? PlatformRole.USER,
       },
     });
 
