@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
-import { File, Prisma } from '@/generated/prisma/client';
+import { File } from '@/generated/prisma/client';
+import type { FileUncheckedCreateInput } from '@/generated/prisma/models/File';
 
 const DEFAULT_CLEANUP_BATCH_SIZE = 100;
 
@@ -8,7 +9,7 @@ const DEFAULT_CLEANUP_BATCH_SIZE = 100;
 export class FileRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(data: Prisma.FileUncheckedCreateInput): Promise<File> {
+  create(data: FileUncheckedCreateInput): Promise<File> {
     return this.prisma.file.create({ data });
   }
 

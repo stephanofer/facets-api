@@ -31,7 +31,6 @@ describe('ActiveMembershipGuard', () => {
     workspace: {
       id: 'workspace-1',
       name: 'Workspace',
-      slug: null,
       type: WorkspaceType.PERSONAL,
       status: WorkspaceStatus.ACTIVE,
       createdAt: new Date(),

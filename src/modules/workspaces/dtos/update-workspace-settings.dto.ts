@@ -1,6 +1,5 @@
 import { Transform } from 'class-transformer';
 import {
-  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -11,7 +10,6 @@ import {
   MinLength,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { WorkspaceType } from '@/generated/prisma/client';
 
 export class UpdateWorkspaceSettingsDto {
   @ApiPropertyOptional({
@@ -36,7 +34,7 @@ export class UpdateWorkspaceSettingsDto {
   @IsOptional()
   @IsString()
   @MinLength(2)
-  @MaxLength(10)
+  @MaxLength(20)
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   contentLocale?: string;
 
@@ -79,25 +77,4 @@ export class UpdateWorkspaceSettingsDto {
   @MaxLength(50)
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   financialTimezone?: string;
-
-  @ApiPropertyOptional({
-    description:
-      'Representative label shown for the workspace across the product',
-    example: 'Casa',
-  })
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
-  displayLabel?: string;
-
-  @ApiPropertyOptional({
-    description: 'Workspace type used for shared workspace semantics',
-    enum: WorkspaceType,
-    example: WorkspaceType.FAMILY,
-  })
-  @IsOptional()
-  @IsEnum(WorkspaceType)
-  workspaceType?: WorkspaceType;
 }

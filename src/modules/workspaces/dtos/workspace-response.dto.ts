@@ -24,9 +24,6 @@ export class WorkspaceSettingsDto {
 
   @ApiProperty({ example: 'UTC' })
   financialTimezone: string;
-
-  @ApiProperty({ example: 'John Workspace' })
-  displayLabel: string;
 }
 
 export class WorkspaceSummaryDto {

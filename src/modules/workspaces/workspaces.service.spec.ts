@@ -45,7 +45,6 @@ describe('WorkspacesService', () => {
     workspace: {
       id: workspaceId,
       name: 'Primary Workspace',
-      slug: null,
       type: WorkspaceType.PERSONAL,
       status: WorkspaceStatus.ACTIVE,
       financialDataUpdatedAt: new Date(),
@@ -69,7 +68,6 @@ describe('WorkspacesService', () => {
   const workspaceWithSettings = {
     id: workspaceId,
     name: 'Primary Workspace',
-    slug: null,
     type: WorkspaceType.PERSONAL,
     status: WorkspaceStatus.ACTIVE,
     financialDataUpdatedAt: new Date('2026-03-12T00:00:00.000Z'),
@@ -84,7 +82,6 @@ describe('WorkspacesService', () => {
       monthStartDay: 1,
       weekStartDay: 1,
       financialTimezone: 'UTC',
-      displayLabel: 'Primary Workspace',
       createdAt: new Date('2026-03-12T00:00:00.000Z'),
       updatedAt: new Date('2026-03-12T00:00:00.000Z'),
     },
@@ -98,6 +95,7 @@ describe('WorkspacesService', () => {
           provide: WorkspacesRepository,
           useValue: {
             findById: jest.fn(),
+            updateWorkspace: jest.fn(),
             updateSettings: jest.fn(),
           },
         },
@@ -128,14 +126,32 @@ describe('WorkspacesService', () => {
 
     const result = await service.getCurrentWorkspaceSettings(principal);
 
-    expect(result.settings.displayLabel).toBe('Primary Workspace');
+    expect(result.settings.baseCurrencyCode).toBe('USD');
     expect(result.settings.financialTimezone).toBe('UTC');
   });
 
-  it('updates workspace type and shared settings without touching membership context', async () => {
+  it('updates workspace identity without touching shared settings', async () => {
     const updatedWorkspace = {
       ...workspaceWithSettings,
-      type: WorkspaceType.FAMILY,
+      name: 'Casa',
+    };
+    repository.updateWorkspace.mockResolvedValue(updatedWorkspace);
+
+    const result = await service.updateCurrentWorkspace(principal, {
+      name: 'Casa',
+    });
+
+    expect(repository.updateWorkspace).toHaveBeenCalledWith(workspaceId, {
+      name: 'Casa',
+    });
+    expect(result.workspace.name).toBe('Casa');
+    expect(result.membership.id).toBe(membershipId);
+    expect(result.settings.baseCurrencyCode).toBe('USD');
+  });
+
+  it('updates shared settings without mutating workspace identity', async () => {
+    const updatedWorkspace = {
+      ...workspaceWithSettings,
       settings: {
         ...workspaceWithSettings.settings,
         baseCurrencyCode: 'ARS',
@@ -143,35 +159,32 @@ describe('WorkspacesService', () => {
         dateFormat: 'YYYY-MM-DD',
         monthStartDay: 5,
         financialTimezone: 'America/Argentina/Buenos_Aires',
-        displayLabel: 'Casa',
       },
     };
     repository.updateSettings.mockResolvedValue(updatedWorkspace);
 
     const result = await service.updateWorkspaceSettings(principal, {
-      workspaceType: WorkspaceType.FAMILY,
       baseCurrencyCode: 'ARS',
       contentLocale: 'es-AR',
       dateFormat: 'YYYY-MM-DD',
       monthStartDay: 5,
       financialTimezone: 'America/Argentina/Buenos_Aires',
-      displayLabel: 'Casa',
     });
 
-    expect(repository.updateSettings).toHaveBeenCalledWith(workspaceId, {
-      workspaceType: WorkspaceType.FAMILY,
-      settings: expect.objectContaining({
+    expect(repository.updateSettings).toHaveBeenCalledWith(
+      workspaceId,
+      expect.objectContaining({
         baseCurrencyCode: 'ARS',
         contentLocale: 'es-AR',
         dateFormat: 'YYYY-MM-DD',
         monthStartDay: 5,
         financialTimezone: 'America/Argentina/Buenos_Aires',
-        displayLabel: 'Casa',
       }),
-    });
-    expect(result.workspace.type).toBe(WorkspaceType.FAMILY);
+    );
+    expect(result.workspace.type).toBe(WorkspaceType.PERSONAL);
+    expect(result.workspace.name).toBe('Primary Workspace');
     expect(result.membership.id).toBe(membershipId);
-    expect(result.settings.displayLabel).toBe('Casa');
+    expect(result.settings.baseCurrencyCode).toBe('ARS');
   });
 
   it('throws when the workspace cannot be found', async () => {

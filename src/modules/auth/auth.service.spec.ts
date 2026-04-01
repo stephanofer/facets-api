@@ -37,7 +37,6 @@ describe('AuthService', () => {
   const mockWorkspace = {
     id: 'workspace-id',
     name: 'Test User Workspace',
-    slug: null,
     type: WorkspaceType.PERSONAL,
     status: WorkspaceStatus.ACTIVE,
     financialDataUpdatedAt: new Date(),
@@ -216,7 +215,10 @@ describe('AuthService', () => {
       prismaService.$transaction.mockImplementation(async (callback: any) => {
         const tx = {
           workspace: {
-            create: jest.fn().mockResolvedValue(mockWorkspace),
+            create: jest.fn().mockResolvedValue({
+              ...mockWorkspace,
+              financialDataUpdatedAt: new Date(),
+            }),
           },
           user: {
             create: jest.fn().mockResolvedValue(createdUser),

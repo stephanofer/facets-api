@@ -1,6 +1,7 @@
 import { Body, Controller, Get, HttpStatus, Patch } from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiPropertyOptional,
   ApiOperation,
   ApiResponse,
   ApiTags,
@@ -8,6 +9,7 @@ import {
 import { CurrentPrincipal } from '@common/decorators/current-principal.decorator';
 import { RequireWorkspaceRole } from '@common/decorators/workspace-role.decorator';
 import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
+import { UpdateWorkspaceDto } from '@modules/workspaces/dtos/update-workspace.dto';
 import { UpdateWorkspaceSettingsDto } from '@modules/workspaces/dtos/update-workspace-settings.dto';
 import {
   CurrentWorkspaceResponseDto,
@@ -44,6 +46,29 @@ export class WorkspacesController {
     return this.workspacesService.getCurrentWorkspace(principal);
   }
 
+  @Patch('current')
+  @RequireWorkspaceRole(WorkspaceRole.ADMIN)
+  @ApiOperation({
+    summary: 'Update current workspace',
+    description:
+      'Update workspace identity fields for the active workspace, such as the visible name. Only workspace admins can mutate this surface.',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Workspace updated successfully',
+    type: CurrentWorkspaceResponseDto,
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Only workspace admins can update the workspace',
+  })
+  async updateCurrentWorkspace(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Body() dto: UpdateWorkspaceDto,
+  ): Promise<CurrentWorkspaceResponseDto> {
+    return this.workspacesService.updateCurrentWorkspace(principal, dto);
+  }
+
   @Get('current/settings')
   @RequireWorkspaceRole(
     WorkspaceRole.ADMIN,
@@ -71,7 +96,7 @@ export class WorkspacesController {
   @ApiOperation({
     summary: 'Update current workspace settings',
     description:
-      'Update shared workspace settings for the active workspace. Only workspace admins can mutate this surface. Personal user preferences must stay in user-scoped preference flows, not here.',
+      'Update shared workspace settings for the active workspace. Only workspace admins can mutate this surface. Workspace identity fields like name belong to PATCH /workspaces/current, not here.',
   })
   @ApiResponse({
     status: HttpStatus.OK,

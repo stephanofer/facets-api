@@ -186,7 +186,6 @@ export async function createTestUser(
     await tx.workspaceSettings.create({
       data: {
         workspaceId: workspace.id,
-        displayLabel: workspaceName,
       },
     });
 

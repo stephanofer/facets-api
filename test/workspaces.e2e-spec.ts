@@ -87,10 +87,33 @@ describe('Workspaces (e2e)', () => {
       .expect(200);
 
     expect(res.body.success).toBe(true);
-    expect(res.body.data.settings.displayLabel).toContain('Workspace');
+    expect(res.body.data.settings.baseCurrencyCode).toBe('USD');
   });
 
-  it('lets admins update shared workspace settings without mutating personal preferences', async () => {
+  it('lets admins update workspace identity separately from shared settings', async () => {
+    const payload = {
+      name: 'Casa',
+    };
+
+    const res = await request(app.getHttpServer())
+      .patch('/api/workspaces/current')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(payload)
+      .expect(200);
+
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.workspace).toMatchObject({
+      name: 'Casa',
+      type: WorkspaceType.PERSONAL,
+    });
+
+    const persistedWorkspace = await prisma.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+    });
+    expect(persistedWorkspace.name).toBe('Casa');
+  });
+
+  it('lets admins update shared workspace settings without mutating workspace identity', async () => {
     const payload = {
       baseCurrencyCode: 'ARS',
       contentLocale: 'es-AR',
@@ -98,8 +121,6 @@ describe('Workspaces (e2e)', () => {
       monthStartDay: 5,
       weekStartDay: 1,
       financialTimezone: 'America/Argentina/Buenos_Aires',
-      displayLabel: 'Casa',
-      workspaceType: WorkspaceType.FAMILY,
     };
 
     const res = await request(app.getHttpServer())
@@ -109,34 +130,50 @@ describe('Workspaces (e2e)', () => {
       .expect(200);
 
     expect(res.body.success).toBe(true);
-    expect(res.body.data.workspace.type).toBe(WorkspaceType.FAMILY);
+    expect(res.body.data.workspace.type).toBe(WorkspaceType.PERSONAL);
+    expect(res.body.data.workspace.name).toBe('Casa');
     expect(res.body.data.settings).toMatchObject({
       baseCurrencyCode: 'ARS',
       contentLocale: 'es-AR',
       dateFormat: 'YYYY-MM-DD',
       monthStartDay: 5,
       financialTimezone: 'America/Argentina/Buenos_Aires',
-      displayLabel: 'Casa',
     });
 
     const persistedWorkspace = await prisma.workspace.findUniqueOrThrow({
       where: { id: workspaceId },
       include: { settings: true },
     });
-    expect(persistedWorkspace.type).toBe(WorkspaceType.FAMILY);
+    expect(persistedWorkspace.type).toBe(WorkspaceType.PERSONAL);
+    expect(persistedWorkspace.name).toBe('Casa');
     expect(persistedWorkspace.settings).toMatchObject({
       baseCurrencyCode: 'ARS',
       contentLocale: 'es-AR',
       financialTimezone: 'America/Argentina/Buenos_Aires',
-      displayLabel: 'Casa',
     });
+  });
+
+  it('denies members from updating workspace identity', async () => {
+    await request(app.getHttpServer())
+      .patch('/api/workspaces/current')
+      .set('Authorization', `Bearer ${memberToken}`)
+      .send({ name: 'Member Hack' })
+      .expect(403);
+  });
+
+  it('denies guests from updating workspace identity', async () => {
+    await request(app.getHttpServer())
+      .patch('/api/workspaces/current')
+      .set('Authorization', `Bearer ${guestToken}`)
+      .send({ name: 'Guest Hack' })
+      .expect(403);
   });
 
   it('denies members from updating shared workspace settings', async () => {
     await request(app.getHttpServer())
       .patch('/api/workspaces/current/settings')
       .set('Authorization', `Bearer ${memberToken}`)
-      .send({ displayLabel: 'Member Hack' })
+      .send({ baseCurrencyCode: 'EUR' })
       .expect(403);
   });
 
@@ -144,7 +181,7 @@ describe('Workspaces (e2e)', () => {
     await request(app.getHttpServer())
       .patch('/api/workspaces/current/settings')
       .set('Authorization', `Bearer ${guestToken}`)
-      .send({ displayLabel: 'Guest Hack' })
+      .send({ baseCurrencyCode: 'EUR' })
       .expect(403);
   });
 });

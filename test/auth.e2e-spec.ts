@@ -94,9 +94,9 @@ describe('Auth workspace-first flows (e2e)', () => {
     expect(persistedUser.memberships[0].workspace.type).toBe(
       WorkspaceType.PERSONAL,
     );
-    expect(persistedUser.memberships[0].workspace.settings).toMatchObject({
-      displayLabel: 'Workspace Owner Workspace',
-    });
+    expect(persistedUser.memberships[0].workspace.name).toBe(
+      'Workspace Owner Workspace',
+    );
     expect(persistedUser.memberships[0].workspace.subscription).toBeNull();
 
     expect(mailProviderMock.sendTemplate).toHaveBeenCalledWith(

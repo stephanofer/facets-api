@@ -100,7 +100,6 @@ enum OtpType {
 model Workspace {
   id                     String          @id @default(cuid(2))
   name                   String          @db.VarChar(120)
-  slug                   String?         @unique @db.VarChar(120)
   type                   WorkspaceType   @default(PERSONAL)
   status                 WorkspaceStatus @default(ACTIVE)
   financialDataUpdatedAt DateTime        @default(now())
@@ -172,7 +171,6 @@ model WorkspaceSettings {
   financialTimezone String    @default("UTC") @db.VarChar(50)
   monthStartDay     Int       @default(1)
   weekStartDay      Int       @default(1)
-  displayLabel      String    @db.VarChar(100)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
@@ -483,7 +481,6 @@ model Currency {
   decimalScale Int     @default(2) // Most currencies have 2 decimal places, JPY has 0, BHD has 3
   isActive     Boolean @default(true)
 
-  userProfiles         UserProfile[]
   workspaceSettings    WorkspaceSettings[]
   accounts             Account[]
   accountDailyBalances AccountDailyBalance[]
@@ -500,20 +497,20 @@ model Currency {
 
 /// ISO 3166-1 country reference table.
 /// Seeded with ~50 most common countries. Extensible via INSERT.
-/// Used for user localization, tax rules (future), and regional features.
+/// Used for user localization, regional defaults, tax rules (future), and regional features.
 model Country {
-  code         String   @id @db.VarChar(2) // ISO 3166-1 alpha-2: US, AR, BR, etc.
-  name         String   @db.VarChar(100) // "United States", "Argentina", "Brazil"
-  currencyCode String   @db.VarChar(3) // Default currency for this country
-  currency     Currency @relation(fields: [currencyCode], references: [code])
-  phoneCode    String   @db.VarChar(10) // "+1", "+54", "+55"
-  locale       String   @default("en-US") @db.VarChar(10) // BCP 47 locale tag
-  isActive     Boolean  @default(true)
+  code                String   @id @db.VarChar(2) // ISO 3166-1 alpha-2: US, AR, BR, etc.
+  name                String   @db.VarChar(100) // "United States", "Argentina", "Brazil"
+  defaultCurrencyCode String   @db.VarChar(3) // Suggested default currency for this country
+  defaultCurrency     Currency @relation(fields: [defaultCurrencyCode], references: [code])
+  callingCode         String   @db.VarChar(10) // "+1", "+54", "+55"
+  defaultLocale       String   @default("en-US") @db.VarChar(20) // Suggested BCP 47 locale tag
+  isActive            Boolean  @default(true)
 
   userProfiles UserProfile[]
 
   @@index([isActive])
-  @@index([currencyCode])
+  @@index([defaultCurrencyCode])
   @@map("countries")
 }
 
@@ -545,10 +542,8 @@ model UserProfile {
   // Onboarding
   onboardingCompletedAt DateTime?
 
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  currency     Currency? @relation(fields: [currencyCode], references: [code])
-  currencyCode String?   @db.VarChar(3)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([countryCode])
   @@map("user_profiles")
@@ -647,6 +642,11 @@ enum TransactionKind {
   LOAN_PAYMENT
   DEBT_PAYMENT
   ONE_TIME
+}
+
+enum TransactionStatus {
+  ACTIVE
+  VOIDED
 }
 
 enum BudgetStatus {
@@ -882,6 +882,7 @@ model Transaction {
   currency              Currency             @relation(fields: [currencyCode], references: [code])
   description           String               @db.VarChar(255)
   kind                  TransactionKind      @default(STANDARD)
+  status                TransactionStatus    @default(ACTIVE)
   categoryId            String?
   category              Category?            @relation(fields: [workspaceId, categoryId], references: [workspaceId, id], onDelete: Restrict)
   systemMerchantId      String?
@@ -890,6 +891,8 @@ model Transaction {
   workspaceMerchant     WorkspaceMerchant?   @relation(fields: [workspaceId, workspaceMerchantId], references: [workspaceId, id], onDelete: Restrict)
   notes                 String?              @db.Text
   isExcludedFromReports Boolean              @default(false)
+  voidedAt              DateTime?
+  voidReason            String?              @db.VarChar(255)
   sourceProvider        String?              @db.VarChar(50)
   sourceExternalId      String?              @db.VarChar(191)
   sourceDedupKey        String?              @db.VarChar(255)
@@ -906,6 +909,7 @@ model Transaction {
   @@unique([workspaceId, sourceDedupKey])
   @@unique([workspaceId, sourceProvider, sourceExternalId])
   @@index([workspaceId, date])
+  @@index([workspaceId, status, date])
   @@index([accountId, date])
   @@index([workspaceId, date, direction])
   @@index([workspaceId, date, kind])

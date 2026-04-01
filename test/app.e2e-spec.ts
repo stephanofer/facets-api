@@ -49,7 +49,6 @@ describe('Health (e2e)', () => {
       name: 'Health Workspace',
       type: 'PERSONAL',
       status: WorkspaceStatus.ACTIVE,
-      slug: null,
       financialDataUpdatedAt: new Date('2026-03-31T22:00:00.000Z'),
       createdAt: new Date('2026-03-31T22:00:00.000Z'),
       updatedAt: new Date('2026-03-31T22:00:00.000Z'),

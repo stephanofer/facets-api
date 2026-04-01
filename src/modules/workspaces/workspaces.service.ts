@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { ERROR_CODES } from '@common/constants/app.constants';
 import { BusinessException } from '@common/exceptions/business.exception';
 import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
+import { UpdateWorkspaceDto } from '@modules/workspaces/dtos/update-workspace.dto';
 import { UpdateWorkspaceSettingsDto } from '@modules/workspaces/dtos/update-workspace-settings.dto';
 import {
   CurrentWorkspaceResponseDto,
@@ -51,55 +52,59 @@ export class WorkspacesService {
     };
   }
 
+  async updateCurrentWorkspace(
+    principal: AuthenticatedPrincipal,
+    dto: UpdateWorkspaceDto,
+  ): Promise<CurrentWorkspaceResponseDto> {
+    const hasWorkspaceChanges = dto.name !== undefined;
+
+    if (!hasWorkspaceChanges) {
+      return this.getCurrentWorkspace(principal);
+    }
+
+    const updatedWorkspace = await this.workspacesRepository.updateWorkspace(
+      principal.workspaceId,
+      {
+        ...(dto.name !== undefined && { name: dto.name }),
+      },
+    );
+
+    return this.toCurrentWorkspaceResponse(principal, updatedWorkspace);
+  }
+
   async updateWorkspaceSettings(
     principal: AuthenticatedPrincipal,
     dto: UpdateWorkspaceSettingsDto,
   ): Promise<CurrentWorkspaceResponseDto> {
+    const settingsUpdate = {
+      ...(dto.baseCurrencyCode !== undefined && {
+        baseCurrencyCode: dto.baseCurrencyCode,
+      }),
+      ...(dto.contentLocale !== undefined && {
+        contentLocale: dto.contentLocale,
+      }),
+      ...(dto.dateFormat !== undefined && { dateFormat: dto.dateFormat }),
+      ...(dto.monthStartDay !== undefined && {
+        monthStartDay: dto.monthStartDay,
+      }),
+      ...(dto.weekStartDay !== undefined && {
+        weekStartDay: dto.weekStartDay,
+      }),
+      ...(dto.financialTimezone !== undefined && {
+        financialTimezone: dto.financialTimezone,
+      }),
+    };
+
+    if (Object.keys(settingsUpdate).length === 0) {
+      return this.getCurrentWorkspace(principal);
+    }
+
     const updatedWorkspace = await this.workspacesRepository.updateSettings(
       principal.workspaceId,
-      {
-        workspaceType: dto.workspaceType,
-        settings: {
-          ...(dto.baseCurrencyCode !== undefined && {
-            baseCurrencyCode: dto.baseCurrencyCode,
-          }),
-          ...(dto.contentLocale !== undefined && {
-            contentLocale: dto.contentLocale,
-          }),
-          ...(dto.dateFormat !== undefined && { dateFormat: dto.dateFormat }),
-          ...(dto.monthStartDay !== undefined && {
-            monthStartDay: dto.monthStartDay,
-          }),
-          ...(dto.weekStartDay !== undefined && {
-            weekStartDay: dto.weekStartDay,
-          }),
-          ...(dto.financialTimezone !== undefined && {
-            financialTimezone: dto.financialTimezone,
-          }),
-          ...(dto.displayLabel !== undefined && {
-            displayLabel: dto.displayLabel,
-          }),
-        },
-      },
+      settingsUpdate,
     );
 
-    return {
-      workspace: {
-        id: updatedWorkspace.id,
-        name: updatedWorkspace.name,
-        type: updatedWorkspace.type,
-        status: updatedWorkspace.status,
-        createdAt: updatedWorkspace.createdAt,
-        updatedAt: updatedWorkspace.updatedAt,
-      },
-      membership: {
-        id: principal.membership.id,
-        role: principal.membership.role,
-        status: principal.membership.status,
-        joinedAt: principal.membership.joinedAt,
-      },
-      settings: this.toSettingsDto(updatedWorkspace),
-    };
+    return this.toCurrentWorkspaceResponse(principal, updatedWorkspace);
   }
 
   private async findWorkspaceOrThrow(
@@ -136,7 +141,29 @@ export class WorkspacesService {
       monthStartDay: workspace.settings.monthStartDay,
       weekStartDay: workspace.settings.weekStartDay,
       financialTimezone: workspace.settings.financialTimezone,
-      displayLabel: workspace.settings.displayLabel,
+    };
+  }
+
+  private toCurrentWorkspaceResponse(
+    principal: AuthenticatedPrincipal,
+    workspace: WorkspaceWithSettings,
+  ): CurrentWorkspaceResponseDto {
+    return {
+      workspace: {
+        id: workspace.id,
+        name: workspace.name,
+        type: workspace.type,
+        status: workspace.status,
+        createdAt: workspace.createdAt,
+        updatedAt: workspace.updatedAt,
+      },
+      membership: {
+        id: principal.membership.id,
+        role: principal.membership.role,
+        status: principal.membership.status,
+        joinedAt: principal.membership.joinedAt,
+      },
+      settings: this.toSettingsDto(workspace),
     };
   }
 }

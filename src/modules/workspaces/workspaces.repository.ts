@@ -3,7 +3,7 @@ import { PrismaService } from '@database/prisma.service';
 import { Workspace, WorkspaceSettings } from '@/generated/prisma/client';
 
 export type WorkspaceWithSettings = Workspace & {
-  settings: WorkspaceSettings | null;
+  settings: Omit<WorkspaceSettings, 'displayLabel'> | null;
 };
 
 export interface WorkspaceSettingsUpdateData {
@@ -13,7 +13,10 @@ export interface WorkspaceSettingsUpdateData {
   monthStartDay?: number;
   weekStartDay?: number;
   financialTimezone?: string;
-  displayLabel?: string;
+}
+
+export interface WorkspaceUpdateData {
+  name?: Workspace['name'];
 }
 
 @Injectable()
@@ -27,37 +30,37 @@ export class WorkspacesRepository {
     });
   }
 
+  async updateWorkspace(
+    workspaceId: string,
+    data: WorkspaceUpdateData,
+  ): Promise<WorkspaceWithSettings> {
+    await this.prisma.workspace.update({
+      where: { id: workspaceId },
+      data,
+    });
+
+    return this.prisma.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      include: { settings: true },
+    });
+  }
+
   async updateSettings(
     workspaceId: string,
-    data: {
-      workspaceType?: Workspace['type'];
-      settings?: WorkspaceSettingsUpdateData;
-    },
+    data: WorkspaceSettingsUpdateData,
   ): Promise<WorkspaceWithSettings> {
-    return this.prisma.$transaction(async (tx) => {
-      if (data.workspaceType !== undefined) {
-        await tx.workspace.update({
-          where: { id: workspaceId },
-          data: { type: data.workspaceType },
-        });
-      }
+    await this.prisma.workspaceSettings.upsert({
+      where: { workspaceId },
+      create: {
+        workspaceId,
+        ...data,
+      },
+      update: data,
+    });
 
-      if (data.settings && Object.keys(data.settings).length > 0) {
-        await tx.workspaceSettings.upsert({
-          where: { workspaceId },
-          create: {
-            workspaceId,
-            displayLabel: 'Workspace',
-            ...data.settings,
-          },
-          update: data.settings,
-        });
-      }
-
-      return tx.workspace.findUniqueOrThrow({
-        where: { id: workspaceId },
-        include: { settings: true },
-      });
+    return this.prisma.workspace.findUniqueOrThrow({
+      where: { id: workspaceId },
+      include: { settings: true },
     });
   }
 }

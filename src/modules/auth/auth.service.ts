@@ -134,7 +134,6 @@ export class AuthService {
         await tx.workspaceSettings.create({
           data: {
             workspaceId: workspace.id,
-            displayLabel: workspaceName,
           },
         });
 
