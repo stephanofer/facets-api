@@ -5,9 +5,9 @@ import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-p
 import { WorkspacesRepository } from '@modules/workspaces/workspaces.repository';
 import { WorkspacesService } from '@modules/workspaces/workspaces.service';
 import {
+  WorkspaceMembershipStatus,
   PlatformRole,
   UserStatus,
-  WorkspaceMembershipStatus,
   WorkspaceRole,
   WorkspaceStatus,
   WorkspaceType,
@@ -95,6 +95,9 @@ describe('WorkspacesService', () => {
           provide: WorkspacesRepository,
           useValue: {
             findById: jest.fn(),
+            findAccessibleWorkspaces: jest.fn(),
+            findWorkspacePreference: jest.fn(),
+            upsertWorkspacePreference: jest.fn(),
             updateWorkspace: jest.fn(),
             updateSettings: jest.fn(),
           },
@@ -193,5 +196,129 @@ describe('WorkspacesService', () => {
     await expect(service.getCurrentWorkspace(principal)).rejects.toThrow(
       BusinessException,
     );
+  });
+
+  it('lists only accessible workspaces and marks the current one', async () => {
+    repository.findAccessibleWorkspaces.mockResolvedValue([
+      {
+        id: membershipId,
+        workspaceId,
+        userId: principal.sub,
+        role: WorkspaceRole.ADMIN,
+        status: WorkspaceMembershipStatus.ACTIVE,
+        invitedAt: null,
+        joinedAt: new Date('2026-03-12T00:00:00.000Z'),
+        invitedByUserId: null,
+        createdAt: new Date('2026-03-12T00:00:00.000Z'),
+        updatedAt: new Date('2026-03-12T00:00:00.000Z'),
+        workspace: {
+          id: workspaceId,
+          name: 'Primary Workspace',
+          type: WorkspaceType.PERSONAL,
+          status: WorkspaceStatus.ACTIVE,
+          financialDataUpdatedAt: new Date('2026-03-12T00:00:00.000Z'),
+          createdAt: new Date('2026-03-12T00:00:00.000Z'),
+          updatedAt: new Date('2026-03-12T00:00:00.000Z'),
+        },
+      },
+      {
+        id: 'membership-secondary',
+        workspaceId: 'workspace-secondary',
+        userId: principal.sub,
+        role: WorkspaceRole.MEMBER,
+        status: WorkspaceMembershipStatus.ACTIVE,
+        invitedAt: null,
+        joinedAt: new Date('2026-03-14T00:00:00.000Z'),
+        invitedByUserId: null,
+        createdAt: new Date('2026-03-14T00:00:00.000Z'),
+        updatedAt: new Date('2026-03-14T00:00:00.000Z'),
+        workspace: {
+          id: 'workspace-secondary',
+          name: 'Shared Space',
+          type: WorkspaceType.GROUP,
+          status: WorkspaceStatus.ACTIVE,
+          financialDataUpdatedAt: new Date('2026-03-14T00:00:00.000Z'),
+          createdAt: new Date('2026-03-14T00:00:00.000Z'),
+          updatedAt: new Date('2026-03-14T00:00:00.000Z'),
+        },
+      },
+    ] as never);
+
+    const result = await service.listWorkspaces(principal);
+
+    expect(repository.findAccessibleWorkspaces).toHaveBeenCalledWith(
+      principal.sub,
+    );
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({
+      isCurrent: true,
+      workspace: { id: workspaceId, name: 'Primary Workspace' },
+      membership: { id: membershipId, role: WorkspaceRole.ADMIN },
+    });
+    expect(result[1]).toMatchObject({
+      isCurrent: false,
+      workspace: { id: 'workspace-secondary', name: 'Shared Space' },
+      membership: { role: WorkspaceRole.MEMBER },
+    });
+  });
+
+  it('returns a stable empty current workspace preference shape when no row exists', async () => {
+    repository.findWorkspacePreference.mockResolvedValue(null);
+
+    const result = await service.getCurrentWorkspacePreferences(principal);
+
+    expect(repository.findWorkspacePreference).toHaveBeenCalledWith(
+      workspaceId,
+      principal.sub,
+    );
+    expect(result).toEqual({
+      uiLocale: null,
+      dateFormat: null,
+      dashboardPreferences: {},
+      reportPreferences: {},
+      transactionPreferences: {},
+    });
+  });
+
+  it('updates only current user preferences for the current workspace', async () => {
+    repository.upsertWorkspacePreference.mockResolvedValue({
+      id: 'pref-id',
+      workspaceId,
+      userId: principal.sub,
+      uiLocale: 'es-AR',
+      dateFormat: 'YYYY-MM-DD',
+      dashboardPreferences: { compact: true },
+      reportPreferences: { defaultPeriod: 'month' },
+      transactionPreferences: { showPending: true },
+      createdAt: new Date('2026-03-12T00:00:00.000Z'),
+      updatedAt: new Date('2026-03-12T00:00:00.000Z'),
+    } as never);
+
+    const result = await service.updateCurrentWorkspacePreferences(principal, {
+      uiLocale: 'es-AR',
+      dateFormat: 'YYYY-MM-DD',
+      dashboardPreferences: { compact: true },
+      reportPreferences: { defaultPeriod: 'month' },
+      transactionPreferences: { showPending: true },
+    });
+
+    expect(repository.upsertWorkspacePreference).toHaveBeenCalledWith(
+      workspaceId,
+      principal.sub,
+      {
+        uiLocale: 'es-AR',
+        dateFormat: 'YYYY-MM-DD',
+        dashboardPreferences: { compact: true },
+        reportPreferences: { defaultPeriod: 'month' },
+        transactionPreferences: { showPending: true },
+      },
+    );
+    expect(result).toEqual({
+      uiLocale: 'es-AR',
+      dateFormat: 'YYYY-MM-DD',
+      dashboardPreferences: { compact: true },
+      reportPreferences: { defaultPeriod: 'month' },
+      transactionPreferences: { showPending: true },
+    });
   });
 });

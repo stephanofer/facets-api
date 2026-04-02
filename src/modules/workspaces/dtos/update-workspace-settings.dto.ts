@@ -1,4 +1,4 @@
-import { Transform } from 'class-transformer';
+import { Transform, type TransformFnParams } from 'class-transformer';
 import {
   IsInt,
   IsOptional,
@@ -11,6 +11,14 @@ import {
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
+function trimString({ value }: TransformFnParams): unknown {
+  return typeof value === 'string' ? value.trim() : value;
+}
+
+function trimAndUppercaseString({ value }: TransformFnParams): unknown {
+  return typeof value === 'string' ? value.trim().toUpperCase() : value;
+}
+
 export class UpdateWorkspaceSettingsDto {
   @ApiPropertyOptional({
     description: 'Workspace base currency code shared by all members',
@@ -22,9 +30,7 @@ export class UpdateWorkspaceSettingsDto {
     message:
       'Base currency code must be a valid ISO 4217 code (e.g., USD, ARS)',
   })
-  @Transform(({ value }) =>
-    typeof value === 'string' ? value.trim().toUpperCase() : value,
-  )
+  @Transform(trimAndUppercaseString)
   baseCurrencyCode?: string;
 
   @ApiPropertyOptional({
@@ -35,7 +41,7 @@ export class UpdateWorkspaceSettingsDto {
   @IsString()
   @MinLength(2)
   @MaxLength(20)
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(trimString)
   contentLocale?: string;
 
   @ApiPropertyOptional({
@@ -45,7 +51,7 @@ export class UpdateWorkspaceSettingsDto {
   @IsOptional()
   @IsString()
   @MaxLength(30)
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(trimString)
   dateFormat?: string;
 
   @ApiPropertyOptional({
@@ -75,6 +81,6 @@ export class UpdateWorkspaceSettingsDto {
   @IsOptional()
   @IsString()
   @MaxLength(50)
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @Transform(trimString)
   financialTimezone?: string;
 }

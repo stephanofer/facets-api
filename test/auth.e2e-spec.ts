@@ -2,6 +2,7 @@ import { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as request from 'supertest';
 import { App } from 'supertest/types';
+import { ApiResponse } from '@common/interfaces/api-response.interface';
 import { ConfigService } from '@config/config.service';
 import { PrismaService } from '@database/prisma.service';
 import { createUserFixture } from './fixtures/user.fixture';
@@ -18,7 +19,18 @@ import {
   WorkspaceRole,
   WorkspaceType,
 } from '@/generated/prisma/client';
-import { JwtPayload } from '@/modules/auth/dtos/auth-response.dto';
+import { AuthBootstrapResponseDto } from '@/modules/auth/dtos/auth-bootstrap-response.dto';
+import {
+  JwtPayload,
+  LoginResponseDto,
+  RegisterResponseDto,
+  TokensResponseDto,
+  VerifyEmailResponseDto,
+} from '@/modules/auth/dtos/auth-response.dto';
+
+function getSuccessBody<T>(response: request.Response): ApiResponse<T> {
+  return response.body as ApiResponse<T>;
+}
 
 describe('Auth workspace-first flows (e2e)', () => {
   let app: INestApplication<App>;
@@ -55,11 +67,12 @@ describe('Auth workspace-first flows (e2e)', () => {
       .post('/api/auth/register')
       .send(payload)
       .expect(201);
+    const responseBody = getSuccessBody<RegisterResponseDto>(response);
 
     await waitForMailMockCall('sendTemplate', 1);
 
-    expect(response.body.success).toBe(true);
-    expect(response.body.data.user).toMatchObject({
+    expect(responseBody.success).toBe(true);
+    expect(responseBody.data.user).toMatchObject({
       email: payload.email.toLowerCase(),
       status: UserStatus.PENDING_VERIFICATION,
       platformRole: PlatformRole.USER,
@@ -71,7 +84,7 @@ describe('Auth workspace-first flows (e2e)', () => {
         status: WorkspaceMembershipStatus.ACTIVE,
       },
     });
-    expect(response.body.data.user).not.toHaveProperty('plan');
+    expect(responseBody.data.user).not.toHaveProperty('plan');
 
     const persistedUser = await prisma.user.findUniqueOrThrow({
       where: { email: payload.email.toLowerCase() },
@@ -99,13 +112,13 @@ describe('Auth workspace-first flows (e2e)', () => {
     );
     expect(persistedUser.memberships[0].workspace.subscription).toBeNull();
 
-    expect(mailProviderMock.sendTemplate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        variables: expect.objectContaining({
-          otpCode: expect.any(String),
-        }),
-      }),
-    );
+    const firstMailCall = mailProviderMock.sendTemplate.mock.calls[0]?.[0] as
+      | { variables?: Record<string, unknown> }
+      | undefined;
+
+    const firstOtpCode = firstMailCall?.variables?.['otpCode'];
+
+    expect(typeof firstOtpCode).toBe('string');
   });
 
   it('rejects login for a user without verified workspace access, then verifies, logs in, refreshes, resolves /me, and logs out', async () => {
@@ -148,11 +161,13 @@ describe('Auth workspace-first flows (e2e)', () => {
       .post('/api/auth/verify-email')
       .send({ email: payload.email, code: otpCode })
       .expect(200);
+    const verifyResponseBody =
+      getSuccessBody<VerifyEmailResponseDto>(verifyResponse);
 
     await waitForMailMockCall('sendTemplate', initialMailCalls + 2);
 
-    expect(verifyResponse.body.success).toBe(true);
-    expect(verifyResponse.body.data.user).toMatchObject({
+    expect(verifyResponseBody.success).toBe(true);
+    expect(verifyResponseBody.data.user).toMatchObject({
       email: payload.email.toLowerCase(),
       status: UserStatus.ACTIVE,
       workspace: {
@@ -162,7 +177,7 @@ describe('Auth workspace-first flows (e2e)', () => {
         role: WorkspaceRole.ADMIN,
       },
     });
-    expect(verifyResponse.body.data.user).not.toHaveProperty('plan');
+    expect(verifyResponseBody.data.user).not.toHaveProperty('plan');
     expect(verifyResponse.headers['set-cookie']).toEqual(
       expect.arrayContaining([
         expect.stringContaining('refreshToken='),
@@ -174,18 +189,19 @@ describe('Auth workspace-first flows (e2e)', () => {
       .post('/api/auth/login')
       .send({ email: payload.email, password: payload.password })
       .expect(200);
+    const loginResponseBody = getSuccessBody<LoginResponseDto>(loginResponse);
 
-    expect(loginResponse.body.success).toBe(true);
-    expect(loginResponse.body.data.user.workspace.id).toBe(
+    expect(loginResponseBody.success).toBe(true);
+    expect(loginResponseBody.data.user.workspace.id).toBe(
       createdUser.memberships[0].workspaceId,
     );
-    expect(loginResponse.body.data.user.membership.id).toBe(
+    expect(loginResponseBody.data.user.membership.id).toBe(
       createdUser.memberships[0].id,
     );
-    expect(loginResponse.body.data.user).not.toHaveProperty('plan');
+    expect(loginResponseBody.data.user).not.toHaveProperty('plan');
 
     const accessPayload = await jwtService.verifyAsync<JwtPayload>(
-      loginResponse.body.data.tokens.accessToken,
+      loginResponseBody.data.tokens.accessToken,
       {
         secret: configService.jwt.accessSecret,
       },
@@ -203,13 +219,16 @@ describe('Auth workspace-first flows (e2e)', () => {
       .get('/api/auth/me')
       .set(
         'Authorization',
-        `Bearer ${loginResponse.body.data.tokens.accessToken}`,
+        `Bearer ${loginResponseBody.data.tokens.accessToken}`,
       )
       .expect(200);
+    const meResponseBody = getSuccessBody<AuthBootstrapResponseDto>(meResponse);
 
-    expect(meResponse.body.success).toBe(true);
-    expect(meResponse.body.data).toMatchObject({
-      id: createdUser.id,
+    expect(meResponseBody.success).toBe(true);
+    expect(meResponseBody.data).toMatchObject({
+      user: {
+        id: createdUser.id,
+      },
       workspace: {
         id: createdUser.memberships[0].workspaceId,
       },
@@ -217,8 +236,21 @@ describe('Auth workspace-first flows (e2e)', () => {
         id: createdUser.memberships[0].id,
         role: WorkspaceRole.ADMIN,
       },
+      profile: {
+        countryCode: null,
+        theme: null,
+        onboardingCompletedAt: null,
+      },
+      workspaceSettings: {
+        baseCurrencyCode: 'USD',
+        contentLocale: 'en-US',
+        financialTimezone: 'UTC',
+      },
+      needsOnboarding: true,
     });
-    expect(meResponse.body.data).not.toHaveProperty('plan');
+    expect(meResponseBody.data.user).not.toHaveProperty('plan');
+    expect(meResponseBody.data.profile).not.toHaveProperty('phone');
+    expect(meResponseBody.data).not.toHaveProperty('workspaceUserPreference');
 
     const refreshCookies = loginResponse.headers['set-cookie'];
 
@@ -230,11 +262,13 @@ describe('Auth workspace-first flows (e2e)', () => {
       .post('/api/auth/refresh')
       .set('Cookie', refreshCookies)
       .expect(200);
+    const refreshResponseBody =
+      getSuccessBody<TokensResponseDto>(refreshResponse);
 
-    expect(refreshResponse.body.success).toBe(true);
+    expect(refreshResponseBody.success).toBe(true);
 
     const refreshedPayload = await jwtService.verifyAsync<JwtPayload>(
-      refreshResponse.body.data.accessToken,
+      refreshResponseBody.data.accessToken,
       {
         secret: configService.jwt.accessSecret,
       },
@@ -250,13 +284,13 @@ describe('Auth workspace-first flows (e2e)', () => {
 
     await request(app.getHttpServer())
       .post('/api/auth/logout')
-      .set('Authorization', `Bearer ${refreshResponse.body.data.accessToken}`)
-      .send({ refreshToken: refreshResponse.body.data.refreshToken })
+      .set('Authorization', `Bearer ${refreshResponseBody.data.accessToken}`)
+      .send({ refreshToken: refreshResponseBody.data.refreshToken })
       .expect(200);
 
     await request(app.getHttpServer())
       .post('/api/auth/refresh')
-      .send({ refreshToken: refreshResponse.body.data.refreshToken })
+      .send({ refreshToken: refreshResponseBody.data.refreshToken })
       .expect(401);
   });
 });

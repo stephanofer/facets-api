@@ -9,6 +9,8 @@ import { HealthModule } from '@health/health.module';
 import { MailModule } from '@mail/mail.module';
 import { StorageModule } from '@storage/storage.module';
 import { AuthModule } from '@modules/auth/auth.module';
+import { MeModule } from '@modules/me/me.module';
+import { ReferenceModule } from '@modules/reference/reference.module';
 import { VoucherAnalyzerModule } from '@modules/voucher-analyzer/voucher-analyzer.module';
 import { WorkspacesModule } from '@modules/workspaces/workspaces.module';
 import { ActiveMembershipGuard } from '@common/guards/active-membership.guard';
@@ -37,6 +39,8 @@ import { WorkspaceRoleGuard } from '@common/guards/workspace-role.guard';
     // Feature modules
     HealthModule,
     AuthModule,
+    MeModule,
+    ReferenceModule,
     WorkspacesModule,
     VoucherAnalyzerModule,
   ],

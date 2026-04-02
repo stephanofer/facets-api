@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/unbound-method */
+import * as crypto from 'crypto';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as argon2 from 'argon2';
+import { AuthBootstrapRepository } from '@modules/auth/auth-bootstrap.repository';
 import { AuthService } from '@modules/auth/auth.service';
 import { RefreshTokensRepository } from '@modules/auth/refresh-tokens.repository';
 import { ConfigService } from '@config/config.service';
@@ -14,6 +16,8 @@ import { FileService } from '@storage/services/file.service';
 import {
   OtpType,
   PlatformRole,
+  Prisma,
+  ThemePreference,
   UserStatus,
   WorkspaceMembershipStatus,
   WorkspaceRole,
@@ -22,6 +26,10 @@ import {
 } from '../../generated/prisma/client';
 
 jest.mock('argon2');
+
+function hashRefreshToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -33,6 +41,7 @@ describe('AuthService', () => {
   let mailService: jest.Mocked<MailService>;
   let prismaService: jest.Mocked<PrismaService>;
   let fileService: jest.Mocked<FileService>;
+  let authBootstrapRepository: jest.Mocked<AuthBootstrapRepository>;
 
   const mockWorkspace = {
     id: 'workspace-id',
@@ -95,10 +104,42 @@ describe('AuthService', () => {
     avatarStorageKey: 'avatars/file-1.png',
   };
 
+  const mockWorkspaceSettings = {
+    id: 'settings-id',
+    workspaceId: mockWorkspace.id,
+    baseCurrencyCode: 'USD',
+    contentLocale: 'en-US',
+    dateFormat: 'DD/MM/YYYY',
+    monthStartDay: 1,
+    weekStartDay: 1,
+    financialTimezone: 'UTC',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const mockUserProfile = {
+    id: 'profile-id',
+    userId: mockUser.id,
+    phone: '+5491155550000',
+    avatarUrl: mockAvatar.avatarUrl,
+    avatarStorageKey: mockAvatar.avatarStorageKey,
+    theme: ThemePreference.DARK,
+    countryCode: 'AR',
+    onboardingCompletedAt: new Date('2026-03-15T10:00:00.000Z'),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
   beforeEach(async () => {
     moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
+        {
+          provide: AuthBootstrapRepository,
+          useValue: {
+            findBootstrapContext: jest.fn(),
+          },
+        },
         {
           provide: UsersService,
           useValue: {
@@ -186,6 +227,7 @@ describe('AuthService', () => {
     mailService = moduleRef.get(MailService);
     prismaService = moduleRef.get(PrismaService);
     fileService = moduleRef.get(FileService);
+    authBootstrapRepository = moduleRef.get(AuthBootstrapRepository);
   });
 
   afterEach(async () => {
@@ -212,7 +254,10 @@ describe('AuthService', () => {
 
       usersService.emailExists.mockResolvedValue(false);
       (argon2.hash as jest.Mock).mockResolvedValue('hashed-password');
-      prismaService.$transaction.mockImplementation(async (callback: any) => {
+      prismaService.$transaction.mockImplementation((callback) => {
+        const transactionCallback = callback as (
+          prisma: Prisma.TransactionClient,
+        ) => Promise<unknown>;
         const tx = {
           workspace: {
             create: jest.fn().mockResolvedValue({
@@ -232,9 +277,9 @@ describe('AuthService', () => {
           workspaceSettings: {
             create: jest.fn().mockResolvedValue({ id: 'settings-id' }),
           },
-        };
+        } as unknown as Prisma.TransactionClient;
 
-        return callback(tx);
+        return transactionCallback(tx);
       });
       otpService.generate.mockResolvedValue(mockOtpResult);
       mailService.sendTemplate.mockResolvedValue(undefined);
@@ -308,10 +353,7 @@ describe('AuthService', () => {
     };
 
     it('should refresh tokens while preserving workspace claims', async () => {
-      const expectedHash = require('crypto')
-        .createHash('sha256')
-        .update(payload.refreshToken)
-        .digest('hex');
+      const expectedHash = hashRefreshToken(payload.refreshToken);
 
       refreshTokensRepository.findById.mockResolvedValue({
         ...mockRefreshToken,
@@ -340,10 +382,7 @@ describe('AuthService', () => {
     });
 
     it('should deny refresh when membership is no longer active', async () => {
-      const expectedHash = require('crypto')
-        .createHash('sha256')
-        .update(payload.refreshToken)
-        .digest('hex');
+      const expectedHash = hashRefreshToken(payload.refreshToken);
 
       refreshTokensRepository.findById.mockResolvedValue({
         ...mockRefreshToken,
@@ -365,8 +404,11 @@ describe('AuthService', () => {
   });
 
   describe('getMe', () => {
-    it('should return workspace-aware user info', async () => {
-      usersService.findAvatarByUserId.mockResolvedValue(null);
+    it('should return the bootstrap contract with separated user, workspace, membership, profile, and settings', async () => {
+      authBootstrapRepository.findBootstrapContext.mockResolvedValue({
+        workspaceSettings: mockWorkspaceSettings,
+        profile: mockUserProfile,
+      });
 
       const result = await authService.getMe({
         sub: mockUser.id,
@@ -381,9 +423,47 @@ describe('AuthService', () => {
         membership: mockMembership,
       });
 
+      expect(result.user.id).toBe(mockUser.id);
+      expect(result.user.avatarUrl).toBe(mockAvatar.avatarUrl);
       expect(result.workspace.id).toBe(mockWorkspace.id);
       expect(result.membership.role).toBe(WorkspaceRole.ADMIN);
-      expect(result).not.toHaveProperty('plan');
+      expect(result.profile).toEqual({
+        countryCode: 'AR',
+        theme: ThemePreference.DARK,
+        onboardingCompletedAt: mockUserProfile.onboardingCompletedAt,
+      });
+      expect(result.workspaceSettings.baseCurrencyCode).toBe('USD');
+      expect(result.needsOnboarding).toBe(false);
+      expect(result.profile).not.toHaveProperty('phone');
+      expect(result).not.toHaveProperty('workspaceUserPreference');
+    });
+
+    it('should return nullable profile summary and needsOnboarding when the profile row is missing', async () => {
+      authBootstrapRepository.findBootstrapContext.mockResolvedValue({
+        workspaceSettings: mockWorkspaceSettings,
+        profile: null,
+      });
+
+      const result = await authService.getMe({
+        sub: mockUser.id,
+        email: mockUser.email,
+        workspaceId: mockWorkspace.id,
+        actorUserId: mockUser.id,
+        membershipId: mockMembership.id,
+        workspaceRole: WorkspaceRole.ADMIN,
+        platformRole: PlatformRole.USER,
+        user: mockUser,
+        workspace: mockWorkspace,
+        membership: mockMembership,
+      });
+
+      expect(result.profile).toEqual({
+        countryCode: null,
+        theme: null,
+        onboardingCompletedAt: null,
+      });
+      expect(result.user.avatarUrl).toBeNull();
+      expect(result.needsOnboarding).toBe(true);
     });
   });
 

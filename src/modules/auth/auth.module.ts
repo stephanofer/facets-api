@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from '@modules/auth/auth.controller';
+import { AuthBootstrapRepository } from '@modules/auth/auth-bootstrap.repository';
 import { AuthService } from '@modules/auth/auth.service';
 import { RefreshTokensRepository } from '@modules/auth/refresh-tokens.repository';
 import { JwtStrategy } from '@modules/auth/strategies/jwt.strategy';
@@ -23,6 +24,7 @@ import { StorageModule } from '@storage/storage.module';
   controllers: [AuthController],
   providers: [
     AuthService,
+    AuthBootstrapRepository,
     RefreshTokensRepository,
     JwtStrategy,
     JwtRefreshStrategy,

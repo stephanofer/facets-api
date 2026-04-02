@@ -25,6 +25,7 @@ import { Request, Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from '@modules/auth/auth.service';
+import { AuthBootstrapResponseDto } from '@modules/auth/dtos/auth-bootstrap-response.dto';
 import { RegisterDto } from '@modules/auth/dtos/register.dto';
 import { LoginDto } from '@modules/auth/dtos/login.dto';
 import { RefreshTokenDto } from '@modules/auth/dtos/refresh-token.dto';
@@ -386,7 +387,7 @@ export class AuthController {
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'User profile',
-    type: AuthUserDto,
+    type: AuthBootstrapResponseDto,
   })
   @ApiResponse({
     status: HttpStatus.UNAUTHORIZED,
@@ -394,7 +395,7 @@ export class AuthController {
   })
   async getMe(
     @CurrentPrincipal() principal: AuthenticatedPrincipal,
-  ): Promise<AuthUserDto> {
+  ): Promise<AuthBootstrapResponseDto> {
     return this.authService.getMe(principal);
   }
 

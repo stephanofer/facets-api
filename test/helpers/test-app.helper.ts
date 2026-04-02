@@ -6,13 +6,15 @@ process.env.AI_METADATA_ENVIRONMENT ??= 'test';
 
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  type Type,
   INestApplication,
   RequestMethod,
   ValidationPipe,
 } from '@nestjs/common';
-import { HttpAdapterHost, APP_GUARD, Reflector } from '@nestjs/core';
+import { HttpAdapterHost, Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import * as cookieParser from 'cookie-parser';
+import { App } from 'supertest/types';
 import { AppModule } from '@/app.module';
 import { AllExceptionsFilter } from '@common/filters/all-exceptions.filter';
 import { TransformResponseInterceptor } from '@common/interceptors/transform-response.interceptor';
@@ -58,7 +60,7 @@ const DEFAULT_TEST_PASSWORD = 'TestP@ss123';
 
 export interface TestAppOptions {
   overrideProviders?: Array<{
-    provide: string | symbol | Function;
+    provide: string | symbol | Type<unknown>;
     useValue: unknown;
   }>;
   skipReferenceSeedData?: boolean;
@@ -66,7 +68,7 @@ export interface TestAppOptions {
 
 export async function createTestApp(
   options: TestAppOptions = {},
-): Promise<INestApplication> {
+): Promise<INestApplication<App>> {
   aiGatewayClientMock.executeChatCompletion.mockReset();
   mailProviderMock.send.mockReset();
   mailProviderMock.sendTemplate.mockReset();
@@ -76,10 +78,10 @@ export async function createTestApp(
   })
     .overrideProvider(STORAGE_PROVIDER)
     .useValue({
-      upload: async () => undefined,
-      delete: async () => undefined,
-      getPresignedUrl: async (bucket: string, key: string) =>
-        `https://cdn.e2e.test/${bucket}/${key}`,
+      upload: () => Promise.resolve(),
+      delete: () => Promise.resolve(),
+      getPresignedUrl: (bucket: string, key: string) =>
+        Promise.resolve(`https://cdn.e2e.test/${bucket}/${key}`),
     })
     .overrideProvider(AI_GATEWAY_CLIENT)
     .useValue(aiGatewayClientMock)
@@ -121,7 +123,7 @@ export async function createTestApp(
     await ensureReferenceSeedData(app.get(PrismaService));
   }
 
-  return app;
+  return app as INestApplication<App>;
 }
 
 /**
@@ -341,11 +343,6 @@ export async function cleanupTestUser(
   }
 }
 
-export async function cleanDatabase(prisma: PrismaService): Promise<void> {
-  // Add table cleaning logic as models are added
-  // Example: await prisma.$executeRaw`TRUNCATE users CASCADE`;
-}
-
 async function ensureReferenceSeedData(prisma: PrismaService): Promise<void> {
   for (const currency of [
     { code: 'USD', name: 'US Dollar', symbol: '$', decimalScale: 2 },
@@ -364,6 +361,42 @@ async function ensureReferenceSeedData(prisma: PrismaService): Promise<void> {
         name: currency.name,
         symbol: currency.symbol,
         decimalScale: currency.decimalScale,
+        isActive: true,
+      },
+    });
+  }
+
+  for (const country of [
+    {
+      code: 'US',
+      name: 'United States',
+      defaultCurrencyCode: 'USD',
+      callingCode: '+1',
+      defaultLocale: 'en-US',
+    },
+    {
+      code: 'AR',
+      name: 'Argentina',
+      defaultCurrencyCode: 'ARS',
+      callingCode: '+54',
+      defaultLocale: 'es-AR',
+    },
+  ]) {
+    await prisma.country.upsert({
+      where: { code: country.code },
+      update: {
+        name: country.name,
+        defaultCurrencyCode: country.defaultCurrencyCode,
+        callingCode: country.callingCode,
+        defaultLocale: country.defaultLocale,
+        isActive: true,
+      },
+      create: {
+        code: country.code,
+        name: country.name,
+        defaultCurrencyCode: country.defaultCurrencyCode,
+        callingCode: country.callingCode,
+        defaultLocale: country.defaultLocale,
         isActive: true,
       },
     });

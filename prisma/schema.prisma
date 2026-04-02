@@ -186,7 +186,6 @@ model WorkspaceUserPreference {
   userId                 String
   membership             WorkspaceMembership @relation(fields: [workspaceId, userId], references: [workspaceId, userId], onDelete: Cascade)
   uiLocale               String?             @db.VarChar(10)
-  theme                  ThemePreference     @default(SYSTEM)
   dateFormat             String?             @db.VarChar(30)
   dashboardPreferences   Json                @default("{}")
   reportPreferences      Json                @default("{}")
@@ -534,6 +533,7 @@ model UserProfile {
   phone            String? @db.VarChar(20) // E.164 format: +5491155557777
   avatarUrl        String? @db.VarChar(500)
   avatarStorageKey String? @db.VarChar(500)
+  theme            ThemePreference @default(SYSTEM)
 
   // Profile context
   countryCode String?  @db.VarChar(2)

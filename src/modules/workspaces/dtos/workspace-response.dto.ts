@@ -74,6 +74,17 @@ export class CurrentWorkspaceResponseDto {
   settings: WorkspaceSettingsDto;
 }
 
+export class WorkspaceDirectoryItemDto {
+  @ApiProperty({ type: WorkspaceSummaryDto })
+  workspace: WorkspaceSummaryDto;
+
+  @ApiProperty({ type: WorkspaceMembershipSummaryDto })
+  membership: WorkspaceMembershipSummaryDto;
+
+  @ApiProperty({ example: true })
+  isCurrent: boolean;
+}
+
 export class WorkspaceSettingsResponseDto {
   @ApiProperty({ type: WorkspaceSettingsDto })
   settings: WorkspaceSettingsDto;

@@ -10,6 +10,7 @@ import {
   Prisma,
   PrismaClient,
   SubscriptionStatus,
+  ThemePreference,
   UserStatus,
   WorkspaceMembershipStatus,
   WorkspaceRole,
@@ -537,7 +538,7 @@ async function seedSuperAdmin(
 
   if (!adminCountry) {
     throw new Error(
-      `Unsupported SEED_SUPER_ADMIN_COUNTRY_CODE \"${input.countryCode}\". Use one of: ${LATAM_COUNTRIES.map((country) => country.code).join(', ')}`,
+      `Unsupported SEED_SUPER_ADMIN_COUNTRY_CODE "${input.countryCode}". Use one of: ${LATAM_COUNTRIES.map((country) => country.code).join(', ')}`,
     );
   }
 
@@ -640,7 +641,8 @@ async function seedSuperAdmin(
     existingUser?.profile === null || existingUser?.profile === undefined,
     Boolean(
       existingUser?.profile &&
-      existingUser.profile.countryCode !== adminCountry.code,
+      (existingUser.profile.countryCode !== adminCountry.code ||
+        existingUser.profile.theme !== ThemePreference.SYSTEM),
     ),
   );
 
@@ -785,9 +787,11 @@ async function seedSuperAdmin(
         create: {
           userId: user.id,
           countryCode: adminCountry.code,
+          theme: ThemePreference.SYSTEM,
         },
         update: {
           countryCode: adminCountry.code,
+          theme: ThemePreference.SYSTEM,
         },
       });
     },
@@ -826,7 +830,7 @@ async function main(): Promise<void> {
 
   if (positionals.length > 0) {
     throw new Error(
-      `Unexpected positional arguments: ${positionals.join(' ')}. Use \"prisma db seed -- --dry-run\" for dry runs.`,
+      `Unexpected positional arguments: ${positionals.join(' ')}. Use "prisma db seed -- --dry-run" for dry runs.`,
     );
   }
 

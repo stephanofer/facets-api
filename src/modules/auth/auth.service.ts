@@ -11,6 +11,8 @@ import * as crypto from 'crypto';
 import { CookieOptions, Response } from 'express';
 import { ERROR_CODES } from '@common/constants/app.constants';
 import { BusinessException } from '@common/exceptions/business.exception';
+import { AuthBootstrapRepository } from '@modules/auth/auth-bootstrap.repository';
+import { AuthBootstrapResponseDto } from '@modules/auth/dtos/auth-bootstrap-response.dto';
 import { RefreshTokensRepository } from '@modules/auth/refresh-tokens.repository';
 import { AuthenticatedPrincipal } from '@modules/auth/interfaces/authenticated-principal.interface';
 import {
@@ -72,6 +74,7 @@ export class AuthService {
   constructor(
     private readonly fileService: FileService,
     private readonly usersService: UsersService,
+    private readonly authBootstrapRepository: AuthBootstrapRepository,
     private readonly refreshTokensRepository: RefreshTokensRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
@@ -153,7 +156,7 @@ export class AuthService {
     this.sendVerificationEmail(user).catch((error) => {
       this.logger.error(
         `Failed to send verification email to ${user.email}`,
-        error.stack,
+        this.getErrorStack(error),
       );
     });
 
@@ -162,7 +165,7 @@ export class AuthService {
     return {
       message:
         'Registration successful. Please check your email to verify your account.',
-      user: await this.toAuthUserDto(principal),
+      user: this.toAuthUserDto(principal),
     };
   }
 
@@ -197,7 +200,7 @@ export class AuthService {
 
     return {
       tokens,
-      user: await this.toAuthUserDto(principal),
+      user: this.toAuthUserDto(principal),
     };
   }
 
@@ -229,7 +232,7 @@ export class AuthService {
     this.sendWelcomeEmail(updatedUser).catch((error) => {
       this.logger.error(
         `Failed to send welcome email to ${updatedUser.email}`,
-        error.stack,
+        this.getErrorStack(error),
       );
     });
 
@@ -240,7 +243,7 @@ export class AuthService {
     return {
       message: 'Email verified successfully. You are now logged in.',
       tokens,
-      user: await this.toAuthUserDto(principal),
+      user: this.toAuthUserDto(principal),
     };
   }
 
@@ -266,7 +269,7 @@ export class AuthService {
     this.sendVerificationEmail(user).catch((error) => {
       this.logger.error(
         `Failed to send verification email to ${user.email}`,
-        error.stack,
+        this.getErrorStack(error),
       );
     });
 
@@ -291,7 +294,7 @@ export class AuthService {
     this.sendPasswordResetEmail(user).catch((error) => {
       this.logger.error(
         `Failed to send password reset email to ${user.email}`,
-        error.stack,
+        this.getErrorStack(error),
       );
     });
 
@@ -391,10 +394,53 @@ export class AuthService {
     return { revokedCount: result.count };
   }
 
-  async getMe(principal: AuthenticatedPrincipal): Promise<AuthUserDto> {
-    const avatar = await this.usersService.findAvatarByUserId(principal.sub);
+  async getMe(
+    principal: AuthenticatedPrincipal,
+  ): Promise<AuthBootstrapResponseDto> {
+    const { workspaceSettings, profile } =
+      await this.authBootstrapRepository.findBootstrapContext(
+        principal.sub,
+        principal.workspaceId,
+      );
 
-    return this.toAuthUserDto(principal, avatar);
+    return {
+      user: {
+        id: principal.user.id,
+        email: principal.user.email,
+        firstName: principal.user.firstName,
+        lastName: principal.user.lastName,
+        emailVerified: principal.user.emailVerified,
+        status: principal.user.status,
+        platformRole: principal.user.platformRole,
+        createdAt: principal.user.createdAt,
+        avatarUrl: profile?.avatarUrl ?? null,
+      },
+      workspace: {
+        id: principal.workspace.id,
+        name: principal.workspace.name,
+        type: principal.workspace.type,
+        status: principal.workspace.status,
+      },
+      membership: {
+        id: principal.membership.id,
+        role: principal.membership.role,
+        status: principal.membership.status,
+      },
+      profile: {
+        countryCode: profile?.countryCode ?? null,
+        theme: profile?.theme ?? null,
+        onboardingCompletedAt: profile?.onboardingCompletedAt ?? null,
+      },
+      workspaceSettings: {
+        baseCurrencyCode: workspaceSettings.baseCurrencyCode,
+        contentLocale: workspaceSettings.contentLocale,
+        dateFormat: workspaceSettings.dateFormat,
+        monthStartDay: workspaceSettings.monthStartDay,
+        weekStartDay: workspaceSettings.weekStartDay,
+        financialTimezone: workspaceSettings.financialTimezone,
+      },
+      needsOnboarding: profile?.onboardingCompletedAt == null,
+    };
   }
 
   async uploadAvatar(
@@ -547,10 +593,10 @@ export class AuthService {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
-  private async toAuthUserDto(
+  private toAuthUserDto(
     principal: AuthenticatedPrincipal,
     avatarUrl?: string | null,
-  ): Promise<AuthUserDto> {
+  ): AuthUserDto {
     const { user, workspace, membership } = principal;
 
     return {
@@ -575,6 +621,12 @@ export class AuthService {
       },
       platformRole: user.platformRole,
     };
+  }
+
+  private getErrorStack(error: unknown): string {
+    return error instanceof Error
+      ? (error.stack ?? error.message)
+      : String(error);
   }
 
   private async safeDeleteStorageObject(key: string): Promise<void> {

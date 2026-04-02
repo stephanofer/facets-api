@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { ApiResponse } from '@common/interfaces/api-response.interface';
 import { PrismaService } from '@database/prisma.service';
 import * as request from 'supertest';
 import { App } from 'supertest/types';
@@ -8,7 +9,17 @@ import {
   createTestUser,
   createWorkspaceMember,
 } from './helpers/test-app.helper';
+import {
+  CurrentWorkspaceResponseDto,
+  WorkspaceDirectoryItemDto,
+  WorkspaceSettingsResponseDto,
+} from '@/modules/workspaces/dtos/workspace-response.dto';
+import { WorkspacePreferencesResponseDto } from '@/modules/workspaces/dtos/workspace-preferences-response.dto';
 import { WorkspaceRole, WorkspaceType } from '@/generated/prisma/client';
+
+function getSuccessBody<T>(response: request.Response): ApiResponse<T> {
+  return response.body as ApiResponse<T>;
+}
 
 describe('Workspaces (e2e)', () => {
   let app: INestApplication<App>;
@@ -20,6 +31,7 @@ describe('Workspaces (e2e)', () => {
   let memberToken: string;
   let guestUserId: string;
   let guestToken: string;
+  let secondaryWorkspaceId: string;
 
   beforeAll(async () => {
     app = await createTestApp();
@@ -54,6 +66,11 @@ describe('Workspaces (e2e)', () => {
   }, 30000);
 
   afterAll(async () => {
+    if (secondaryWorkspaceId) {
+      await prisma.workspace.deleteMany({
+        where: { id: secondaryWorkspaceId },
+      });
+    }
     await cleanupTestUser(app, memberUserId);
     await cleanupTestUser(app, guestUserId);
     await cleanupTestUser(app, adminUserId);
@@ -65,14 +82,15 @@ describe('Workspaces (e2e)', () => {
       .get('/api/workspaces/current')
       .set('Authorization', `Bearer ${adminToken}`)
       .expect(200);
+    const responseBody = getSuccessBody<CurrentWorkspaceResponseDto>(res);
 
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.workspace).toMatchObject({
+    expect(responseBody.success).toBe(true);
+    expect(responseBody.data.workspace).toMatchObject({
       id: workspaceId,
       type: WorkspaceType.PERSONAL,
     });
-    expect(res.body.data.membership.role).toBe(WorkspaceRole.ADMIN);
-    expect(res.body.data.settings).toMatchObject({
+    expect(responseBody.data.membership.role).toBe(WorkspaceRole.ADMIN);
+    expect(responseBody.data.settings).toMatchObject({
       baseCurrencyCode: 'USD',
       contentLocale: 'en-US',
       financialTimezone: 'UTC',
@@ -85,9 +103,127 @@ describe('Workspaces (e2e)', () => {
       .get('/api/workspaces/current/settings')
       .set('Authorization', `Bearer ${guestToken}`)
       .expect(200);
+    const responseBody = getSuccessBody<WorkspaceSettingsResponseDto>(res);
 
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.settings.baseCurrencyCode).toBe('USD');
+    expect(responseBody.success).toBe(true);
+    expect(responseBody.data.settings.baseCurrencyCode).toBe('USD');
+  });
+
+  it('lists only membership-scoped workspaces and marks the current one', async () => {
+    const secondaryWorkspace = await prisma.workspace.create({
+      data: {
+        name: 'Shared Team',
+        type: WorkspaceType.GROUP,
+      },
+    });
+    secondaryWorkspaceId = secondaryWorkspace.id;
+
+    await prisma.workspaceSettings.create({
+      data: {
+        workspaceId: secondaryWorkspace.id,
+      },
+    });
+
+    await prisma.workspaceMembership.create({
+      data: {
+        workspaceId: secondaryWorkspace.id,
+        userId: adminUserId,
+        role: WorkspaceRole.MEMBER,
+      },
+    });
+
+    const res = await request(app.getHttpServer())
+      .get('/api/workspaces')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    const responseBody = getSuccessBody<WorkspaceDirectoryItemDto[]>(res);
+    const currentWorkspace = responseBody.data.find(
+      (item) => item.workspace.id === workspaceId,
+    );
+    const secondaryWorkspaceItem = responseBody.data.find(
+      (item) => item.workspace.id === secondaryWorkspace.id,
+    );
+
+    expect(responseBody.success).toBe(true);
+    expect(currentWorkspace).toBeDefined();
+    expect(currentWorkspace?.isCurrent).toBe(true);
+    expect(currentWorkspace?.workspace.type).toBe(WorkspaceType.PERSONAL);
+    expect(currentWorkspace?.membership.role).toBe(WorkspaceRole.ADMIN);
+    expect(secondaryWorkspaceItem).toBeDefined();
+    expect(secondaryWorkspaceItem?.isCurrent).toBe(false);
+    expect(secondaryWorkspaceItem?.workspace.type).toBe(WorkspaceType.GROUP);
+    expect(secondaryWorkspaceItem?.membership.role).toBe(WorkspaceRole.MEMBER);
+    expect(responseBody.data).toHaveLength(2);
+  });
+
+  it('returns a stable current workspace preference resource for the authenticated member', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/workspaces/current/preferences')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    const responseBody = getSuccessBody<WorkspacePreferencesResponseDto>(res);
+
+    expect(responseBody.success).toBe(true);
+    expect(responseBody.data).toEqual({
+      uiLocale: null,
+      dateFormat: null,
+      dashboardPreferences: {},
+      reportPreferences: {},
+      transactionPreferences: {},
+    });
+  });
+
+  it('updates only the current user preference row for the current workspace', async () => {
+    const res = await request(app.getHttpServer())
+      .patch('/api/workspaces/current/preferences')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        uiLocale: 'es-AR',
+        dateFormat: 'YYYY-MM-DD',
+        dashboardPreferences: { compact: true },
+        reportPreferences: { defaultPeriod: 'month' },
+        transactionPreferences: { showPending: true },
+      })
+      .expect(200);
+    const responseBody = getSuccessBody<WorkspacePreferencesResponseDto>(res);
+
+    expect(responseBody.success).toBe(true);
+    expect(responseBody.data).toEqual({
+      uiLocale: 'es-AR',
+      dateFormat: 'YYYY-MM-DD',
+      dashboardPreferences: { compact: true },
+      reportPreferences: { defaultPeriod: 'month' },
+      transactionPreferences: { showPending: true },
+    });
+
+    const adminPreference =
+      await prisma.workspaceUserPreference.findUniqueOrThrow({
+        where: {
+          workspaceId_userId: {
+            workspaceId,
+            userId: adminUserId,
+          },
+        },
+      });
+
+    expect(adminPreference).toMatchObject({
+      uiLocale: 'es-AR',
+      dateFormat: 'YYYY-MM-DD',
+      dashboardPreferences: { compact: true },
+      reportPreferences: { defaultPeriod: 'month' },
+      transactionPreferences: { showPending: true },
+    });
+
+    const memberPreference = await prisma.workspaceUserPreference.findUnique({
+      where: {
+        workspaceId_userId: {
+          workspaceId,
+          userId: memberUserId,
+        },
+      },
+    });
+
+    expect(memberPreference).toBeNull();
   });
 
   it('lets admins update workspace identity separately from shared settings', async () => {
@@ -100,9 +236,10 @@ describe('Workspaces (e2e)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .send(payload)
       .expect(200);
+    const responseBody = getSuccessBody<CurrentWorkspaceResponseDto>(res);
 
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.workspace).toMatchObject({
+    expect(responseBody.success).toBe(true);
+    expect(responseBody.data.workspace).toMatchObject({
       name: 'Casa',
       type: WorkspaceType.PERSONAL,
     });
@@ -128,11 +265,12 @@ describe('Workspaces (e2e)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .send(payload)
       .expect(200);
+    const responseBody = getSuccessBody<CurrentWorkspaceResponseDto>(res);
 
-    expect(res.body.success).toBe(true);
-    expect(res.body.data.workspace.type).toBe(WorkspaceType.PERSONAL);
-    expect(res.body.data.workspace.name).toBe('Casa');
-    expect(res.body.data.settings).toMatchObject({
+    expect(responseBody.success).toBe(true);
+    expect(responseBody.data.workspace.type).toBe(WorkspaceType.PERSONAL);
+    expect(responseBody.data.workspace.name).toBe('Casa');
+    expect(responseBody.data.settings).toMatchObject({
       baseCurrencyCode: 'ARS',
       contentLocale: 'es-AR',
       dateFormat: 'YYYY-MM-DD',
