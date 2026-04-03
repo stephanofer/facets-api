@@ -498,6 +498,260 @@
         ]
       }
     },
+    "/api/v1/accounts": {
+      "post": {
+        "description": "Create a workspace-scoped account foundation record and, when compatible, one typed specialized profile. This surface intentionally excludes balances, transfers, reconciliation, and reporting math.",
+        "operationId": "AccountsController_create_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Account created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid account payload or incompatible profile"
+          },
+          "403": {
+            "description": "Only workspace admins and members can create accounts"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create an account",
+        "tags": [
+          "Accounts"
+        ]
+      },
+      "get": {
+        "description": "List only accounts that belong to the current principal workspace. Omitting the status filter returns only ACTIVE accounts.",
+        "operationId": "AccountsController_list_v1",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Optional lifecycle filter. Defaults to ACTIVE when omitted.",
+            "schema": {
+              "example": "ACTIVE",
+              "type": "string",
+              "enum": [
+                "ACTIVE",
+                "ARCHIVED"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace-scoped accounts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccountResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List accounts",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/v1/accounts/{id}": {
+      "get": {
+        "description": "Return a single account from the current workspace. Detail supports both ACTIVE and ARCHIVED records but never crosses workspace boundaries.",
+        "operationId": "AccountsController_getById_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Account not found in the current workspace"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get account detail",
+        "tags": [
+          "Accounts"
+        ]
+      },
+      "patch": {
+        "description": "Update only mutable Accounts Core metadata: name, includeInReports, notes, and a compatible typed profile. Immutable lifecycle and financial seed fields are rejected explicitly.",
+        "operationId": "AccountsController_update_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Immutable fields cannot be changed"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update mutable account metadata",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/v1/accounts/{id}/archive": {
+      "patch": {
+        "description": "Archive an account explicitly without mutating includeInReports or any downstream financial computations.",
+        "operationId": "AccountsController_archive_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account archived successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Archive an account",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
+    "/api/v1/accounts/{id}/reactivate": {
+      "patch": {
+        "description": "Return an archived account to ACTIVE explicitly while preserving independent metadata like includeInReports.",
+        "operationId": "AccountsController_reactivate_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Account CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account reactivated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reactivate an account",
+        "tags": [
+          "Accounts"
+        ]
+      }
+    },
     "/api/v1/me/profile": {
       "get": {
         "description": "Return the authenticated user profile summary owned by UserProfile. This surface includes phone, countryCode, theme, and onboardingCompletedAt only.",
@@ -1754,6 +2008,458 @@
         "required": [
           "file"
         ]
+      },
+      "AccountResponseDto": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CreditCardProfileResponseDto"
+              },
+              {
+                "$ref": "#/components/schemas/DebtProfileResponseDto"
+              },
+              {
+                "$ref": "#/components/schemas/LoanProfileResponseDto"
+              },
+              {
+                "$ref": "#/components/schemas/LentMoneyProfileResponseDto"
+              }
+            ]
+          },
+          "id": {
+            "type": "string",
+            "example": "cacc_123456789"
+          },
+          "name": {
+            "type": "string",
+            "example": "Banco sueldo"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "CASH",
+              "BANK",
+              "CREDIT_CARD",
+              "DEBT",
+              "LOAN",
+              "LENT_MONEY"
+            ],
+            "example": "BANK"
+          },
+          "currencyCode": {
+            "type": "string",
+            "example": "ARS"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "ARCHIVED"
+            ],
+            "example": "ACTIVE"
+          },
+          "includeInReports": {
+            "type": "boolean",
+            "example": true
+          },
+          "notes": {
+            "type": "object",
+            "example": "Cuenta principal",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-04-03T12:00:00.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-04-03T12:00:00.000Z"
+          }
+        },
+        "required": [
+          "profile",
+          "id",
+          "name",
+          "type",
+          "currencyCode",
+          "status",
+          "includeInReports",
+          "notes",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateCreditCardProfileDto": {
+        "type": "object",
+        "properties": {
+          "issuerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "last4": {
+            "type": "string",
+            "example": "1234",
+            "nullable": true
+          },
+          "creditLimit": {
+            "type": "number",
+            "example": 5000,
+            "nullable": true,
+            "minimum": 0
+          },
+          "closingDayOfMonth": {
+            "type": "number",
+            "example": 25,
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 31
+          },
+          "dueDayOfMonth": {
+            "type": "number",
+            "example": 10,
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 31
+          }
+        }
+      },
+      "CreateDebtProfileDto": {
+        "type": "object",
+        "properties": {
+          "creditorName": {
+            "type": "string",
+            "example": "Visa Banco",
+            "nullable": true
+          },
+          "dueDate": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-04-30",
+            "nullable": true
+          },
+          "reference": {
+            "type": "string",
+            "example": "resumen-marzo",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "example": "Pago en cuotas",
+            "nullable": true
+          }
+        }
+      },
+      "CreateLoanProfileDto": {
+        "type": "object",
+        "properties": {
+          "lenderName": {
+            "type": "string",
+            "example": "Banco Nación",
+            "nullable": true
+          },
+          "interestRate": {
+            "type": "number",
+            "example": 12.5,
+            "nullable": true,
+            "minimum": 0
+          },
+          "estimatedInstallmentAmount": {
+            "type": "number",
+            "example": 350,
+            "nullable": true,
+            "minimum": 0
+          },
+          "termMonths": {
+            "type": "number",
+            "example": 24,
+            "nullable": true,
+            "minimum": 1
+          },
+          "dueDayOfMonth": {
+            "type": "number",
+            "example": 15,
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 31
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-01-10",
+            "nullable": true
+          },
+          "maturityDate": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2028-01-10",
+            "nullable": true
+          }
+        }
+      },
+      "CreateLentMoneyProfileDto": {
+        "type": "object",
+        "properties": {
+          "borrowerName": {
+            "type": "string",
+            "example": "Juan Pérez",
+            "nullable": true
+          },
+          "expectedRepaymentDate": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-07-10",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "example": "Prestado para viaje",
+            "nullable": true
+          }
+        }
+      },
+      "CreditCardProfileResponseDto": {
+        "type": "object",
+        "properties": {
+          "issuerName": {
+            "type": "object",
+            "example": "Visa",
+            "nullable": true
+          },
+          "last4": {
+            "type": "object",
+            "example": "1234",
+            "nullable": true
+          },
+          "creditLimit": {
+            "type": "object",
+            "example": "5000",
+            "nullable": true
+          },
+          "closingDayOfMonth": {
+            "type": "object",
+            "example": 25,
+            "nullable": true
+          },
+          "dueDayOfMonth": {
+            "type": "object",
+            "example": 10,
+            "nullable": true
+          }
+        },
+        "required": [
+          "issuerName",
+          "last4",
+          "creditLimit",
+          "closingDayOfMonth",
+          "dueDayOfMonth"
+        ]
+      },
+      "DebtProfileResponseDto": {
+        "type": "object",
+        "properties": {
+          "creditorName": {
+            "type": "object",
+            "example": "Visa Banco",
+            "nullable": true
+          },
+          "dueDate": {
+            "type": "object",
+            "example": "2026-04-30T00:00:00.000Z",
+            "nullable": true
+          },
+          "reference": {
+            "type": "object",
+            "example": "resumen-marzo",
+            "nullable": true
+          },
+          "notes": {
+            "type": "object",
+            "example": "Pago en cuotas",
+            "nullable": true
+          }
+        },
+        "required": [
+          "creditorName",
+          "dueDate",
+          "reference",
+          "notes"
+        ]
+      },
+      "LoanProfileResponseDto": {
+        "type": "object",
+        "properties": {
+          "lenderName": {
+            "type": "object",
+            "example": "Banco Nación",
+            "nullable": true
+          },
+          "interestRate": {
+            "type": "object",
+            "example": "12.5",
+            "nullable": true
+          },
+          "estimatedInstallmentAmount": {
+            "type": "object",
+            "example": "350",
+            "nullable": true
+          },
+          "termMonths": {
+            "type": "object",
+            "example": 24,
+            "nullable": true
+          },
+          "dueDayOfMonth": {
+            "type": "object",
+            "example": 15,
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "object",
+            "example": "2026-01-10T00:00:00.000Z",
+            "nullable": true
+          },
+          "maturityDate": {
+            "type": "object",
+            "example": "2028-01-10T00:00:00.000Z",
+            "nullable": true
+          }
+        },
+        "required": [
+          "lenderName",
+          "interestRate",
+          "estimatedInstallmentAmount",
+          "termMonths",
+          "dueDayOfMonth",
+          "startedAt",
+          "maturityDate"
+        ]
+      },
+      "LentMoneyProfileResponseDto": {
+        "type": "object",
+        "properties": {
+          "borrowerName": {
+            "type": "object",
+            "example": "Juan Pérez",
+            "nullable": true
+          },
+          "expectedRepaymentDate": {
+            "type": "object",
+            "example": "2026-07-10T00:00:00.000Z",
+            "nullable": true
+          },
+          "notes": {
+            "type": "object",
+            "example": "Prestado para viaje",
+            "nullable": true
+          }
+        },
+        "required": [
+          "borrowerName",
+          "expectedRepaymentDate",
+          "notes"
+        ]
+      },
+      "CreateAccountDto": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CreateCreditCardProfileDto"
+              },
+              {
+                "$ref": "#/components/schemas/CreateDebtProfileDto"
+              },
+              {
+                "$ref": "#/components/schemas/CreateLoanProfileDto"
+              },
+              {
+                "$ref": "#/components/schemas/CreateLentMoneyProfileDto"
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "example": "Banco sueldo"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "CASH",
+              "BANK",
+              "CREDIT_CARD",
+              "DEBT",
+              "LOAN",
+              "LENT_MONEY"
+            ],
+            "example": "BANK"
+          },
+          "currencyCode": {
+            "type": "string",
+            "example": "ARS"
+          },
+          "initialBalance": {
+            "type": "number",
+            "example": 0,
+            "minimum": 0
+          },
+          "includeInReports": {
+            "type": "boolean",
+            "example": true,
+            "default": true
+          },
+          "notes": {
+            "type": "string",
+            "example": "Cuenta principal del trabajo",
+            "nullable": true
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "currencyCode"
+        ]
+      },
+      "UpdateAccountDto": {
+        "type": "object",
+        "properties": {
+          "profile": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CreateCreditCardProfileDto"
+              },
+              {
+                "$ref": "#/components/schemas/CreateDebtProfileDto"
+              },
+              {
+                "$ref": "#/components/schemas/CreateLoanProfileDto"
+              },
+              {
+                "$ref": "#/components/schemas/CreateLentMoneyProfileDto"
+              }
+            ]
+          },
+          "name": {
+            "type": "string",
+            "example": "Caja hogar"
+          },
+          "includeInReports": {
+            "type": "boolean",
+            "example": false
+          },
+          "notes": {
+            "type": "string",
+            "example": "Solo gastos del hogar",
+            "nullable": true
+          }
+        }
       },
       "MeProfileResponseDto": {
         "type": "object",
