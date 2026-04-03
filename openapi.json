@@ -1,359 +1,88 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/api/v1/health": {
+    "/health": {
       "get": {
-        "operationId": "HealthController_check_v1",
+        "description": "Minimal public health probe. It verifies bootstrap completion, shutdown state, and PostgreSQL availability via Prisma without exposing dependency details.",
+        "operationId": "HealthController_status",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "The Health Check is successful",
+            "description": "Application is healthy",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "ok"
-                    },
-                    "info": {
-                      "type": "object",
-                      "example": {
-                        "database": {
-                          "status": "up"
-                        }
-                      },
-                      "additionalProperties": {
-                        "type": "object",
-                        "required": [
-                          "status"
-                        ],
-                        "properties": {
-                          "status": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": true
-                      },
-                      "nullable": true
-                    },
-                    "error": {
-                      "type": "object",
-                      "example": {},
-                      "additionalProperties": {
-                        "type": "object",
-                        "required": [
-                          "status"
-                        ],
-                        "properties": {
-                          "status": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": true
-                      },
-                      "nullable": true
-                    },
-                    "details": {
-                      "type": "object",
-                      "example": {
-                        "database": {
-                          "status": "up"
-                        }
-                      },
-                      "additionalProperties": {
-                        "type": "object",
-                        "required": [
-                          "status"
-                        ],
-                        "properties": {
-                          "status": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": true
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/HealthStatusResponseDto"
                 }
               }
             }
           },
           "503": {
-            "description": "The Health Check is not successful",
+            "description": "Application is not healthy",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "error"
-                    },
-                    "info": {
-                      "type": "object",
-                      "example": {
-                        "database": {
-                          "status": "up"
-                        }
-                      },
-                      "additionalProperties": {
-                        "type": "object",
-                        "required": [
-                          "status"
-                        ],
-                        "properties": {
-                          "status": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": true
-                      },
-                      "nullable": true
-                    },
-                    "error": {
-                      "type": "object",
-                      "example": {
-                        "redis": {
-                          "status": "down",
-                          "message": "Could not connect"
-                        }
-                      },
-                      "additionalProperties": {
-                        "type": "object",
-                        "required": [
-                          "status"
-                        ],
-                        "properties": {
-                          "status": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": true
-                      },
-                      "nullable": true
-                    },
-                    "details": {
-                      "type": "object",
-                      "example": {
-                        "database": {
-                          "status": "up"
-                        },
-                        "redis": {
-                          "status": "down",
-                          "message": "Could not connect"
-                        }
-                      },
-                      "additionalProperties": {
-                        "type": "object",
-                        "required": [
-                          "status"
-                        ],
-                        "properties": {
-                          "status": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": true
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/HealthStatusResponseDto"
                 }
               }
             }
           }
         },
+        "summary": "Public health probe",
         "tags": [
+          "Health",
           "Health"
         ]
       }
     },
-    "/api/v1/health/live": {
+    "/health/details": {
       "get": {
-        "operationId": "HealthController_live_v1",
+        "description": "Return a detailed health view for operators, including critical database status and placeholders for optional future dependencies such as Redis.",
+        "operationId": "HealthController_details",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
-          }
-        },
-        "tags": [
-          "Health"
-        ]
-      }
-    },
-    "/api/v1/health/ready": {
-      "get": {
-        "operationId": "HealthController_ready_v1",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "The Health Check is successful",
+            "description": "Detailed health report",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "ok"
-                    },
-                    "info": {
-                      "type": "object",
-                      "example": {
-                        "database": {
-                          "status": "up"
-                        }
-                      },
-                      "additionalProperties": {
-                        "type": "object",
-                        "required": [
-                          "status"
-                        ],
-                        "properties": {
-                          "status": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": true
-                      },
-                      "nullable": true
-                    },
-                    "error": {
-                      "type": "object",
-                      "example": {},
-                      "additionalProperties": {
-                        "type": "object",
-                        "required": [
-                          "status"
-                        ],
-                        "properties": {
-                          "status": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": true
-                      },
-                      "nullable": true
-                    },
-                    "details": {
-                      "type": "object",
-                      "example": {
-                        "database": {
-                          "status": "up"
-                        }
-                      },
-                      "additionalProperties": {
-                        "type": "object",
-                        "required": [
-                          "status"
-                        ],
-                        "properties": {
-                          "status": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": true
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/HealthDetailsResponseDto"
                 }
               }
             }
           },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Super admin role required"
+          },
           "503": {
-            "description": "The Health Check is not successful",
+            "description": "One or more critical dependencies are unavailable",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "error"
-                    },
-                    "info": {
-                      "type": "object",
-                      "example": {
-                        "database": {
-                          "status": "up"
-                        }
-                      },
-                      "additionalProperties": {
-                        "type": "object",
-                        "required": [
-                          "status"
-                        ],
-                        "properties": {
-                          "status": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": true
-                      },
-                      "nullable": true
-                    },
-                    "error": {
-                      "type": "object",
-                      "example": {
-                        "redis": {
-                          "status": "down",
-                          "message": "Could not connect"
-                        }
-                      },
-                      "additionalProperties": {
-                        "type": "object",
-                        "required": [
-                          "status"
-                        ],
-                        "properties": {
-                          "status": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": true
-                      },
-                      "nullable": true
-                    },
-                    "details": {
-                      "type": "object",
-                      "example": {
-                        "database": {
-                          "status": "up"
-                        },
-                        "redis": {
-                          "status": "down",
-                          "message": "Could not connect"
-                        }
-                      },
-                      "additionalProperties": {
-                        "type": "object",
-                        "required": [
-                          "status"
-                        ],
-                        "properties": {
-                          "status": {
-                            "type": "string"
-                          }
-                        },
-                        "additionalProperties": true
-                      }
-                    }
-                  }
+                  "$ref": "#/components/schemas/HealthDetailsResponseDto"
                 }
               }
             }
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get detailed operator health report",
         "tags": [
+          "Health",
           "Health"
         ]
       }
     },
     "/api/v1/auth/register": {
       "post": {
-        "description": "Create a new user account and atomically bootstrap a personal workspace, admin membership, workspace settings, and free workspace subscription. A verification OTP will be sent to the provided email.",
+        "description": "Create a new user account and atomically bootstrap a personal workspace, admin membership, and workspace settings. A verification OTP will be sent to the provided email.",
         "operationId": "AuthController_register_v1",
         "parameters": [],
         "requestBody": {
@@ -382,9 +111,6 @@
           },
           "409": {
             "description": "Email already exists"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
           }
         },
         "summary": "Register new user",
@@ -424,9 +150,6 @@
           },
           "403": {
             "description": "Account not verified or suspended"
-          },
-          "429": {
-            "description": "Rate limit exceeded"
           }
         },
         "summary": "Login user",
@@ -476,7 +199,7 @@
     },
     "/api/v1/auth/resend-verification": {
       "post": {
-        "description": "Request a new verification OTP. Rate limited to prevent abuse (60s cooldown, 5/hour max).",
+        "description": "Request a new verification OTP.",
         "operationId": "AuthController_resendVerification_v1",
         "parameters": [],
         "requestBody": {
@@ -502,9 +225,6 @@
           },
           "400": {
             "description": "Email already verified"
-          },
-          "429": {
-            "description": "Rate limit exceeded or cooldown period active"
           }
         },
         "summary": "Resend verification email",
@@ -538,9 +258,6 @@
                 }
               }
             }
-          },
-          "429": {
-            "description": "Rate limit exceeded"
           }
         },
         "summary": "Request password reset",
@@ -701,7 +418,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthUserDto"
+                  "$ref": "#/components/schemas/AuthBootstrapResponseDto"
                 }
               }
             }
@@ -781,78 +498,85 @@
         ]
       }
     },
-    "/api/v1/plans": {
+    "/api/v1/me/profile": {
       "get": {
-        "description": "Get all available subscription plans with their features and pricing.",
-        "operationId": "PlansController_getAllPlans_v1",
+        "description": "Return the authenticated user profile summary owned by UserProfile. This surface includes phone, countryCode, theme, and onboardingCompletedAt only.",
+        "operationId": "MeController_getProfile_v1",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "List of all active plans",
+            "description": "Current user profile",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlansListResponseDto"
+                  "$ref": "#/components/schemas/MeProfileResponseDto"
                 }
               }
             }
           }
         },
-        "summary": "List all plans",
-        "tags": [
-          "Plans"
-        ]
-      }
-    },
-    "/api/v1/plans/{code}": {
-      "get": {
-        "description": "Get detailed information about a specific plan by its code.",
-        "operationId": "PlansController_getPlanByCode_v1",
-        "parameters": [
+        "security": [
           {
-            "name": "code",
-            "required": true,
-            "in": "path",
-            "description": "Plan code (free, pro, premium)",
-            "schema": {
-              "example": "pro",
-              "type": "string"
-            }
+            "bearer": []
           }
         ],
+        "summary": "Get current user profile",
+        "tags": [
+          "Me"
+        ]
+      },
+      "patch": {
+        "description": "Update user-owned profile fields only. This route validates E.164 phone numbers, active countries, and theme values without mutating onboarding completion or workspace-scoped settings.",
+        "operationId": "MeController_updateProfile_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Plan details",
+            "description": "Profile updated successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlanDto"
+                  "$ref": "#/components/schemas/MeProfileResponseDto"
                 }
               }
             }
           },
-          "404": {
-            "description": "Plan not found"
+          "400": {
+            "description": "Invalid phone, inactive country, or invalid theme value"
           }
         },
-        "summary": "Get plan details",
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update current user profile",
         "tags": [
-          "Plans"
+          "Me"
         ]
       }
     },
-    "/api/v1/subscriptions/current": {
+    "/api/v1/me/onboarding": {
       "get": {
-        "description": "Get the current workspace subscription details including plan and status.",
-        "operationId": "SubscriptionsController_getCurrentSubscription_v1",
+        "description": "Return onboarding completion state only. This surface exposes onboardingCompletedAt and needsOnboarding without leaking profile-owned phone, theme, or countryCode fields.",
+        "operationId": "MeController_getOnboarding_v1",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Current subscription details",
+            "description": "Current onboarding state",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CurrentSubscriptionResponseDto"
+                  "$ref": "#/components/schemas/MeOnboardingResponseDto"
                 }
               }
             }
@@ -863,104 +587,38 @@
             "bearer": []
           }
         ],
-        "summary": "Get current subscription",
+        "summary": "Get onboarding state",
         "tags": [
-          "Subscriptions"
+          "Me"
         ]
-      }
-    },
-    "/api/v1/subscriptions/usage": {
-      "get": {
-        "description": "Get the current usage for all features in the active workspace plan.",
-        "operationId": "SubscriptionsController_getUsage_v1",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Usage statistics for all features",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UsageResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Get usage statistics",
-        "tags": [
-          "Subscriptions"
-        ]
-      }
-    },
-    "/api/v1/subscriptions/preview": {
-      "get": {
-        "description": "Preview the effects of changing to a different plan for the active workspace.",
-        "operationId": "SubscriptionsController_previewPlanChange_v1",
-        "parameters": [
-          {
-            "name": "planCode",
-            "required": true,
-            "in": "query",
-            "description": "Target plan code (e.g., \"pro\", \"premium\", \"free\")",
-            "schema": {
-              "example": "pro",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Plan change preview",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PreviewResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Preview plan change",
-        "tags": [
-          "Subscriptions"
-        ]
-      }
-    },
-    "/api/v1/subscriptions/upgrade": {
-      "post": {
-        "description": "Upgrade the active workspace to a higher tier plan. The change takes effect immediately.",
-        "operationId": "SubscriptionsController_upgradePlan_v1",
+      },
+      "patch": {
+        "description": "Update onboarding completion state only. Extra fields like phone, theme, or countryCode are rejected by request validation, and completion state is derived exclusively from onboardingCompletedAt.",
+        "operationId": "MeController_updateOnboarding_v1",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ChangePlanDto"
+                "$ref": "#/components/schemas/UpdateOnboardingDto"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Plan upgraded successfully",
+            "description": "Onboarding state updated successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/UpgradeResponseDto"
+                  "$ref": "#/components/schemas/MeOnboardingResponseDto"
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid onboarding payload or forbidden extra fields"
           }
         },
         "security": [
@@ -968,167 +626,27 @@
             "bearer": []
           }
         ],
-        "summary": "Upgrade plan",
+        "summary": "Update onboarding state",
         "tags": [
-          "Subscriptions"
+          "Me"
         ]
       }
     },
-    "/api/v1/subscriptions/downgrade": {
-      "post": {
-        "description": "Downgrade the active workspace to a lower tier plan. The change is scheduled for the end of the current billing period.",
-        "operationId": "SubscriptionsController_downgradePlan_v1",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ChangePlanDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Downgrade scheduled successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DowngradeResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Downgrade plan",
-        "tags": [
-          "Subscriptions"
-        ]
-      }
-    },
-    "/api/v1/subscriptions/cancel": {
-      "post": {
-        "description": "Cancel the active workspace subscription. It will downgrade to Free at the end of the billing period.",
-        "operationId": "SubscriptionsController_cancelSubscription_v1",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CancelSubscriptionDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Cancellation scheduled successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancelResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Cancel subscription",
-        "tags": [
-          "Subscriptions"
-        ]
-      }
-    },
-    "/api/v1/subscriptions/reactivate": {
-      "post": {
-        "description": "Reactivate a cancelled active workspace subscription before cancellation takes effect.",
-        "operationId": "SubscriptionsController_reactivateSubscription_v1",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Subscription reactivated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReactivateResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Reactivate subscription",
-        "tags": [
-          "Subscriptions"
-        ]
-      }
-    },
-    "/api/v1/subscriptions/scheduled": {
-      "delete": {
-        "description": "Cancel a scheduled downgrade or cancellation for the active workspace.",
-        "operationId": "SubscriptionsController_cancelScheduledChange_v1",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Scheduled change cancelled successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CancelScheduledChangeResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Cancel scheduled change",
-        "tags": [
-          "Subscriptions"
-        ]
-      }
-    },
-    "/api/v1/subscriptions/history": {
+    "/api/v1/reference/countries": {
       "get": {
-        "description": "Get a list of all plan changes for the active workspace.",
-        "operationId": "SubscriptionsController_getPlanChangeHistory_v1",
-        "parameters": [
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "description": "Maximum number of records to return (default: 20)",
-            "schema": {
-              "example": 20,
-              "type": "number"
-            }
-          }
-        ],
+        "description": "Return active country reference rows only for onboarding and profile forms.",
+        "operationId": "ReferenceController_getCountries_v1",
+        "parameters": [],
         "responses": {
           "200": {
-            "description": "Plan change history",
+            "description": "Active countries",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlanChangeHistoryResponseDto"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReferenceCountryResponseDto"
+                  }
                 }
               }
             }
@@ -1139,9 +657,71 @@
             "bearer": []
           }
         ],
-        "summary": "Get plan change history",
+        "summary": "List active countries",
         "tags": [
-          "Subscriptions"
+          "Reference"
+        ]
+      }
+    },
+    "/api/v1/reference/currencies": {
+      "get": {
+        "description": "Return active currency reference rows only for workspace and onboarding flows.",
+        "operationId": "ReferenceController_getCurrencies_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Active currencies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReferenceCurrencyResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List active currencies",
+        "tags": [
+          "Reference"
+        ]
+      }
+    },
+    "/api/v1/workspaces": {
+      "get": {
+        "description": "Return only workspaces where the authenticated caller has active membership access. Each item includes workspace summary, membership summary, and whether it matches the current workspace from principal context.",
+        "operationId": "WorkspacesController_listWorkspaces_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Accessible workspaces for the authenticated caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkspaceDirectoryItemDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List accessible workspaces",
+        "tags": [
+          "Workspaces"
         ]
       }
     },
@@ -1168,6 +748,45 @@
           }
         ],
         "summary": "Get current workspace",
+        "tags": [
+          "Workspaces"
+        ]
+      },
+      "patch": {
+        "description": "Update workspace identity fields for the active workspace, such as the visible name. Only workspace admins can mutate this surface.",
+        "operationId": "WorkspacesController_updateCurrentWorkspace_v1",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkspaceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workspace updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentWorkspaceResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only workspace admins can update the workspace"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update current workspace",
         "tags": [
           "Workspaces"
         ]
@@ -1201,7 +820,7 @@
         ]
       },
       "patch": {
-        "description": "Update shared workspace settings for the active workspace. Only workspace admins can mutate this surface. Personal user preferences must stay in user-scoped preference flows, not here.",
+        "description": "Update shared workspace settings for the active workspace. Only workspace admins can mutate this surface. Workspace identity fields like name belong to PATCH /workspaces/current, not here.",
         "operationId": "WorkspacesController_updateCurrentWorkspaceSettings_v1",
         "parameters": [],
         "requestBody": {
@@ -1240,40 +859,60 @@
         ]
       }
     },
-    "/api/v1/accounts": {
-      "post": {
-        "description": "Create a new financial account (bank, card, cash, etc.). Subject to plan limits.",
-        "operationId": "AccountsController_create_v1",
+    "/api/v1/workspaces/current/preferences": {
+      "get": {
+        "description": "Return only the current user preference overrides for the active workspace. Shared workspace settings and theme ownership are intentionally excluded from this surface.",
+        "operationId": "WorkspacesController_getCurrentWorkspacePreferences_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current user preference overrides for the active workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspacePreferencesResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get current workspace personal preferences",
+        "tags": [
+          "Workspaces"
+        ]
+      },
+      "patch": {
+        "description": "Update only per-user-per-workspace preference overrides for the active workspace. Shared workspace settings and theme are not owned by this route and cannot be mutated here.",
+        "operationId": "WorkspacesController_updateCurrentWorkspacePreferences_v1",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateAccountDto"
+                "$ref": "#/components/schemas/UpdateWorkspacePreferencesDto"
               }
             }
           }
         },
         "responses": {
-          "201": {
-            "description": "Account created successfully",
+          "200": {
+            "description": "Current workspace personal preferences updated successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AccountResponseDto"
+                  "$ref": "#/components/schemas/WorkspacePreferencesResponseDto"
                 }
               }
             }
           },
           "400": {
-            "description": "Validation error or invalid credit card fields"
-          },
-          "403": {
-            "description": "Account limit reached for current plan"
-          },
-          "409": {
-            "description": "Account name already exists"
+            "description": "Invalid workspace preference payload"
           }
         },
         "security": [
@@ -1281,650 +920,9 @@
             "bearer": []
           }
         ],
-        "summary": "Create account",
+        "summary": "Update current workspace personal preferences",
         "tags": [
-          "Accounts"
-        ]
-      },
-      "get": {
-        "description": "Get all accounts for the authenticated workspace. By default, archived accounts are hidden.",
-        "operationId": "AccountsController_findAll_v1",
-        "parameters": [
-          {
-            "name": "type",
-            "required": false,
-            "in": "query",
-            "description": "Filter by account type",
-            "schema": {
-              "example": "DEBIT_CARD",
-              "type": "string",
-              "enum": [
-                "CASH",
-                "DEBIT_CARD",
-                "CREDIT_CARD",
-                "SAVINGS",
-                "INVESTMENT",
-                "DIGITAL_WALLET",
-                "OTHER"
-              ]
-            }
-          },
-          {
-            "name": "includeArchived",
-            "required": false,
-            "in": "query",
-            "description": "Include archived accounts (default: false)",
-            "schema": {
-              "default": false,
-              "example": false,
-              "type": "boolean"
-            }
-          },
-          {
-            "name": "currencyCode",
-            "required": false,
-            "in": "query",
-            "description": "Filter by currency code",
-            "schema": {
-              "example": "USD",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "List of accounts",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountListResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List accounts",
-        "tags": [
-          "Accounts"
-        ]
-      }
-    },
-    "/api/v1/accounts/summary": {
-      "get": {
-        "description": "Get total balance grouped by currency across all active accounts that are included in total.",
-        "operationId": "AccountsController_getBalanceSummary_v1",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Balance summary by currency",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountSummaryResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Balance summary",
-        "tags": [
-          "Accounts"
-        ]
-      }
-    },
-    "/api/v1/accounts/{id}": {
-      "get": {
-        "description": "Get details of a specific account.",
-        "operationId": "AccountsController_findById_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Account ID (CUID)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Account details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountResponseDto"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Account not found"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Get account",
-        "tags": [
-          "Accounts"
-        ]
-      },
-      "put": {
-        "description": "Update account details. Type and currency cannot be changed after creation.",
-        "operationId": "AccountsController_update_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Account ID (CUID)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateAccountDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Account updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountResponseDto"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Account not found"
-          },
-          "409": {
-            "description": "Account name already exists"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Update account",
-        "tags": [
-          "Accounts"
-        ]
-      },
-      "delete": {
-        "description": "Permanently delete an account. Only possible if the account has no transactions. Use archive instead for accounts with transaction history.",
-        "operationId": "AccountsController_delete_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Account ID (CUID)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Account deleted successfully"
-          },
-          "404": {
-            "description": "Account not found"
-          },
-          "409": {
-            "description": "Account has transactions, archive instead"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Delete account",
-        "tags": [
-          "Accounts"
-        ]
-      }
-    },
-    "/api/v1/accounts/{id}/archive": {
-      "patch": {
-        "description": "Archive an account to hide it from the UI while preserving transaction history. Archived accounts do not count towards plan limits.",
-        "operationId": "AccountsController_archive_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Account ID (CUID)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Account archived successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountResponseDto"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Account not found"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Archive account",
-        "tags": [
-          "Accounts"
-        ]
-      }
-    },
-    "/api/v1/accounts/{id}/unarchive": {
-      "patch": {
-        "description": "Restore an archived account. Subject to plan limits — unarchiving may fail if you are at your account limit.",
-        "operationId": "AccountsController_unarchive_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Account ID (CUID)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Account unarchived successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountResponseDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Account limit reached, cannot unarchive"
-          },
-          "404": {
-            "description": "Account not found"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Unarchive account",
-        "tags": [
-          "Accounts"
-        ]
-      }
-    },
-    "/api/v1/categories": {
-      "post": {
-        "description": "Create a custom transaction category. Subject to plan limits. Supports 2-level hierarchy (parent → child).",
-        "operationId": "CategoriesController_create_v1",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateCategoryDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Category created successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CategoryResponseDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error, max depth exceeded, or parent type mismatch"
-          },
-          "403": {
-            "description": "Category limit reached or system category modification"
-          },
-          "409": {
-            "description": "Category name already exists"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Create custom category",
-        "tags": [
-          "Categories"
-        ]
-      },
-      "get": {
-        "description": "Get all categories for the authenticated workspace. Includes system categories (shared) and workspace custom categories. Returns tree structure by default.",
-        "operationId": "CategoriesController_findAll_v1",
-        "parameters": [
-          {
-            "name": "type",
-            "required": false,
-            "in": "query",
-            "description": "Filter by transaction type",
-            "schema": {
-              "example": "EXPENSE",
-              "type": "string",
-              "enum": [
-                "EXPENSE",
-                "INCOME",
-                "TRANSFER"
-              ]
-            }
-          },
-          {
-            "name": "includeInactive",
-            "required": false,
-            "in": "query",
-            "description": "Include inactive categories (default: false)",
-            "schema": {
-              "default": false,
-              "example": false,
-              "type": "boolean"
-            }
-          },
-          {
-            "name": "flat",
-            "required": false,
-            "in": "query",
-            "description": "Return flat list instead of tree structure (default: false)",
-            "schema": {
-              "default": false,
-              "example": false,
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Category tree (or flat list if ?flat=true)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CategoryTreeResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List categories",
-        "tags": [
-          "Categories"
-        ]
-      }
-    },
-    "/api/v1/categories/{id}": {
-      "get": {
-        "description": "Get details of a specific category including its subcategories.",
-        "operationId": "CategoriesController_findById_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Category ID (CUID)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Category details with children",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CategoryWithChildrenDto"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Category not found"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Get category",
-        "tags": [
-          "Categories"
-        ]
-      },
-      "put": {
-        "description": "Update a custom category. System categories cannot be modified. Type and parent cannot be changed.",
-        "operationId": "CategoriesController_update_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Category ID (CUID)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateCategoryDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Category updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CategoryResponseDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Cannot modify system categories"
-          },
-          "404": {
-            "description": "Category not found"
-          },
-          "409": {
-            "description": "Category name already exists"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Update category",
-        "tags": [
-          "Categories"
-        ]
-      },
-      "delete": {
-        "description": "Permanently delete a custom category. System categories cannot be deleted. Categories with transactions can only be deactivated.",
-        "operationId": "CategoriesController_delete_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Category ID (CUID)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Category deleted successfully"
-          },
-          "403": {
-            "description": "Cannot delete system categories"
-          },
-          "404": {
-            "description": "Category not found"
-          },
-          "409": {
-            "description": "Category has transactions, deactivate instead"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Delete category",
-        "tags": [
-          "Categories"
-        ]
-      }
-    },
-    "/api/v1/categories/{id}/deactivate": {
-      "patch": {
-        "description": "Deactivate a custom category to hide it from selection lists while preserving existing transaction references.",
-        "operationId": "CategoriesController_deactivate_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Category ID (CUID)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Category deactivated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CategoryResponseDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Cannot deactivate system categories"
-          },
-          "404": {
-            "description": "Category not found"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Deactivate category",
-        "tags": [
-          "Categories"
-        ]
-      }
-    },
-    "/api/v1/categories/{id}/reactivate": {
-      "patch": {
-        "description": "Reactivate a previously deactivated custom category.",
-        "operationId": "CategoriesController_reactivate_v1",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "description": "Category ID (CUID)",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Category reactivated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CategoryResponseDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Cannot modify system categories"
-          },
-          "404": {
-            "description": "Category not found"
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Reactivate category",
-        "tags": [
-          "Categories"
+          "Workspaces"
         ]
       }
     },
@@ -1990,6 +988,132 @@
       }
     },
     "schemas": {
+      "HealthStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "error"
+            ],
+            "example": "ok"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "HealthAppStateDto": {
+        "type": "object",
+        "properties": {
+          "bootstrapCompleted": {
+            "type": "boolean",
+            "example": true
+          },
+          "shuttingDown": {
+            "type": "boolean",
+            "example": false
+          },
+          "startedAt": {
+            "type": "string",
+            "example": "2026-03-31T22:00:00.000Z"
+          },
+          "bootstrappedAt": {
+            "type": "string",
+            "example": "2026-03-31T22:00:01.250Z"
+          },
+          "uptimeMs": {
+            "type": "number",
+            "example": 10234
+          }
+        },
+        "required": [
+          "bootstrapCompleted",
+          "shuttingDown",
+          "startedAt",
+          "uptimeMs"
+        ]
+      },
+      "HealthDependencyDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down",
+              "not_configured"
+            ],
+            "example": "up"
+          },
+          "critical": {
+            "type": "boolean",
+            "example": true
+          },
+          "timeoutMs": {
+            "type": "number",
+            "example": 1000
+          },
+          "latencyMs": {
+            "type": "number",
+            "example": 14
+          },
+          "message": {
+            "type": "string",
+            "example": "timeout of 1000ms exceeded"
+          }
+        },
+        "required": [
+          "status",
+          "critical"
+        ]
+      },
+      "HealthDependenciesDto": {
+        "type": "object",
+        "properties": {
+          "database": {
+            "$ref": "#/components/schemas/HealthDependencyDto"
+          },
+          "redis": {
+            "$ref": "#/components/schemas/HealthDependencyDto"
+          }
+        },
+        "required": [
+          "database",
+          "redis"
+        ]
+      },
+      "HealthDetailsResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "error",
+              "shutting_down"
+            ],
+            "example": "ok"
+          },
+          "timestamp": {
+            "type": "string",
+            "example": "2026-03-31T22:00:05.000Z"
+          },
+          "app": {
+            "$ref": "#/components/schemas/HealthAppStateDto"
+          },
+          "dependencies": {
+            "$ref": "#/components/schemas/HealthDependenciesDto"
+          }
+        },
+        "required": [
+          "status",
+          "timestamp",
+          "app",
+          "dependencies"
+        ]
+      },
       "RegisterDto": {
         "type": "object",
         "properties": {
@@ -2021,61 +1145,6 @@
           "password",
           "firstName",
           "lastName"
-        ]
-      },
-      "FileResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "example": "cm8storage0001jn08abc12345"
-          },
-          "url": {
-            "type": "string",
-            "example": "https://pub-xxx.r2.dev/avatars/550e8400-e29b-41d4-a716-446655440000.webp"
-          },
-          "mimeType": {
-            "type": "string",
-            "example": "image/webp"
-          },
-          "size": {
-            "type": "number",
-            "example": 45200
-          },
-          "purpose": {
-            "type": "string",
-            "enum": [
-              "AVATAR",
-              "TRANSACTION_RECEIPT"
-            ],
-            "example": "AVATAR"
-          }
-        },
-        "required": [
-          "id",
-          "url",
-          "mimeType",
-          "size",
-          "purpose"
-        ]
-      },
-      "AuthPlanDto": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string",
-            "description": "Plan code",
-            "example": "free"
-          },
-          "name": {
-            "type": "string",
-            "description": "Plan display name",
-            "example": "Free"
-          }
-        },
-        "required": [
-          "code",
-          "name"
         ]
       },
       "AuthWorkspaceDto": {
@@ -2200,21 +1269,10 @@
             "description": "Account creation date",
             "example": "2026-02-04T12:00:00.000Z"
           },
-          "avatar": {
-            "description": "Current user avatar file metadata",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/FileResponseDto"
-              }
-            ]
-          },
-          "plan": {
-            "description": "Current workspace subscription plan",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AuthPlanDto"
-              }
-            ]
+          "avatarUrl": {
+            "type": "string",
+            "description": "Current user avatar public URL",
+            "example": "https://cdn.facets.test/avatars/avatar-123.webp"
           },
           "workspace": {
             "description": "Current active workspace summary",
@@ -2451,6 +1509,239 @@
           }
         }
       },
+      "AuthBootstrapUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cuid_123456789"
+          },
+          "email": {
+            "type": "string",
+            "example": "user@example.com"
+          },
+          "firstName": {
+            "type": "string",
+            "example": "John"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "Doe"
+          },
+          "emailVerified": {
+            "type": "boolean",
+            "example": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_VERIFICATION",
+              "ACTIVE",
+              "SUSPENDED",
+              "DELETED"
+            ],
+            "example": "ACTIVE"
+          },
+          "platformRole": {
+            "type": "string",
+            "enum": [
+              "USER",
+              "SUPER_ADMIN"
+            ],
+            "example": "USER"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-02-04T12:00:00.000Z"
+          },
+          "avatarUrl": {
+            "type": "object",
+            "example": "https://cdn.facets.test/avatars/avatar-123.webp",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "firstName",
+          "lastName",
+          "emailVerified",
+          "status",
+          "platformRole",
+          "createdAt",
+          "avatarUrl"
+        ]
+      },
+      "AuthBootstrapWorkspaceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cwksp_123456789"
+          },
+          "name": {
+            "type": "string",
+            "example": "John Workspace"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "PERSONAL",
+              "FAMILY",
+              "GROUP"
+            ],
+            "example": "PERSONAL"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "SUSPENDED",
+              "ARCHIVED"
+            ],
+            "example": "ACTIVE"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "status"
+        ]
+      },
+      "AuthBootstrapMembershipDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cmship_123456789"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ADMIN",
+              "MEMBER",
+              "GUEST"
+            ],
+            "example": "ADMIN"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INVITED",
+              "SUSPENDED",
+              "REMOVED"
+            ],
+            "example": "ACTIVE"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "status"
+        ]
+      },
+      "AuthBootstrapProfileDto": {
+        "type": "object",
+        "properties": {
+          "countryCode": {
+            "type": "object",
+            "example": "AR",
+            "nullable": true
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "SYSTEM",
+              "LIGHT",
+              "DARK"
+            ],
+            "example": "DARK",
+            "nullable": true
+          },
+          "onboardingCompletedAt": {
+            "type": "object",
+            "example": "2026-03-15T10:00:00.000Z",
+            "nullable": true
+          }
+        },
+        "required": [
+          "countryCode",
+          "theme",
+          "onboardingCompletedAt"
+        ]
+      },
+      "AuthBootstrapWorkspaceSettingsDto": {
+        "type": "object",
+        "properties": {
+          "baseCurrencyCode": {
+            "type": "string",
+            "example": "USD"
+          },
+          "contentLocale": {
+            "type": "string",
+            "example": "en-US"
+          },
+          "dateFormat": {
+            "type": "string",
+            "example": "DD/MM/YYYY"
+          },
+          "monthStartDay": {
+            "type": "number",
+            "example": 1
+          },
+          "weekStartDay": {
+            "type": "number",
+            "example": 1
+          },
+          "financialTimezone": {
+            "type": "string",
+            "example": "UTC"
+          }
+        },
+        "required": [
+          "baseCurrencyCode",
+          "contentLocale",
+          "dateFormat",
+          "monthStartDay",
+          "weekStartDay",
+          "financialTimezone"
+        ]
+      },
+      "AuthBootstrapResponseDto": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/AuthBootstrapUserDto"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/AuthBootstrapWorkspaceDto"
+          },
+          "membership": {
+            "$ref": "#/components/schemas/AuthBootstrapMembershipDto"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/AuthBootstrapProfileDto"
+          },
+          "workspaceSettings": {
+            "$ref": "#/components/schemas/AuthBootstrapWorkspaceSettingsDto"
+          },
+          "needsOnboarding": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "user",
+          "workspace",
+          "membership",
+          "profile",
+          "workspaceSettings",
+          "needsOnboarding"
+        ]
+      },
       "UploadAvatarDto": {
         "type": "object",
         "properties": {
@@ -2464,607 +1755,152 @@
           "file"
         ]
       },
-      "PlanFeatureDto": {
+      "MeProfileResponseDto": {
         "type": "object",
         "properties": {
-          "featureCode": {
-            "type": "string",
-            "description": "Feature code identifier"
+          "phone": {
+            "type": "object",
+            "example": "+5491155557777",
+            "nullable": true
           },
-          "limitType": {
+          "countryCode": {
+            "type": "object",
+            "example": "AR",
+            "nullable": true
+          },
+          "theme": {
             "type": "string",
             "enum": [
-              "BOOLEAN",
-              "COUNT",
-              "UNLIMITED"
+              "SYSTEM",
+              "LIGHT",
+              "DARK"
             ],
-            "description": "Type of limit"
+            "example": "DARK",
+            "nullable": true
           },
-          "limitValue": {
-            "type": "number",
-            "description": "Limit value (-1 for unlimited, 0/1 for boolean)"
-          },
-          "featureType": {
+          "onboardingCompletedAt": {
+            "type": "object",
+            "example": "2026-03-15T10:00:00.000Z",
+            "nullable": true
+          }
+        },
+        "required": [
+          "phone",
+          "countryCode",
+          "theme",
+          "onboardingCompletedAt"
+        ]
+      },
+      "UpdateProfileDto": {
+        "type": "object",
+        "properties": {
+          "phone": {
             "type": "string",
+            "description": "Phone number in E.164 format",
+            "example": "+5491155557777"
+          },
+          "countryCode": {
+            "type": "string",
+            "description": "Active ISO 3166-1 alpha-2 country code",
+            "example": "AR"
+          },
+          "theme": {
+            "type": "string",
+            "description": "User theme preference",
             "enum": [
-              "RESOURCE",
-              "CONSUMABLE"
+              "SYSTEM",
+              "LIGHT",
+              "DARK"
             ],
-            "description": "Feature type"
-          },
-          "limitPeriod": {
-            "type": "string",
-            "enum": [
-              "DAILY",
-              "WEEKLY",
-              "MONTHLY",
-              "YEARLY"
-            ],
-            "description": "Period for consumable features"
+            "example": "DARK"
           }
-        },
-        "required": [
-          "featureCode",
-          "limitType",
-          "limitValue"
-        ]
+        }
       },
-      "PlanDto": {
+      "MeOnboardingResponseDto": {
         "type": "object",
         "properties": {
-          "id": {
-            "type": "string",
-            "description": "Plan ID"
+          "onboardingCompletedAt": {
+            "type": "object",
+            "example": "2026-03-15T10:00:00.000Z",
+            "nullable": true
           },
-          "code": {
-            "type": "string",
-            "description": "Plan code (free, pro, premium)"
-          },
-          "name": {
-            "type": "string",
-            "description": "Display name"
-          },
-          "description": {
-            "type": "string",
-            "description": "Plan description"
-          },
-          "priceMonthly": {
-            "type": "number",
-            "description": "Monthly price"
-          },
-          "priceYearly": {
-            "type": "number",
-            "description": "Yearly price (with discount)"
-          },
-          "priceCurrency": {
-            "type": "string",
-            "description": "Currency code"
-          },
-          "isDefault": {
+          "needsOnboarding": {
             "type": "boolean",
-            "description": "Is this the default plan for new users"
-          },
-          "sortOrder": {
-            "type": "number",
-            "description": "Sort order for display"
-          },
-          "features": {
-            "description": "Features included in this plan",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanFeatureDto"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "code",
-          "name",
-          "priceMonthly",
-          "priceCurrency",
-          "isDefault",
-          "sortOrder",
-          "features"
-        ]
-      },
-      "PlansListResponseDto": {
-        "type": "object",
-        "properties": {
-          "plans": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanDto"
-            }
-          }
-        },
-        "required": [
-          "plans"
-        ]
-      },
-      "SubscriptionDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "Subscription ID"
-          },
-          "status": {
-            "type": "string",
-            "description": "Subscription status"
-          },
-          "currentPeriodStart": {
-            "format": "date-time",
-            "type": "string",
-            "description": "Current billing period start"
-          },
-          "currentPeriodEnd": {
-            "format": "date-time",
-            "type": "string",
-            "description": "Current billing period end (null for free plan)"
-          },
-          "trialStart": {
-            "format": "date-time",
-            "type": "string",
-            "description": "Trial start date"
-          },
-          "trialEnd": {
-            "format": "date-time",
-            "type": "string",
-            "description": "Trial end date"
-          },
-          "plan": {
-            "description": "Current plan details",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/PlanDto"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "status",
-          "currentPeriodStart",
-          "plan"
-        ]
-      },
-      "CurrentSubscriptionResponseDto": {
-        "type": "object",
-        "properties": {
-          "subscription": {
-            "$ref": "#/components/schemas/SubscriptionDto"
-          }
-        },
-        "required": [
-          "subscription"
-        ]
-      },
-      "FeatureUsageDto": {
-        "type": "object",
-        "properties": {
-          "featureCode": {
-            "type": "string",
-            "description": "Feature code"
-          },
-          "current": {
-            "type": "number",
-            "description": "Current usage count"
-          },
-          "limit": {
-            "type": "number",
-            "description": "Maximum allowed (-1 for unlimited)"
-          },
-          "limitType": {
-            "type": "string",
-            "description": "Type of limit"
-          },
-          "featureType": {
-            "type": "string",
-            "description": "Feature type (RESOURCE or CONSUMABLE)"
-          },
-          "periodType": {
-            "type": "string",
-            "description": "Period type for consumable features"
-          },
-          "periodEnd": {
-            "format": "date-time",
-            "type": "string",
-            "description": "Period end date for consumable features"
-          },
-          "usagePercentage": {
-            "type": "number",
-            "description": "Percentage of limit used (0-100+)"
-          },
-          "limitReached": {
-            "type": "boolean",
-            "description": "Whether the limit has been reached"
-          }
-        },
-        "required": [
-          "featureCode",
-          "current",
-          "limit",
-          "limitType",
-          "featureType",
-          "usagePercentage",
-          "limitReached"
-        ]
-      },
-      "UsageResponseDto": {
-        "type": "object",
-        "properties": {
-          "planCode": {
-            "type": "string",
-            "description": "Plan code"
-          },
-          "planName": {
-            "type": "string",
-            "description": "Plan name"
-          },
-          "features": {
-            "description": "Usage details for each feature",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/FeatureUsageDto"
-            }
-          }
-        },
-        "required": [
-          "planCode",
-          "planName",
-          "features"
-        ]
-      },
-      "ResourceOverageDto": {
-        "type": "object",
-        "properties": {
-          "featureCode": {
-            "type": "string",
-            "description": "Feature code with overage",
-            "example": "accounts"
-          },
-          "current": {
-            "type": "number",
-            "description": "Current count of resources",
-            "example": 5
-          },
-          "newLimit": {
-            "type": "number",
-            "description": "New limit after plan change",
-            "example": 2
-          },
-          "overage": {
-            "type": "number",
-            "description": "Number of resources over the limit",
-            "example": 3
-          },
-          "hasGracePeriod": {
-            "type": "boolean",
-            "description": "Whether this feature will have a grace period",
             "example": true
           }
         },
         "required": [
-          "featureCode",
-          "current",
-          "newLimit",
-          "overage",
-          "hasGracePeriod"
+          "onboardingCompletedAt",
+          "needsOnboarding"
         ]
       },
-      "PlanChangePreviewDto": {
+      "UpdateOnboardingDto": {
         "type": "object",
         "properties": {
-          "currentPlan": {
-            "description": "Current plan details",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/PlanDto"
-              }
-            ]
-          },
-          "targetPlan": {
-            "description": "Target plan details",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/PlanDto"
-              }
-            ]
-          },
-          "changeType": {
-            "type": "string",
-            "description": "Type of change",
-            "enum": [
-              "UPGRADE",
-              "DOWNGRADE"
-            ]
-          },
-          "immediate": {
+          "completed": {
             "type": "boolean",
-            "description": "Whether the change is applied immediately"
-          },
-          "effectiveAt": {
-            "format": "date-time",
-            "type": "string",
-            "description": "When the change will be applied (for downgrades)"
-          },
-          "prorationAmount": {
-            "type": "number",
-            "description": "Proration amount (positive = credit, negative = charge)",
-            "example": 2.5
-          },
-          "overages": {
-            "description": "Resources that exceed new plan limits",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ResourceOverageDto"
-            }
-          },
-          "hasOverages": {
-            "type": "boolean",
-            "description": "Whether there are any overages"
-          },
-          "gracePeriodEnd": {
-            "format": "date-time",
-            "type": "string",
-            "description": "Grace period end date if there are overages"
-          }
-        },
-        "required": [
-          "currentPlan",
-          "targetPlan",
-          "changeType",
-          "immediate",
-          "overages",
-          "hasOverages"
-        ]
-      },
-      "PreviewResponseDto": {
-        "type": "object",
-        "properties": {
-          "preview": {
-            "$ref": "#/components/schemas/PlanChangePreviewDto"
-          }
-        },
-        "required": [
-          "preview"
-        ]
-      },
-      "ChangePlanDto": {
-        "type": "object",
-        "properties": {
-          "planCode": {
-            "type": "string",
-            "description": "Target plan code to change to",
-            "example": "pro"
-          }
-        },
-        "required": [
-          "planCode"
-        ]
-      },
-      "UpgradeResponseDto": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "Success message",
-            "example": "Successfully upgraded to Pro plan"
-          },
-          "subscription": {
-            "description": "Updated subscription details",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SubscriptionDto"
-              }
-            ]
-          },
-          "prorationAmount": {
-            "type": "number",
-            "description": "Proration amount applied"
-          }
-        },
-        "required": [
-          "message",
-          "subscription"
-        ]
-      },
-      "DowngradeResponseDto": {
-        "type": "object",
-        "properties": {
-          "message": {
-            "type": "string",
-            "description": "Success message",
-            "example": "Downgrade to Free plan scheduled for end of billing period"
-          },
-          "subscription": {
-            "description": "Current subscription (plan not changed yet)",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SubscriptionDto"
-              }
-            ]
-          },
-          "scheduledFor": {
-            "format": "date-time",
-            "type": "string",
-            "description": "When the downgrade will be applied"
-          },
-          "targetPlanCode": {
-            "type": "string",
-            "description": "Target plan code"
-          },
-          "overages": {
-            "description": "Resources that will exceed new plan limits",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ResourceOverageDto"
-            }
-          },
-          "gracePeriodEnd": {
-            "format": "date-time",
-            "type": "string",
-            "description": "Grace period end date if there are overages"
-          }
-        },
-        "required": [
-          "message",
-          "subscription",
-          "scheduledFor",
-          "targetPlanCode",
-          "overages"
-        ]
-      },
-      "CancelSubscriptionDto": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string",
-            "description": "Reason for cancellation",
-            "example": "Too expensive",
-            "maxLength": 500
+            "description": "Whether onboarding is complete",
+            "example": true
           }
         }
       },
-      "CancelResponseDto": {
+      "ReferenceCountryResponseDto": {
         "type": "object",
         "properties": {
-          "message": {
+          "code": {
             "type": "string",
-            "description": "Success message",
-            "example": "Subscription cancellation scheduled"
+            "example": "AR"
           },
-          "cancelledAt": {
-            "format": "date-time",
+          "name": {
             "type": "string",
-            "description": "When the subscription will be cancelled"
+            "example": "Argentina"
           },
-          "effectiveAt": {
-            "format": "date-time",
+          "callingCode": {
             "type": "string",
-            "description": "When the subscription will effectively end"
+            "example": "+54"
+          },
+          "defaultCurrencyCode": {
+            "type": "string",
+            "example": "ARS"
+          },
+          "defaultLocale": {
+            "type": "string",
+            "example": "es-AR"
           }
         },
         "required": [
-          "message",
-          "cancelledAt",
-          "effectiveAt"
+          "code",
+          "name",
+          "callingCode",
+          "defaultCurrencyCode",
+          "defaultLocale"
         ]
       },
-      "ReactivateResponseDto": {
+      "ReferenceCurrencyResponseDto": {
         "type": "object",
         "properties": {
-          "message": {
+          "code": {
             "type": "string",
-            "description": "Success message",
-            "example": "Subscription reactivated successfully"
+            "example": "USD"
           },
-          "subscription": {
-            "description": "Updated subscription details",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SubscriptionDto"
-              }
-            ]
-          }
-        },
-        "required": [
-          "message",
-          "subscription"
-        ]
-      },
-      "CancelScheduledChangeResponseDto": {
-        "type": "object",
-        "properties": {
-          "message": {
+          "name": {
             "type": "string",
-            "description": "Success message",
-            "example": "Scheduled change cancelled successfully"
+            "example": "US Dollar"
           },
-          "subscription": {
-            "description": "Updated subscription details",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SubscriptionDto"
-              }
-            ]
-          }
-        },
-        "required": [
-          "message",
-          "subscription"
-        ]
-      },
-      "PlanChangeLogDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "fromPlanCode": {
-            "type": "string"
-          },
-          "fromPlanName": {
-            "type": "string"
-          },
-          "toPlanCode": {
-            "type": "string"
-          },
-          "toPlanName": {
-            "type": "string"
-          },
-          "changeType": {
+          "symbol": {
             "type": "string",
-            "enum": [
-              "UPGRADE",
-              "DOWNGRADE_SCHEDULED",
-              "DOWNGRADE_APPLIED",
-              "CANCELLATION",
-              "CANCELLATION_APPLIED",
-              "REACTIVATION"
-            ]
+            "example": "$"
           },
-          "requestedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "effectiveAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "scheduledFor": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "prorationAmount": {
-            "type": "number"
-          },
-          "reason": {
-            "type": "string"
+          "decimalScale": {
+            "type": "number",
+            "example": 2
           }
         },
         "required": [
-          "id",
-          "fromPlanCode",
-          "fromPlanName",
-          "toPlanCode",
-          "toPlanName",
-          "changeType",
-          "requestedAt"
-        ]
-      },
-      "PlanChangeHistoryResponseDto": {
-        "type": "object",
-        "properties": {
-          "history": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PlanChangeLogDto"
-            }
-          }
-        },
-        "required": [
-          "history"
+          "code",
+          "name",
+          "symbol",
+          "decimalScale"
         ]
       },
       "WorkspaceSummaryDto": {
@@ -3143,8 +1979,7 @@
             "example": "ACTIVE"
           },
           "joinedAt": {
-            "format": "date-time",
-            "type": "string",
+            "type": "object",
             "example": "2026-03-12T00:00:00.000Z"
           }
         },
@@ -3155,6 +1990,26 @@
           "joinedAt"
         ]
       },
+      "WorkspaceDirectoryItemDto": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceSummaryDto"
+          },
+          "membership": {
+            "$ref": "#/components/schemas/WorkspaceMembershipSummaryDto"
+          },
+          "isCurrent": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "workspace",
+          "membership",
+          "isCurrent"
+        ]
+      },
       "WorkspaceSettingsDto": {
         "type": "object",
         "properties": {
@@ -3162,9 +2017,9 @@
             "type": "string",
             "example": "USD"
           },
-          "baseLanguage": {
+          "contentLocale": {
             "type": "string",
-            "example": "en"
+            "example": "en-US"
           },
           "dateFormat": {
             "type": "string",
@@ -3178,28 +2033,18 @@
             "type": "number",
             "example": 1
           },
-          "timezone": {
+          "financialTimezone": {
             "type": "string",
             "example": "UTC"
-          },
-          "locale": {
-            "type": "string",
-            "example": "en-US"
-          },
-          "displayLabel": {
-            "type": "string",
-            "example": "John Workspace"
           }
         },
         "required": [
           "baseCurrencyCode",
-          "baseLanguage",
+          "contentLocale",
           "dateFormat",
           "monthStartDay",
           "weekStartDay",
-          "timezone",
-          "locale",
-          "displayLabel"
+          "financialTimezone"
         ]
       },
       "CurrentWorkspaceResponseDto": {
@@ -3221,6 +2066,16 @@
           "settings"
         ]
       },
+      "UpdateWorkspaceDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Visible workspace name shared across the product",
+            "example": "Casa"
+          }
+        }
+      },
       "WorkspaceSettingsResponseDto": {
         "type": "object",
         "properties": {
@@ -3232,6 +2087,88 @@
           "settings"
         ]
       },
+      "WorkspacePreferencesResponseDto": {
+        "type": "object",
+        "properties": {
+          "uiLocale": {
+            "type": "object",
+            "example": "es-AR",
+            "nullable": true
+          },
+          "dateFormat": {
+            "type": "object",
+            "example": "YYYY-MM-DD",
+            "nullable": true
+          },
+          "dashboardPreferences": {
+            "type": "object",
+            "example": {
+              "compact": true
+            },
+            "additionalProperties": true
+          },
+          "reportPreferences": {
+            "type": "object",
+            "example": {
+              "defaultPeriod": "month"
+            },
+            "additionalProperties": true
+          },
+          "transactionPreferences": {
+            "type": "object",
+            "example": {
+              "showPending": true
+            },
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "uiLocale",
+          "dateFormat",
+          "dashboardPreferences",
+          "reportPreferences",
+          "transactionPreferences"
+        ]
+      },
+      "UpdateWorkspacePreferencesDto": {
+        "type": "object",
+        "properties": {
+          "uiLocale": {
+            "type": "string",
+            "description": "Preferred UI locale override for the current user in this workspace",
+            "example": "es-AR"
+          },
+          "dateFormat": {
+            "type": "string",
+            "description": "Preferred date format override for the current user in this workspace",
+            "example": "YYYY-MM-DD"
+          },
+          "dashboardPreferences": {
+            "type": "object",
+            "description": "Dashboard UI preferences owned by the current user in this workspace",
+            "example": {
+              "compact": true
+            },
+            "additionalProperties": true
+          },
+          "reportPreferences": {
+            "type": "object",
+            "description": "Report UI preferences owned by the current user in this workspace",
+            "example": {
+              "defaultPeriod": "month"
+            },
+            "additionalProperties": true
+          },
+          "transactionPreferences": {
+            "type": "object",
+            "description": "Transaction UI preferences owned by the current user in this workspace",
+            "example": {
+              "showPending": true
+            },
+            "additionalProperties": true
+          }
+        }
+      },
       "UpdateWorkspaceSettingsDto": {
         "type": "object",
         "properties": {
@@ -3240,10 +2177,10 @@
             "description": "Workspace base currency code shared by all members",
             "example": "ARS"
           },
-          "baseLanguage": {
+          "contentLocale": {
             "type": "string",
-            "description": "Workspace base language shared by all members",
-            "example": "es"
+            "description": "Workspace content locale shared by all members",
+            "example": "es-AR"
           },
           "dateFormat": {
             "type": "string",
@@ -3260,556 +2197,10 @@
             "description": "Day of week that starts the calendar week (1-7)",
             "example": 1
           },
-          "timezone": {
+          "financialTimezone": {
             "type": "string",
-            "description": "Workspace default timezone",
+            "description": "Workspace financial timezone",
             "example": "America/Argentina/Buenos_Aires"
-          },
-          "locale": {
-            "type": "string",
-            "description": "Workspace default locale",
-            "example": "es-AR"
-          },
-          "displayLabel": {
-            "type": "string",
-            "description": "Representative label shown for the workspace across the product",
-            "example": "Casa"
-          },
-          "workspaceType": {
-            "type": "string",
-            "description": "Workspace type used for shared workspace semantics",
-            "enum": [
-              "PERSONAL",
-              "FAMILY",
-              "GROUP"
-            ],
-            "example": "FAMILY"
-          }
-        }
-      },
-      "CreateAccountDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Account name",
-            "example": "My Checking Account",
-            "maxLength": 100
-          },
-          "type": {
-            "type": "string",
-            "description": "Account type",
-            "enum": [
-              "CASH",
-              "DEBIT_CARD",
-              "CREDIT_CARD",
-              "SAVINGS",
-              "INVESTMENT",
-              "DIGITAL_WALLET",
-              "OTHER"
-            ],
-            "example": "DEBIT_CARD"
-          },
-          "balance": {
-            "type": "number",
-            "description": "Initial balance (defaults to 0)",
-            "example": 1500.5,
-            "default": 0
-          },
-          "currencyCode": {
-            "type": "string",
-            "description": "ISO 4217 currency code",
-            "example": "USD",
-            "default": "USD"
-          },
-          "color": {
-            "type": "string",
-            "description": "Hex color code for UI",
-            "example": "#FF5733"
-          },
-          "icon": {
-            "type": "string",
-            "description": "Icon identifier for the app UI",
-            "example": "credit-card"
-          },
-          "includeInTotal": {
-            "type": "boolean",
-            "description": "Include this account in the dashboard total balance",
-            "default": true
-          },
-          "creditLimit": {
-            "type": "number",
-            "description": "Credit limit (only for CREDIT_CARD type)",
-            "example": 5000
-          },
-          "statementClosingDay": {
-            "type": "number",
-            "description": "Statement closing day of month (1-31, only for CREDIT_CARD)",
-            "example": 15
-          },
-          "paymentDueDay": {
-            "type": "number",
-            "description": "Payment due day of month (1-31, only for CREDIT_CARD)",
-            "example": 5
-          },
-          "sortOrder": {
-            "type": "number",
-            "description": "Display order (lower = first)",
-            "example": 0,
-            "default": 0
-          }
-        },
-        "required": [
-          "name",
-          "type"
-        ]
-      },
-      "AccountResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "example": "cm3xk7z9w0001jn08abc12345"
-          },
-          "name": {
-            "type": "string",
-            "example": "My Checking Account"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "CASH",
-              "DEBIT_CARD",
-              "CREDIT_CARD",
-              "SAVINGS",
-              "INVESTMENT",
-              "DIGITAL_WALLET",
-              "OTHER"
-            ],
-            "example": "DEBIT_CARD"
-          },
-          "balance": {
-            "type": "string",
-            "example": "1500.5000",
-            "description": "Current balance as string for precision"
-          },
-          "currencyCode": {
-            "type": "string",
-            "example": "USD"
-          },
-          "color": {
-            "type": "string",
-            "example": "#FF5733"
-          },
-          "icon": {
-            "type": "string",
-            "example": "credit-card"
-          },
-          "includeInTotal": {
-            "type": "boolean",
-            "example": true
-          },
-          "isArchived": {
-            "type": "boolean",
-            "example": false
-          },
-          "creditLimit": {
-            "type": "string",
-            "example": "5000.0000"
-          },
-          "statementClosingDay": {
-            "type": "number",
-            "example": 15
-          },
-          "paymentDueDay": {
-            "type": "number",
-            "example": 5
-          },
-          "sortOrder": {
-            "type": "number",
-            "example": 0
-          },
-          "createdByUserId": {
-            "type": "string",
-            "example": "cm3xk7z9w0001jn08user12345"
-          },
-          "updatedByUserId": {
-            "type": "string",
-            "example": "cm3xk7z9w0001jn08user12345"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string",
-            "example": "2025-01-15T10:30:00.000Z"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "type": "string",
-            "example": "2025-01-15T10:30:00.000Z"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "type",
-          "balance",
-          "currencyCode",
-          "includeInTotal",
-          "isArchived",
-          "sortOrder",
-          "createdAt",
-          "updatedAt"
-        ]
-      },
-      "AccountListResponseDto": {
-        "type": "object",
-        "properties": {
-          "accounts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AccountResponseDto"
-            }
-          },
-          "total": {
-            "type": "number",
-            "example": 3,
-            "description": "Total number of active (non-archived) accounts"
-          }
-        },
-        "required": [
-          "accounts",
-          "total"
-        ]
-      },
-      "AccountBalanceSummaryDto": {
-        "type": "object",
-        "properties": {
-          "currencyCode": {
-            "type": "string",
-            "example": "USD"
-          },
-          "totalBalance": {
-            "type": "string",
-            "example": "5500.0000",
-            "description": "Sum of all account balances in this currency"
-          },
-          "accountCount": {
-            "type": "number",
-            "example": 2,
-            "description": "Number of accounts in this currency"
-          }
-        },
-        "required": [
-          "currencyCode",
-          "totalBalance",
-          "accountCount"
-        ]
-      },
-      "AccountSummaryResponseDto": {
-        "type": "object",
-        "properties": {
-          "balances": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AccountBalanceSummaryDto"
-            }
-          },
-          "totalAccounts": {
-            "type": "number",
-            "example": 5,
-            "description": "Total number of active accounts"
-          }
-        },
-        "required": [
-          "balances",
-          "totalAccounts"
-        ]
-      },
-      "UpdateAccountDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Account name",
-            "example": "My Checking Account",
-            "maxLength": 100
-          },
-          "balance": {
-            "type": "number",
-            "description": "Initial balance (defaults to 0)",
-            "example": 1500.5,
-            "default": 0
-          },
-          "color": {
-            "type": "string",
-            "description": "Hex color code for UI",
-            "example": "#FF5733"
-          },
-          "icon": {
-            "type": "string",
-            "description": "Icon identifier for the app UI",
-            "example": "credit-card"
-          },
-          "includeInTotal": {
-            "type": "boolean",
-            "description": "Include this account in the dashboard total balance",
-            "default": true
-          },
-          "creditLimit": {
-            "type": "number",
-            "description": "Credit limit (only for CREDIT_CARD type)",
-            "example": 5000
-          },
-          "statementClosingDay": {
-            "type": "number",
-            "description": "Statement closing day of month (1-31, only for CREDIT_CARD)",
-            "example": 15
-          },
-          "paymentDueDay": {
-            "type": "number",
-            "description": "Payment due day of month (1-31, only for CREDIT_CARD)",
-            "example": 5
-          },
-          "sortOrder": {
-            "type": "number",
-            "description": "Display order (lower = first)",
-            "example": 0,
-            "default": 0
-          }
-        }
-      },
-      "CreateCategoryDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Category name",
-            "example": "Groceries",
-            "maxLength": 100
-          },
-          "type": {
-            "type": "string",
-            "description": "Transaction type this category applies to",
-            "enum": [
-              "EXPENSE",
-              "INCOME",
-              "TRANSFER"
-            ],
-            "example": "EXPENSE"
-          },
-          "parentId": {
-            "type": "string",
-            "description": "Parent category ID. If set, this becomes a subcategory. Max 2-level depth.",
-            "example": "cm3xk7z9w0001jn08abc12345"
-          },
-          "icon": {
-            "type": "string",
-            "description": "Icon identifier for the app UI",
-            "example": "shopping-cart"
-          },
-          "color": {
-            "type": "string",
-            "description": "Hex color code for UI",
-            "example": "#FF6B6B"
-          },
-          "sortOrder": {
-            "type": "number",
-            "description": "Display order (lower = first)",
-            "example": 0,
-            "default": 0
-          }
-        },
-        "required": [
-          "name",
-          "type"
-        ]
-      },
-      "CategoryResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "example": "cm3xk7z9w0001jn08abc12345"
-          },
-          "name": {
-            "type": "string",
-            "example": "Food & Drinks"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "EXPENSE",
-              "INCOME",
-              "TRANSFER"
-            ],
-            "example": "EXPENSE"
-          },
-          "parentId": {
-            "type": "string",
-            "example": "cm3xk7z9w0001jn08abc12345"
-          },
-          "icon": {
-            "type": "string",
-            "example": "utensils"
-          },
-          "color": {
-            "type": "string",
-            "example": "#FF6B6B"
-          },
-          "isSystem": {
-            "type": "boolean",
-            "example": false,
-            "description": "System categories cannot be edited or deleted"
-          },
-          "isActive": {
-            "type": "boolean",
-            "example": true
-          },
-          "sortOrder": {
-            "type": "number",
-            "example": 0
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string",
-            "example": "2025-01-15T10:30:00.000Z"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "type": "string",
-            "example": "2025-01-15T10:30:00.000Z"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "type",
-          "isSystem",
-          "isActive",
-          "sortOrder",
-          "createdAt",
-          "updatedAt"
-        ]
-      },
-      "CategoryWithChildrenDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "example": "cm3xk7z9w0001jn08abc12345"
-          },
-          "name": {
-            "type": "string",
-            "example": "Food & Drinks"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "EXPENSE",
-              "INCOME",
-              "TRANSFER"
-            ],
-            "example": "EXPENSE"
-          },
-          "parentId": {
-            "type": "string",
-            "example": "cm3xk7z9w0001jn08abc12345"
-          },
-          "icon": {
-            "type": "string",
-            "example": "utensils"
-          },
-          "color": {
-            "type": "string",
-            "example": "#FF6B6B"
-          },
-          "isSystem": {
-            "type": "boolean",
-            "example": false,
-            "description": "System categories cannot be edited or deleted"
-          },
-          "isActive": {
-            "type": "boolean",
-            "example": true
-          },
-          "sortOrder": {
-            "type": "number",
-            "example": 0
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string",
-            "example": "2025-01-15T10:30:00.000Z"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "type": "string",
-            "example": "2025-01-15T10:30:00.000Z"
-          },
-          "children": {
-            "description": "Subcategories (second level)",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CategoryResponseDto"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "type",
-          "isSystem",
-          "isActive",
-          "sortOrder",
-          "createdAt",
-          "updatedAt",
-          "children"
-        ]
-      },
-      "CategoryTreeResponseDto": {
-        "type": "object",
-        "properties": {
-          "categories": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CategoryWithChildrenDto"
-            }
-          },
-          "total": {
-            "type": "number",
-            "example": 15,
-            "description": "Total number of categories (including children)"
-          }
-        },
-        "required": [
-          "categories",
-          "total"
-        ]
-      },
-      "UpdateCategoryDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Category name",
-            "example": "Groceries",
-            "maxLength": 100
-          },
-          "icon": {
-            "type": "string",
-            "description": "Icon identifier for the app UI",
-            "example": "shopping-cart"
-          },
-          "color": {
-            "type": "string",
-            "description": "Hex color code for UI",
-            "example": "#FF6B6B"
-          },
-          "sortOrder": {
-            "type": "number",
-            "description": "Display order (lower = first)",
-            "example": 0,
-            "default": 0
           }
         }
       },
