@@ -752,6 +752,332 @@
         ]
       }
     },
+    "/api/v1/accounts/{accountId}/reconciliations": {
+      "post": {
+        "description": "Register an observed balance for one account and date. This adjusts balance state only and never creates fake cashflow transactions.",
+        "operationId": "AccountBalancesController_createReconciliation_v1",
+        "parameters": [
+          {
+            "name": "accountId",
+            "required": true,
+            "in": "path",
+            "description": "Account CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccountReconciliationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reconciliation created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountReconciliationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create an account reconciliation",
+        "tags": [
+          "Account Balances"
+        ]
+      },
+      "get": {
+        "description": "Return the audit trail of reconciliations for one workspace-scoped account, marking which row is currently effective for each date.",
+        "operationId": "AccountBalancesController_listReconciliations_v1",
+        "parameters": [
+          {
+            "name": "accountId",
+            "required": true,
+            "in": "path",
+            "description": "Account CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reconciliations ordered by date and recency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccountReconciliationResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List reconciliations for one account",
+        "tags": [
+          "Account Balances"
+        ]
+      }
+    },
+    "/api/v1/accounts/{accountId}/reconciliations/{reconciliationId}": {
+      "get": {
+        "description": "Return one reconciliation inside the current workspace account boundary, including author and effective status.",
+        "operationId": "AccountBalancesController_getReconciliationById_v1",
+        "parameters": [
+          {
+            "name": "accountId",
+            "required": true,
+            "in": "path",
+            "description": "Account CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "required": true,
+            "in": "path",
+            "description": "Account reconciliation CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reconciliation detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountReconciliationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get reconciliation detail",
+        "tags": [
+          "Account Balances"
+        ]
+      },
+      "patch": {
+        "description": "Update the observed balance or date for one reconciliation and rematerialize daily balances from the earliest affected date.",
+        "operationId": "AccountBalancesController_updateReconciliation_v1",
+        "parameters": [
+          {
+            "name": "accountId",
+            "required": true,
+            "in": "path",
+            "description": "Account CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "required": true,
+            "in": "path",
+            "description": "Account reconciliation CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountReconciliationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reconciliation updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountReconciliationResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update a reconciliation",
+        "tags": [
+          "Account Balances"
+        ]
+      },
+      "delete": {
+        "description": "Delete one reconciliation, keep the audit boundary on the account, and recompute balances so the next most recent row becomes effective if applicable.",
+        "operationId": "AccountBalancesController_deleteReconciliation_v1",
+        "parameters": [
+          {
+            "name": "accountId",
+            "required": true,
+            "in": "path",
+            "description": "Account CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reconciliationId",
+            "required": true,
+            "in": "path",
+            "description": "Account reconciliation CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Reconciliation deleted successfully"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a reconciliation",
+        "tags": [
+          "Account Balances"
+        ]
+      }
+    },
+    "/api/v1/accounts/{accountId}/balance-summary": {
+      "get": {
+        "description": "Return the latest cached balance plus calculated, reconciled, and difference values for the current workspace account.",
+        "operationId": "AccountBalancesController_getBalanceSummary_v1",
+        "parameters": [
+          {
+            "name": "accountId",
+            "required": true,
+            "in": "path",
+            "description": "Account CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceSummaryResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get account balance summary",
+        "tags": [
+          "Account Balances"
+        ]
+      }
+    },
+    "/api/v1/accounts/{accountId}/daily-balances": {
+      "get": {
+        "description": "Return daily materialized balances for one account, including calculated balance, reconciled balance, and the adjustment difference for every day in range.",
+        "operationId": "AccountBalancesController_getDailyBalances_v1",
+        "parameters": [
+          {
+            "name": "accountId",
+            "required": true,
+            "in": "path",
+            "description": "Account CUID identifier",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date-time",
+              "example": "2026-03-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "date-time",
+              "example": "2026-03-31",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Daily balance timeline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DailyBalanceTimelineItemDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get daily balance timeline",
+        "tags": [
+          "Account Balances"
+        ]
+      }
+    },
     "/api/v1/me/profile": {
       "get": {
         "description": "Return the authenticated user profile summary owned by UserProfile. This surface includes phone, countryCode, theme, and onboardingCompletedAt only.",
@@ -2457,6 +2783,232 @@
           "notes": {
             "type": "string",
             "example": "Solo gastos del hogar",
+            "nullable": true
+          }
+        }
+      },
+      "AccountReconciliationAuthorDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cusr_123456789"
+          },
+          "email": {
+            "type": "string",
+            "example": "owner@test.com"
+          },
+          "firstName": {
+            "type": "string",
+            "example": "Stephano"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "Fer"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "firstName",
+          "lastName"
+        ]
+      },
+      "AccountReconciliationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "crec_123456789"
+          },
+          "accountId": {
+            "type": "string",
+            "example": "cacc_123456789"
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-03-26"
+          },
+          "targetBalance": {
+            "type": "string",
+            "example": "1150"
+          },
+          "reason": {
+            "type": "object",
+            "example": "Saldo real del banco",
+            "nullable": true
+          },
+          "isEffective": {
+            "type": "boolean",
+            "example": true
+          },
+          "author": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AccountReconciliationAuthorDto"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-03-26T10:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "example": "2026-03-26T10:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "date",
+          "targetBalance",
+          "reason",
+          "isEffective",
+          "author",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "BalanceSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "example": "cacc_123456789"
+          },
+          "currencyCode": {
+            "type": "string",
+            "example": "ARS"
+          },
+          "currentBalance": {
+            "type": "string",
+            "example": "1150"
+          },
+          "calculatedBalance": {
+            "type": "string",
+            "example": "1200"
+          },
+          "reconciledBalance": {
+            "type": "string",
+            "example": "1150"
+          },
+          "difference": {
+            "type": "string",
+            "example": "-50"
+          },
+          "hasDifference": {
+            "type": "boolean",
+            "example": true
+          },
+          "lastSnapshotDate": {
+            "type": "object",
+            "example": "2026-03-26",
+            "nullable": true
+          }
+        },
+        "required": [
+          "accountId",
+          "currencyCode",
+          "currentBalance",
+          "calculatedBalance",
+          "reconciledBalance",
+          "difference",
+          "hasDifference",
+          "lastSnapshotDate"
+        ]
+      },
+      "DailyBalanceTimelineItemDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "example": "2026-03-26"
+          },
+          "openingBalance": {
+            "type": "string",
+            "example": "1200"
+          },
+          "inflowsAmount": {
+            "type": "string",
+            "example": "0"
+          },
+          "outflowsAmount": {
+            "type": "string",
+            "example": "50"
+          },
+          "adjustmentsAmount": {
+            "type": "string",
+            "example": "-50"
+          },
+          "closingBalance": {
+            "type": "string",
+            "example": "1150"
+          },
+          "calculatedBalance": {
+            "type": "string",
+            "example": "1200"
+          },
+          "reconciledBalance": {
+            "type": "string",
+            "example": "1150"
+          },
+          "difference": {
+            "type": "string",
+            "example": "-50"
+          }
+        },
+        "required": [
+          "date",
+          "openingBalance",
+          "inflowsAmount",
+          "outflowsAmount",
+          "adjustmentsAmount",
+          "closingBalance",
+          "calculatedBalance",
+          "reconciledBalance",
+          "difference"
+        ]
+      },
+      "CreateAccountReconciliationDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-03-26"
+          },
+          "targetBalance": {
+            "type": "number",
+            "example": 1150
+          },
+          "reason": {
+            "type": "string",
+            "example": "Saldo real del banco",
+            "nullable": true
+          }
+        },
+        "required": [
+          "date",
+          "targetBalance"
+        ]
+      },
+      "UpdateAccountReconciliationDto": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-03-26"
+          },
+          "targetBalance": {
+            "type": "number",
+            "example": 1150
+          },
+          "reason": {
+            "type": "string",
+            "example": "Saldo real del banco",
             "nullable": true
           }
         }

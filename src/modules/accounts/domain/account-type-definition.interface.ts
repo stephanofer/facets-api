@@ -24,6 +24,7 @@ export type AccountProfileKind =
 export interface AccountTypeDefinition {
   type: AccountType;
   profileKind: AccountProfileKind;
+  profileRelation?: keyof AccountProfileRelations;
   createDto?: ClassConstructor<object>;
   updateDto?: ClassConstructor<object>;
   persistProfile?: ProfilePersistenceHandler;

@@ -152,6 +152,7 @@ export const ACCOUNT_TYPE_DEFINITIONS: Record<
   [AccountType.CREDIT_CARD]: {
     type: AccountType.CREDIT_CARD,
     profileKind: 'CREDIT_CARD',
+    profileRelation: 'creditCardProfile',
     createDto: CreateCreditCardProfileDto,
     updateDto: UpdateCreditCardProfileDto,
     persistProfile: persistCreditCardProfile,
@@ -160,6 +161,7 @@ export const ACCOUNT_TYPE_DEFINITIONS: Record<
   [AccountType.DEBT]: {
     type: AccountType.DEBT,
     profileKind: 'DEBT',
+    profileRelation: 'debtProfile',
     createDto: CreateDebtProfileDto,
     updateDto: UpdateDebtProfileDto,
     persistProfile: persistDebtProfile,
@@ -168,6 +170,7 @@ export const ACCOUNT_TYPE_DEFINITIONS: Record<
   [AccountType.LOAN]: {
     type: AccountType.LOAN,
     profileKind: 'LOAN',
+    profileRelation: 'loanProfile',
     createDto: CreateLoanProfileDto,
     updateDto: UpdateLoanProfileDto,
     persistProfile: persistLoanProfile,
@@ -176,6 +179,7 @@ export const ACCOUNT_TYPE_DEFINITIONS: Record<
   [AccountType.LENT_MONEY]: {
     type: AccountType.LENT_MONEY,
     profileKind: 'LENT_MONEY',
+    profileRelation: 'lentMoneyProfile',
     createDto: CreateLentMoneyProfileDto,
     updateDto: UpdateLentMoneyProfileDto,
     persistProfile: persistLentMoneyProfile,

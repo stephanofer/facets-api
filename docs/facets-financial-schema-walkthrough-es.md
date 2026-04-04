@@ -146,18 +146,21 @@ Un contenedor financiero donde vive:
 ### Ejemplos simples
 
 #### Cuenta 1
+
 - nombre: `BCP sueldo`
 - `type = BANK`
 - `currencyCode = PEN`
 - `currentBalanceCached = 2500`
 
 #### Cuenta 2
+
 - nombre: `Visa Interbank`
 - `type = CREDIT_CARD`
 - `currencyCode = PEN`
 - `currentBalanceCached = 800`
 
 #### Cuenta 3
+
 - nombre: `Préstamo auto`
 - `type = LOAN`
 - `currencyCode = PEN`
@@ -184,9 +187,11 @@ Es el detalle extra de una cuenta préstamo.
 ### Ejemplo simple
 
 Cuenta:
+
 - `Préstamo auto`
 
 LoanProfile:
+
 - `lenderName = BBVA`
 - `interestRate = 12.5`
 - `estimatedInstallmentAmount = 850`
@@ -206,9 +211,11 @@ Detalle extra de una tarjeta de crédito.
 ### Ejemplo simple
 
 Cuenta:
+
 - `Visa Interbank`
 
 CreditCardProfile:
+
 - `issuerName = Interbank`
 - `last4 = 1234`
 - `creditLimit = 5000`
@@ -228,9 +235,11 @@ Representa una deuda simple, no un préstamo estructurado.
 ### Ejemplo simple
 
 Cuenta:
+
 - `Deuda con Juan`
 
 DebtProfile:
+
 - `creditorName = Juan`
 - `dueDate = 2026-04-15`
 
@@ -247,9 +256,11 @@ Representa plata que el usuario prestó y espera recuperar.
 ### Ejemplo simple
 
 Cuenta:
+
 - `Préstamo a Martín`
 
 LentMoneyProfile:
+
 - `borrowerName = Martín`
 - `expectedRepaymentDate = 2026-05-01`
 - `status = OPEN`
@@ -269,10 +280,12 @@ Sirve para ajustar saldo de una cuenta sin crear una transacción falsa.
 ### Ejemplo simple
 
 Cuenta banco:
+
 - el sistema dice `1200`
 - el banco real dice `1150`
 
 Entonces se crea:
+
 - `date = 2026-03-26`
 - `targetBalance = 1150`
 - `reason = saldo real del banco`
@@ -287,6 +300,7 @@ Esto no debe transformarse en:
 - evento de budget.
 
 Es corrección de estado, no cashflow.
+La API de conciliaciones vive en un módulo aparte de `accounts` justamente para no mezclar metadata de cuentas con matemática financiera.
 
 ---
 
@@ -323,9 +337,11 @@ Taxonomía financiera del workspace.
 ### Ejemplo simple
 
 Categoría padre:
+
 - `Comida`
 
 Subcategorías:
+
 - `Supermercado`
 - `Delivery`
 
@@ -354,11 +370,13 @@ Comercio o contraparte de una transacción.
 ### Ejemplo simple
 
 Merchant del sistema:
+
 - `Starbucks`
 - `normalizedName = starbucks`
 - `suggestedCategoryKey = food`
 
 Merchant privado del workspace:
+
 - `Bodega Don Pepe`
 
 ### Para qué sirve
@@ -407,13 +425,16 @@ Tabla puente entre transacción y tag.
 ### Ejemplo simple
 
 Transacción:
+
 - `Taxi al cliente`
 
 Tags:
+
 - `trabajo`
 - `reembolsable`
 
 Entonces:
+
 - `transaction_tags` une esa transacción con esos dos tags.
 
 ### Por qué existe
@@ -509,14 +530,17 @@ La semántica del movimiento vive en `Transaction.kind`, no en `Transfer`.
 ### Ejemplo simple 1 — pago de tarjeta
 
 Transacción 1:
+
 - sale `300 PEN` de `BCP sueldo`
 - `kind = CC_PAYMENT`
 
 Transacción 2:
+
 - entra `300 PEN` a `Visa Interbank`
 - `kind = CC_PAYMENT`
 
 Transfer:
+
 - une ambas transacciones
 
 ### Resultado esperado
@@ -528,14 +552,17 @@ El dashboard NO debe decir “gastaste 300 más”.
 ### Ejemplo simple 2 — mover plata entre monedas
 
 Transacción origen:
+
 - sale `380 PEN`
 - `kind = FUNDS_MOVEMENT`
 
 Transacción destino:
+
 - entra `100 USD`
 - `kind = FUNDS_MOVEMENT`
 
 Transfer:
+
 - `fxRateUsed = 3.80`
 
 ### Resultado esperado
@@ -562,24 +589,30 @@ Guarda tipos de cambio por fecha.
 #### Caso 1 — dashboard consolidado
 
 Cuenta Wise:
+
 - saldo real = `100 USD`
 
 Tipo de cambio:
+
 - `1 USD = 3.80 PEN`
 
 Entonces en el dashboard consolidado:
+
 - equivalente = `380 PEN`
 
 #### Caso 2 — gasto histórico
 
 Transacción:
+
 - `10 USD`
 - fecha `2026-03-26`
 
 Rate del día:
+
 - `3.80`
 
 En reporte consolidado:
+
 - `38 PEN`
 
 ### Regla importante
@@ -613,6 +646,7 @@ Cada línea es una categoría padre con monto planificado.
 ### Ejemplo simple
 
 Budget del mes:
+
 - `Comida = 400`
 - `Transporte = 150`
 
@@ -648,19 +682,23 @@ No autogenera movimientos financieros.
 ## 4. Ejemplo completo de uso real
 
 Workspace:
+
 - `Finanzas de Stephano`
 - moneda base = `PEN`
 
 Cuentas:
+
 - `BCP sueldo`
 - `Visa Interbank`
 - `Préstamo auto`
 
 Categorías:
+
 - `Comida`
 - `Transporte`
 
 Movimientos:
+
 - sueldo `3000 PEN`
 - supermercado `120 PEN` con tarjeta
 - pago tarjeta `120 PEN` desde banco
@@ -886,6 +924,7 @@ Cuando cambia una transacción, transferencia o reconciliación de una cuenta, e
 - recalcular charts desde cero en cada request;
 - dejar `currentBalanceCached` y `AccountDailyBalance` contando historias distintas;
 - mezclar reconciliaciones como si fueran gasto/ingreso real.
+- usar conciliaciones para “inventar” transacciones que distorsionen analytics, budgets o cashflow.
 
 ---
 
@@ -1038,11 +1077,11 @@ El usuario agrega una cuenta banco.
 Si la cuenta es especial, además:
 
 - `CreditCardProfile`
-o
+  o
 - `LoanProfile`
-o
+  o
 - `DebtProfile`
-o
+  o
 - `LentMoneyProfile`
 
 #### Qué lee luego la app
@@ -1109,9 +1148,9 @@ Se pagan 300 PEN desde banco a tarjeta.
 La semántica vive en `Transaction.kind`:
 
 - `CC_PAYMENT`
-o
+  o
 - `FUNDS_MOVEMENT`
-según corresponda
+  según corresponda
 
 `Transfer` no clasifica; sólo une las dos puntas del movimiento interno.
 
@@ -1265,10 +1304,12 @@ Evitar duplicados cuando:
 #### Ejemplo simple
 
 Workspace `Casa`:
+
 - `baseCurrency = ARS`
 - `dateFormat = DD/MM/YYYY`
 
 Stephano en ese workspace:
+
 - `theme = DARK`
 - `uiLocale = es-AR`
 

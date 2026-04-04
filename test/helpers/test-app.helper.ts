@@ -10,6 +10,7 @@ import {
   INestApplication,
   RequestMethod,
   ValidationPipe,
+  VersioningType,
 } from '@nestjs/common';
 import { HttpAdapterHost, Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
@@ -100,6 +101,10 @@ export async function createTestApp(
   const httpAdapterHost = app.get(HttpAdapterHost);
   const reflector = app.get(Reflector);
 
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
   app.setGlobalPrefix('api', {
     exclude: [
       { path: 'health', method: RequestMethod.GET },
@@ -332,7 +337,37 @@ export async function cleanupTestUser(
       continue;
     }
 
+    const accounts = await prisma.account.findMany({
+      where: { workspaceId },
+      select: { id: true },
+    });
+    const accountIds = accounts.map((account) => account.id);
+
     await prisma.$transaction([
+      prisma.accountDailyBalance.deleteMany({
+        where: { accountId: { in: accountIds } },
+      }),
+      prisma.accountReconciliation.deleteMany({
+        where: { accountId: { in: accountIds } },
+      }),
+      prisma.transactionTag.deleteMany({
+        where: { transaction: { workspaceId } },
+      }),
+      prisma.transfer.deleteMany({ where: { workspaceId } }),
+      prisma.transaction.deleteMany({ where: { workspaceId } }),
+      prisma.creditCardProfile.deleteMany({
+        where: { accountId: { in: accountIds } },
+      }),
+      prisma.loanProfile.deleteMany({
+        where: { accountId: { in: accountIds } },
+      }),
+      prisma.debtProfile.deleteMany({
+        where: { accountId: { in: accountIds } },
+      }),
+      prisma.lentMoneyProfile.deleteMany({
+        where: { accountId: { in: accountIds } },
+      }),
+      prisma.account.deleteMany({ where: { id: { in: accountIds } } }),
       prisma.usageRecord.deleteMany({ where: { workspaceId } }),
       prisma.usageEvent.deleteMany({ where: { workspaceId } }),
       prisma.planChangeLog.deleteMany({ where: { workspaceId } }),

@@ -1,7 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@database/prisma.service';
-import { AccountStatus, Prisma } from '@/generated/prisma/client';
+import {
+  Account,
+  AccountStatus,
+  AccountType,
+  Prisma,
+} from '@/generated/prisma/client';
+import { AccountProfileRelations } from '@modules/accounts/domain/account-type-definition.interface';
 import { ValidatedAccountProfilePayload } from '@modules/accounts/domain/account-type-definition.interface';
+import { getAccountTypeDefinition } from '@modules/accounts/domain/account-type-definitions';
 import { getAccountTypeDefinitionByProfileKind } from '@modules/accounts/domain/account-type-definitions';
 
 const accountInclude = {
@@ -14,6 +21,9 @@ const accountInclude = {
 export type AccountRecord = Prisma.AccountGetPayload<{
   include: typeof accountInclude;
 }>;
+
+type AccountRecordWithOptionalProfiles = Account &
+  Partial<AccountProfileRelations>;
 
 export interface CreateAccountData {
   name: string;
@@ -91,13 +101,7 @@ export class AccountsRepository {
 
       await this.persistProfile(tx, account.id, profile);
 
-      return tx.account.findFirstOrThrow({
-        where: {
-          workspaceId,
-          id: account.id,
-        },
-        include: accountInclude,
-      });
+      return this.findByIdForType(tx, workspaceId, account.id, account.type);
     });
   }
 
@@ -108,22 +112,17 @@ export class AccountsRepository {
     profile: ValidatedAccountProfilePayload | null | undefined,
   ): Promise<AccountRecord> {
     return this.prisma.$transaction(async (tx) => {
-      await tx.account.update({
+      const account = await tx.account.update({
         where: { id: accountId, workspaceId },
         data,
+        select: { type: true },
       });
 
       if (profile !== undefined) {
         await this.persistProfile(tx, accountId, profile);
       }
 
-      return tx.account.findFirstOrThrow({
-        where: {
-          workspaceId,
-          id: accountId,
-        },
-        include: accountInclude,
-      });
+      return this.findByIdForType(tx, workspaceId, accountId, account.type);
     });
   }
 
@@ -160,5 +159,43 @@ export class AccountsRepository {
       accountId,
       profile.data,
     );
+  }
+
+  private async findByIdForType(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    accountId: string,
+    type: AccountType,
+  ): Promise<AccountRecord> {
+    const where = {
+      workspaceId,
+      id: accountId,
+    } as const;
+    const profileRelation = getAccountTypeDefinition(type).profileRelation;
+
+    if (!profileRelation) {
+      return this.normalizeAccountRecord(
+        await tx.account.findFirstOrThrow({ where }),
+      );
+    }
+
+    return this.normalizeAccountRecord(
+      await tx.account.findFirstOrThrow({
+        where,
+        include: { [profileRelation]: true },
+      }),
+    );
+  }
+
+  private normalizeAccountRecord(
+    account: AccountRecordWithOptionalProfiles,
+  ): AccountRecord {
+    return {
+      ...account,
+      creditCardProfile: account.creditCardProfile ?? null,
+      debtProfile: account.debtProfile ?? null,
+      loanProfile: account.loanProfile ?? null,
+      lentMoneyProfile: account.lentMoneyProfile ?? null,
+    };
   }
 }
