@@ -17,6 +17,7 @@ When performing these actions, ALWAYS invoke the corresponding skill FIRST:
 | Work with NestJS modules, controllers, services, guards, interceptors | `nestjs-expert`    |
 | Work with Prisma schema, migrations, queries, relations               | `prisma-expert`    |
 | Audit security                                                        | `security-auditor` |
+| Commit Creator                                                        | `commit-expert` |
 
 ### Design Philosophy
 
