@@ -38,8 +38,7 @@ Estas reglas no son “detalle”. Son la diferencia entre una app que guarda da
 8. **Si falta FX, nunca hagas fallback silencioso a `1`.**
 9. **No permitas cambiar libremente `Account.currencyCode` si la cuenta ya tiene historial.**
 10. **`BudgetLine` debe apuntar solo a categorías padre.**
-11. **`Merchant.suggestedCategoryKey` se resuelve contra categorías reales del workspace.**
-12. **El recupero de `LENT_MONEY` no debe contarse como ingreso nuevo.**
+11. **El recupero de `LENT_MONEY` no debe contarse como ingreso nuevo.**
 
 ---
 

@@ -801,7 +801,6 @@ model Category {
   parent      Category?    @relation("CategoryHierarchy", fields: [workspaceId, parentId], references: [workspaceId, id], onDelete: Restrict)
   children    Category[]   @relation("CategoryHierarchy")
   kind        CategoryKind
-  key         String?      @db.VarChar(100)
   name        String       @db.VarChar(120)
   color       String?      @db.VarChar(20)
   icon        String?      @db.VarChar(100)
@@ -815,7 +814,6 @@ model Category {
   recurringReminders RecurringReminder[]
 
   @@unique([workspaceId, id])
-  @@unique([workspaceId, key])
   @@unique([workspaceId, parentId, name, kind])
   @@index([workspaceId, kind, isActive])
   @@map("categories")
@@ -832,7 +830,6 @@ model SystemMerchantCatalog {
   logoUrl              String?  @db.VarChar(500)
   color                String?  @db.VarChar(20)
   websiteUrl           String?  @db.VarChar(500)
-  suggestedCategoryKey String?  @db.VarChar(100)
   isActive             Boolean  @default(true)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -858,7 +855,6 @@ model Merchant {
   normalizedName       String         @db.VarChar(160)
   logoUrl              String?        @db.VarChar(500)
   color                String?        @db.VarChar(20)
-  suggestedCategoryKey String?        @db.VarChar(100)
   isActive             Boolean        @default(true)
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt

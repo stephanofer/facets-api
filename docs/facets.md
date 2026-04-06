@@ -102,7 +102,7 @@ Dentro de un Workspace se podra definir
 - Moneda base
 - Inicio de mes operativo
 - Preferencias globales
-- Categorias, merchants seeds de datos,etc
+- Categorias, merchants, seeds de datos, etc
 - Miembros con acceso compartido
 
 MVP:
@@ -175,8 +175,7 @@ La lectura del usuario se organiza sobre:
 - categorias;
 - subcategorias;
 - merchants;
-- tags opcionales;
-- reglas y sugerencias futuras.
+- tags opcionales.
 
 ## Capa de inteligencia y extensibilidad
 
@@ -346,7 +345,7 @@ Por ejemplo
 
 Merchant representa el comercio o contraparte asociado a una transaccion.Los nombres libres son inconsistentes y eso degrada automatizacion, busqueda y analitica.
 
-- merchant manual o sugerido;
+- merchant manual;
 - normalizacion simple;
 - posibilidad de reusar merchants existentes;
 - reportes y filtros basicos por merchant
@@ -356,7 +355,7 @@ Merchant representa el comercio o contraparte asociado a una transaccion.Los nom
 
 Ejemplos
 
-- El sistema de merchants usa un modelo **copy-on-first-use** con dos piezas: un **catálogo global** (`SystemMerchantCatalog`) que nosotros mantenemos con marcas conocidas como Starbucks, McDonald's, Netflix — con logo, color y categoría sugerida — y una tabla unificada **`Merchant`** por workspace donde vive la verdad operativa. Cuando el usuario selecciona una marca del catálogo, se copia a su workspace como merchant con `source = SYSTEM`. Si no encuentra lo que busca, crea uno custom con `source = CUSTOM`. Una vez en el workspace, el merchant es 100% del usuario: puede renombrarlo, cambiarle el color o el logo. La transacción apunta a una sola FK (`merchantId`) contra el merchant del workspace, nunca contra el catálogo directamente.
+- El sistema de merchants usa un modelo **copy-on-first-use** con dos piezas: un **catálogo global** (`SystemMerchantCatalog`) que nosotros mantenemos con marcas conocidas como Starbucks, McDonald's, Netflix — con logo y color — y una tabla unificada **`Merchant`** por workspace donde vive la verdad operativa. Cuando el usuario selecciona una marca del catálogo, se copia a su workspace como merchant con `source = SYSTEM`. Si no encuentra lo que busca, crea uno custom con `source = CUSTOM`. Una vez en el workspace, el merchant es 100% del usuario: puede renombrarlo, cambiarle el color o el logo. La transacción apunta a una sola FK (`merchantId`) contra el merchant del workspace, nunca contra el catálogo directamente. No hay sugerencia automática de categoría basada en merchant — la categorización es decisión del usuario al registrar cada transacción.
 
 ## Recurring y one-time
 

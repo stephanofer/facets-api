@@ -375,7 +375,6 @@ Catálogo del sistema (global, read-only):
 
 - `Starbucks`
 - `slug = starbucks`
-- `suggestedCategoryKey = food`
 
 Merchant del workspace (copiado del catálogo):
 
@@ -393,7 +392,6 @@ Merchant custom del workspace:
 
 - mejorar consistencia de nombres;
 - autocompletar con marcas conocidas + merchants propios;
-- facilitar sugerencia de categoría;
 - mejorar reportes y filtros por merchant;
 - permitir personalización de marcas por workspace.
 
@@ -406,11 +404,6 @@ El catálogo es solo consulta; la verdad operativa vive en `Merchant` del worksp
 ### Regla importante 2
 
 `originSlug` existe solo para dedup: evita que el mismo merchant del catálogo se copie dos veces al workspace. El constraint `@@unique([workspaceId, originSlug])` lo garantiza.
-
-### Regla importante 3
-
-`Merchant.suggestedCategoryKey` no apunta por FK a una categoría del workspace.
-Usa un string porque la categoría real depende del locale/seeds/config del workspace.
 
 ---
 
@@ -862,21 +855,7 @@ Mostrar silenciosamente `1 USD = 1 PEN` por ausencia de rate.
 
 ---
 
-## 5.9 `Merchant.suggestedCategoryKey` debe resolverse contra categorías reales del workspace
-
-El merchant del workspace no apunta por FK a `Category`.
-
-### Regla de backend
-
-Cuando se quiera sugerir categoría:
-
-1. leer `suggestedCategoryKey`
-2. buscar categoría del workspace con ese `key`
-3. aplicar sugerencia si existe
-
----
-
-## 5.10 `BudgetLine` debe usarse sólo con categorías padre
+## 5.9 `BudgetLine` debe usarse sólo con categorías padre
 
 El schema relacional no garantiza por sí solo que la categoría elegida sea una categoría raíz.
 
@@ -888,7 +867,7 @@ Antes de crear/update `BudgetLine`, verificar:
 
 ---
 
-## 5.11 `Transfer` debe validar coherencia entre puntas
+## 5.10 `Transfer` debe validar coherencia entre puntas
 
 El schema no garantiza toda la semántica.
 
@@ -902,7 +881,7 @@ El schema no garantiza toda la semántica.
 
 ---
 
-## 5.12 La home debe salir de una lectura agregada
+## 5.11 La home debe salir de una lectura agregada
 
 El schema no obliga arquitectura de API.
 
@@ -912,7 +891,7 @@ No hacer que el front consulte 6 widgets separados pegándole a la base por sepa
 
 ---
 
-## 5.13 `AccountDailyBalance` debe materializarse con reglas consistentes
+## 5.12 `AccountDailyBalance` debe materializarse con reglas consistentes
 
 Prisma no calcula snapshots solo.
 
