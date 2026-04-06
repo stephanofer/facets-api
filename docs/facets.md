@@ -2,7 +2,7 @@
 
 Facets debe convertirse en el sistema financiero diario para personas, parejas y households livianos que necesitan entender su plata operativa con claridad: cuanto dinero tienen disponible, si estan gastando menos de lo que ganan, en que se va la plata y como se mueven sus obligaciones entre cuentas, tarjetas y prestamos.
 
-Para el MVP principalemtne el producto saldra para todo el peru ese sera el publico objetivo pero todo tiene que estar pensado a que en un futuro si funciona el proyecto podamos ir a mas paises y que el cambio y la implementacion sea lo mas eficietne posible y menos dolorosa 
+Para el MVP principalemtne el producto saldra para todo el peru ese sera el publico objetivo pero todo tiene que estar pensado a que en un futuro si funciona el proyecto podamos ir a mas paises y que el cambio y la implementacion sea lo mas eficietne posible y menos dolorosa
 
 La tesis del MVP es deliberada:
 
@@ -30,7 +30,6 @@ El costo del estado actual no es abstracto. Se traduce en:
 - decisiones financieras basadas en numeros falsos;
 - perdida de confianza en la herramienta;
 - abandono del producto a las pocas semanas;
-
 
 ## 3. Perfil de usuario y JTBD
 
@@ -71,32 +70,23 @@ El MVP NO busca resolver de entrada:
 ## 4. Principios rectores del MVP
 
 1. **Cashflow**  
-    El producto optimiza primero para dinero disponible, ingresos, gastos y obligaciones operativas.
-    
+   El producto optimiza primero para dinero disponible, ingresos, gastos y obligaciones operativas.
 2. **Reportes como producto, no como decorado**  
-    El valor del MVP aparece cuando el usuario entiende su situacion, no solo cuando carga transacciones.
-    
+   El valor del MVP aparece cuando el usuario entiende su situacion, no solo cuando carga transacciones.
 3. **Semantica correcta o nada**  
-    Si una feature rompe analytics, no puede entrar como simplificacion temporal.
-    
+   Si una feature rompe analytics, no puede entrar como simplificacion temporal.
 4. **Progresive disclosure**  
-    Primero resumenes claros, despues drill-down. La home responde pocas preguntas. El detalle vive donde corresponde.
-    
+   Primero resumenes claros, despues drill-down. La home responde pocas preguntas. El detalle vive donde corresponde.
 5. **Opinionated defaults**  
-    El producto debe arrancar util desde el dia 1 con seeds, categorias y configuraciones iniciales curadas.
-    
+   El producto debe arrancar util desde el dia 1 con seeds, categorias y configuraciones iniciales curadas.
 6. **Mobile real, no mobile accesorio**  
-    Crear y corregir movimientos desde el telefono debe ser rapido y tolerante a conectividad imperfecta.
-    
+   Crear y corregir movimientos desde el telefono debe ser rapido y tolerante a conectividad imperfecta.
 7. **Multicurrency fundacional, pero sobria**  
-    La V1 soporta moneda base y conversion consistente para reporting, sin intentar resolver todos los problemas de FX del mundo.
-    
+   La V1 soporta moneda base y conversion consistente para reporting, sin intentar resolver todos los problemas de FX del mundo.
 8. **IA y extensibilidad dependen de una base sana**  
-    Primero dato limpio y semantica fuerte. Despues AI, documentos, vector search, chat persistente, MCP y API abierta.
+   Primero dato limpio y semantica fuerte. Despues AI, documentos, vector search, chat persistente, MCP y API abierta.
 
-
-
-Features 
+Features
 
 ### Workspace
 
@@ -107,13 +97,13 @@ Todo vivira dentro de un espacio financiero que puede ser compartido. En Facets 
 - Household liviano
 - Grupos
 
-Dentro de un Workspace se podra definir 
+Dentro de un Workspace se podra definir
 
 - Moneda base
 - Inicio de mes operativo
 - Preferencias globales
 - Categorias, merchants seeds de datos,etc
-- Miembros con acceso compartido 
+- Miembros con acceso compartido
 
 MVP:
 
@@ -123,10 +113,10 @@ MVP:
 
 Basicamente las cuentas van a representar donde vive el dinero o una obligacion a pagar ya que Sin cuentas tipadas no se puede distinguir correctamente entre efectivo, pasivos y movimientos internos.
 
-MVP: 
+MVP:
 
 - Efectivo
-- Banco 
+- Banco
 - Tarjeta de credito
 - Deuda Generica
 - Prestamo
@@ -144,6 +134,7 @@ Para el tema del os balances
 El balance representa el estado financiero actual o de referencia de una cuenta.
 
 Tendremos
+
 - balance inicial;
 - balance actual derivado de movimientos;
 - accion de ajuste o reconciliacion;
@@ -155,7 +146,7 @@ Ademas
 - el producto debe tratar el ajuste de saldo como correccion de estado, no como transaccion falsa;
 - los balances tienen que servir para confiabilidad, no para contaminar analytics;
 - en cuentas manuales, la UX debe priorizar "ajustar saldo actual" por encima de terminologia contable compleja.
-Por ejemplo 
+  Por ejemplo
 
 - una cuenta bancaria deberia tener 1200 pero el banco muestra 1150: el usuario reconcilia a 1150 y el cashflow no se ensucia;
 - una tarjeta arranca con deuda previa de 800: se carga balance inicial y despues las compras y pagos operan sobre esa base.
@@ -172,7 +163,6 @@ El producto necesita distinguir, aunque la UI sea simple:
 - ajuste de saldo o reconciliacion.
 
 La idea central es simple: no todo lo que mueve plata significa lo mismo.
-
 
 ## Capa analitica comun
 
@@ -192,12 +182,11 @@ La lectura del usuario se organiza sobre:
 
 Documentos, busqueda semantica, AI assistant, chat persistente, tool calling, MCP y API keys existen en la vision del producto, pero solo tienen sentido cuando la base transaccional ya es confiable.
 
-
 ## Transactions
 
 La transaccion es el evento cotidiano que registra ingreso, gasto o movimiento operativo. Es la unidad central de captura para responder flujo mensual, clasificacion y reportes.
 
-Lo que se debe tener en cuenta es 
+Lo que se debe tener en cuenta es
 
 - la transaccion comun no debe absorber semanticas que merecen entidad o tipo propio;
 - el usuario debe sentir un flujo simple, pero el dominio debe distinguir `standard`, `funds_movement`, `cc_payment`, `loan_payment` y `one_time`;
@@ -215,16 +204,16 @@ Por ejemplo
 
 Una transferencia es el movimiento entre dos cuentas propias que une dos puntas de una misma intencion financiera. Debemos tener en cuenta que si el sistema la trata como gasto mas ingreso, rompe balances, presupuesto y reportes.
 
-Por ejemplo 
+Por ejemplo
 
 - transferencia comun;
 - pago de tarjeta;
 - pago de prestamo.
 
-Super importante 
+Super importante
 
- - evitar doble conteo en reportes.
- - - crearla explicitamente como accion dedicada;
+- evitar doble conteo en reportes.
+- - crearla explicitamente como accion dedicada;
 - elegir origen, destino, fecha, monto y moneda;
 - ver el badge semantico correcto en ambas cuentas;
 
@@ -238,20 +227,20 @@ Uso
 
 La tarjeta de credito es una cuenta de pasivo con semantica propia.Es el caso mas comun donde las apps de finanzas mienten: compra y pago no pueden contarse como el mismo tipo de salida.
 
-Por ejemplo 
+Por ejemplo
 
 - las compras en tarjeta aumentan deuda pendiente;
 - el pago de tarjeta reduce esa deuda;
 - el gasto real ocurre en la compra, no en el pago;
 - el producto mostrara saldo adeudado, movimientos y pagos asociados.
 
-Uso 
+Uso
 
 - compra de supermercado por 120 con tarjeta: impacta categoria comida y sube deuda;
 - pago de 120 desde cuenta sueldo: baja deuda, no suma gasto del periodo;
 - pago parcial de resumen: reduce parte de la obligacion sin alterar el gasto historico original.
-## Debts
 
+## Debts
 
 Debt representa una obligacion financiera que no necesariamente necesita toda la semantica de un prestamo estructurado.Muchos usuarios tienen deudas informales o simples que igual afectan cashflow y dinero disponible.
 
@@ -270,7 +259,6 @@ USO
 ##  Loans
 
 Loan representa un prestamo estructurado que merece tratamiento distinto a una deuda generica.Prestamos de auto, estudio o personales afectan cashflow futuro y necesitan semantica especifica.
-
 
 - balance inicial o saldo pendiente;
 - pago registrado como `loan_payment`;
@@ -303,6 +291,7 @@ LentMoney representa dinero que el usuario prestó a otras personas o empresas y
 - un amigo al que le prestaste para una emergencia
 - un familiar al que le adelantaste dinero
 - un cliente o proveedor que te quedó debiendo
+
 ## Categories
 
 Las categorias agrupan el significado principal de ingresos y gastos.Sin una taxonomia curada no hay reportes utiles, budgets consistentes ni automatizacion futura.
@@ -365,9 +354,9 @@ Merchant representa el comercio o contraparte asociado a una transaccion.Los nom
 - el sistema debe tolerar descripciones crudas pero tender a consolidarlas;
 - la capa merchant prepara el camino para reglas futuras.
 
-Ejemplos 
+Ejemplos
 
-- Basicamente El sistema de merchants maneja dos tipos  Los **SYSTEM merchants** son registros seeded por nosotros — comercios conocidos como Starbucks, McDonald's, Wong, Plaza Vea — con logo, color y una categoría sugerida por defecto, compartidos para todos los workspaces sin que ningún usuario los pueda editar. Los **WORKSPACE merchants** son comercios creados por el usuario cuando no encuentra lo que busca, pertenecen solo a su workspace y no tienen datos enriquecidos.
+- El sistema de merchants usa un modelo **copy-on-first-use** con dos piezas: un **catálogo global** (`SystemMerchantCatalog`) que nosotros mantenemos con marcas conocidas como Starbucks, McDonald's, Netflix — con logo, color y categoría sugerida — y una tabla unificada **`Merchant`** por workspace donde vive la verdad operativa. Cuando el usuario selecciona una marca del catálogo, se copia a su workspace como merchant con `source = SYSTEM`. Si no encuentra lo que busca, crea uno custom con `source = CUSTOM`. Una vez en el workspace, el merchant es 100% del usuario: puede renombrarlo, cambiarle el color o el logo. La transacción apunta a una sola FK (`merchantId`) contra el merchant del workspace, nunca contra el catálogo directamente.
 
 ## Recurring y one-time
 
@@ -393,11 +382,12 @@ Budget es la capa de planificacion que traduce observacion historica en control 
 - - budget debe apoyarse en la misma semantica que reportes;
 - no debe castigar al usuario con setup infinito;
 
-Uso 
+Uso
 
 - Comida: presupuesto 400, gastado 280, disponible 120;
 - Transporte: presupuesto 150, gastado 165, estado excedido;
 - pago de tarjeta: no consume presupuesto como gasto nuevo.
+
 ## Reports
 
 Los reportes son la forma principal en que el usuario obtiene valor de negocio del producto.Una app que solo registra movimientos pero no responde preguntas claras obliga al usuario a hacer el trabajo mental que el producto deberia resolver.
@@ -409,7 +399,6 @@ Los reportes core deben responder, como minimo, estas preguntas:
 3. cuanto gaste en el periodo pasado versus el actual;
 4. en que categorias se va mi plata.
 
-
 Reportes y vistas minimas:
 
 - resumen de balances por cuenta;
@@ -420,20 +409,20 @@ Reportes y vistas minimas:
 - filtros por cuenta, categoria y moneda base consolidada.
 
 A tener en cuenta
+
 - reportes no son un modulo accesorio: deben guiar la home y el producto;
 - categorias padre primero, detalle despues;
 - comparativas deben usar periodos equivalentes;
 - movimientos internos no deben mentir en analitica;
 - `one_time` debe poder quedar fuera de ciertas lecturas operativas;
 - los mismos numeros deben cerrar entre dashboard, detalle y resumen.
-uso
+  uso
 
 - "Gastaste 920 este mes vs 1030 el mes pasado";
 - "Tu categoria principal fue Comida con 31 por ciento del gasto";
 - "Tus cuentas operativas muestran 1450 disponibles y tu tarjeta adeuda 380".
 
 ## Multicurrency
-
 
 Multicurrency permite operar cuentas y transacciones en distintas monedas, consolidando la lectura del workspace en una moneda base.Sin multicurrency, una app financiera global queda rota muy rapido para expats, freelancers internacionales o usuarios con cuentas en USD/EUR/ARS y similares.
 
@@ -448,6 +437,7 @@ Multicurrency permite operar cuentas y transacciones en distintas monedas, conso
 - la V1 no necesita resolver el mejor motor de FX del mercado, pero SI necesita evitar ambiguedad y doble interpretacion.
 
 USO
+
 - cuenta bancaria en EUR y tarjeta en USD dentro de un workspace base EUR;
 - gasto de viaje cargado en USD pero consolidado a ARS para el resumen;
 - transferencia de ARS a caja USD mostrando ambos montos.
@@ -473,9 +463,7 @@ Uso
 
 ## Seeds y defaults iniciales
 
-
 Son los datos iniciales y estructuras opinionadas que permiten que el producto arranque util.Un producto financiero vacio genera friccion, errores y abandono.
-
 
 - categorias y subcategorias por locale;
 - merchants frecuentes opcionales;
@@ -489,8 +477,6 @@ Uso
 
 - un usuario nuevo ya ve Comida, Vivienda, Salud, Transporte y Servicios listos para usar;
 - al crear una tarjeta, el producto sugiere comportamiento semantico y reportes compatibles.
-
-
 
 ## Mobile offline-first
 
@@ -511,16 +497,17 @@ uso
 
 MVP
 
-Para nuestor MVP no vamos a contemplat el tema de  mobile offline-fiirst mas que todo porque es mucha complejidad para esta etapa entonces lo que se tiene en mente es lo siguiente: sI EL PRODUCTO FUNCIONA ENTONCES SE IMPLEMENTARA SOPORTE PARA ESTO. PERO TODO TIENE QUE ESTAR PENSADO PARA EL DIA QUE SE HAGA ESTO HACERLO DE FORMA EFICIETNE SENCILLA Y SIN DOLOR.
+Para nuestor MVP no vamos a contemplat el tema de mobile offline-fiirst mas que todo porque es mucha complejidad para esta etapa entonces lo que se tiene en mente es lo siguiente: sI EL PRODUCTO FUNCIONA ENTONCES SE IMPLEMENTARA SOPORTE PARA ESTO. PERO TODO TIENE QUE ESTAR PENSADO PARA EL DIA QUE SE HAGA ESTO HACERLO DE FORMA EFICIETNE SENCILLA Y SIN DOLOR.
 
 ##  Documentos y family docs
+
 Es la capacidad de almacenar documentos financieros asociados al workspace. Extractos, contratos, comprobantes y archivos de soporte agregan contexto y abren la puerta a busqueda, AI y auditoria ligera.
 
 - los documentos deben ser del workspace, no de un movimiento aislado solamente;
 - el sistema necesita permisos, metadata y relacion clara con cuentas o periodos;
 - esta capa debe nacer pensando en recuperacion y contexto, no solo en upload de archivos.
 
-uso 
+uso
 
 - guardar resumen de tarjeta del mes;
 - subir contrato de prestamo o comprobante relevante;
@@ -529,12 +516,12 @@ uso
 
 ##  AI assistant
 
-Es un asistente capaz de responder preguntas financieras y  ejecutar herramientas sobre datos del usuario. Puede convertir un producto de lectura en uno de consulta accionable, siempre que los datos sean confiables.
+Es un asistente capaz de responder preguntas financieras y ejecutar herramientas sobre datos del usuario. Puede convertir un producto de lectura en uno de consulta accionable, siempre que los datos sean confiables.
 
 EL "ASISTENTE" CON ACCESO A LA POSTA (Tool Calling)
-El chat  no es solo un loro que repite cosas. Tiene "Functions".
+El chat no es solo un loro que repite cosas. Tiene "Functions".
 Cómo funciona: Si el usuario pregunta "¿Cuánto gasté en pizza este mes?", la IA no adivina. El sistema le da herramientas (funciones de nestjs)
-     para que ella misma haga el query a la base de datos, sume los montos y le devuelva la respuesta real al usuario. Se llama Function Calling.
+para que ella misma haga el query a la base de datos, sume los montos y le devuelva la respuesta real al usuario. Se llama Function Calling.
 Importante
 
 - Lo importante es que nunca envía información personal identificable como email, nombre o números de cuenta al proveedor de AI. Solo envía montos, categorías y balances agregados.
@@ -544,5 +531,4 @@ Uso
 - "Cuanto gaste en comida el ultimo mes";
 - "Mostrame mis cuentas con menos saldo";
 - "Que pagos grandes tuve este trimestre".
-- O tambien cosas como tiene sus documentos y ya se indexaron y vectorizaron entonces le podemosh acer preguntas al chat 
-
+- O tambien cosas como tiene sus documentos y ya se indexaron y vectorizaron entonces le podemosh acer preguntas al chat

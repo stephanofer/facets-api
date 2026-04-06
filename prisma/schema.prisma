@@ -119,7 +119,7 @@ model Workspace {
   files              File[]
   accounts           Account[]
   categories         Category[]
-  workspaceMerchants WorkspaceMerchant[]
+  merchants          Merchant[]
   tags               Tag[]
   transactions       Transaction[]
   transfers          Transfer[]
@@ -654,6 +654,11 @@ enum BudgetStatus {
   ARCHIVED
 }
 
+enum MerchantSource {
+  SYSTEM
+  CUSTOM
+}
+
 enum ReminderAmountType {
   FIXED
   RANGE
@@ -816,40 +821,56 @@ model Category {
   @@map("categories")
 }
 
-model SystemMerchant {
+/// Global merchant catalog maintained by the platform (read-only for workspaces).
+/// Acts as a reference source for autocomplete — merchants are copied to the workspace
+/// on first use (copy-on-first-use pattern). No direct FK from transactions.
+model SystemMerchantCatalog {
   id                   String   @id @default(cuid(2))
   name                 String   @db.VarChar(160)
   normalizedName       String   @db.VarChar(160)
+  slug                 String   @db.VarChar(160)
   logoUrl              String?  @db.VarChar(500)
+  color                String?  @db.VarChar(20)
+  websiteUrl           String?  @db.VarChar(500)
   suggestedCategoryKey String?  @db.VarChar(100)
   isActive             Boolean  @default(true)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  transactions Transaction[]
-
   @@unique([normalizedName])
+  @@unique([slug])
   @@index([isActive])
-  @@map("system_merchants")
+  @@map("system_merchant_catalog")
 }
 
-model WorkspaceMerchant {
-  id             String    @id @default(cuid(2))
-  workspaceId    String
-  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  name           String    @db.VarChar(160)
-  normalizedName String    @db.VarChar(160)
-  logoUrl        String?   @db.VarChar(500)
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+/// Workspace-scoped merchant. Single source of truth for merchant identity per tenant.
+/// Created either from the SystemMerchantCatalog (source=SYSTEM, copy-on-first-use)
+/// or manually by the user (source=CUSTOM).
+/// Once copied, the merchant is fully independent — the user can rename, recolor, etc.
+/// `originSlug` is kept only for dedup: prevents re-importing the same catalog entry.
+model Merchant {
+  id                   String         @id @default(cuid(2))
+  workspaceId          String
+  workspace            Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  source               MerchantSource
+  originSlug           String?        @db.VarChar(160)
+  name                 String         @db.VarChar(160)
+  normalizedName       String         @db.VarChar(160)
+  logoUrl              String?        @db.VarChar(500)
+  color                String?        @db.VarChar(20)
+  suggestedCategoryKey String?        @db.VarChar(100)
+  isActive             Boolean        @default(true)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   transactions Transaction[]
 
   @@unique([workspaceId, id])
   @@unique([workspaceId, normalizedName])
+  @@unique([workspaceId, originSlug])
   @@index([workspaceId, isActive])
-  @@map("workspace_merchants")
+  @@index([workspaceId, source])
+  @@map("merchants")
 }
 
 model Tag {
@@ -885,10 +906,8 @@ model Transaction {
   status                TransactionStatus    @default(ACTIVE)
   categoryId            String?
   category              Category?            @relation(fields: [workspaceId, categoryId], references: [workspaceId, id], onDelete: Restrict)
-  systemMerchantId      String?
-  systemMerchant        SystemMerchant?      @relation(fields: [systemMerchantId], references: [id], onDelete: SetNull)
-  workspaceMerchantId   String?
-  workspaceMerchant     WorkspaceMerchant?   @relation(fields: [workspaceId, workspaceMerchantId], references: [workspaceId, id], onDelete: Restrict)
+  merchantId            String?
+  merchant              Merchant?            @relation(fields: [workspaceId, merchantId], references: [workspaceId, id], onDelete: SetNull)
   notes                 String?              @db.Text
   isExcludedFromReports Boolean              @default(false)
   voidedAt              DateTime?
@@ -913,8 +932,7 @@ model Transaction {
   @@index([accountId, date])
   @@index([workspaceId, date, direction])
   @@index([workspaceId, date, kind])
-  @@index([systemMerchantId])
-  @@index([workspaceId, workspaceMerchantId])
+  @@index([workspaceId, merchantId])
   @@index([workspaceId, sourceProvider])
   @@map("transactions")
 }

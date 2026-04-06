@@ -363,42 +363,54 @@ Nada de árbol infinito.
 
 ---
 
-### `SystemMerchant` + `WorkspaceMerchant`
+### `SystemMerchantCatalog` + `Merchant`
 
 Comercio o contraparte de una transacción.
 
+El modelo usa un patrón **copy-on-first-use**: hay un catálogo global de marcas conocidas (`SystemMerchantCatalog`) que actúa como fuente de referencia para el autocomplete. Cuando el usuario selecciona una marca del catálogo, se crea una copia en su workspace como `Merchant` con `source = SYSTEM`. A partir de ahí, ese merchant es 100% del workspace y se puede personalizar libremente.
+
 ### Ejemplo simple
 
-Merchant del sistema:
+Catálogo del sistema (global, read-only):
 
 - `Starbucks`
-- `normalizedName = starbucks`
+- `slug = starbucks`
 - `suggestedCategoryKey = food`
 
-Merchant privado del workspace:
+Merchant del workspace (copiado del catálogo):
 
-- `Bodega Don Pepe`
+- `name = Starbucks` (o renombrado a "Café Temprano")
+- `source = SYSTEM`
+- `originSlug = starbucks`
+
+Merchant custom del workspace:
+
+- `name = Bodega Don Pepe`
+- `source = CUSTOM`
+- `originSlug = null`
 
 ### Para qué sirve
 
 - mejorar consistencia de nombres;
-- autocompletar;
+- autocompletar con marcas conocidas + merchants propios;
 - facilitar sugerencia de categoría;
-- mejorar reportes por merchant.
+- mejorar reportes y filtros por merchant;
+- permitir personalización de marcas por workspace.
 
 ### Regla importante
 
-Hay dos tablas porque tienen ownership distinto:
-
-- `SystemMerchant` = catálogo global compartido;
-- `WorkspaceMerchant` = merchant privado de un workspace.
-
-Eso evita que una transacción de un workspace apunte por error a un merchant privado de otro.
+`Transaction` apunta a una sola FK: `merchantId` → `Merchant`.
+No hay relación directa entre `Transaction` y `SystemMerchantCatalog`.
+El catálogo es solo consulta; la verdad operativa vive en `Merchant` del workspace.
 
 ### Regla importante 2
 
-`SystemMerchant` no apunta por FK a una categoría del workspace.
-Usa `suggestedCategoryKey` porque la categoría real depende del locale/seeds/config del workspace.
+`originSlug` existe solo para dedup: evita que el mismo merchant del catálogo se copie dos veces al workspace. El constraint `@@unique([workspaceId, originSlug])` lo garantiza.
+
+### Regla importante 3
+
+`Merchant.suggestedCategoryKey` no apunta por FK a una categoría del workspace.
+Usa un string porque la categoría real depende del locale/seeds/config del workspace.
 
 ---
 
@@ -459,18 +471,15 @@ Es la tabla central del cashflow MVP.
 - descripción;
 - kind semántico;
 - categoría;
-- `systemMerchant` o `workspaceMerchant`;
+- merchant (del workspace);
 - notas.
 
 ### Importante
 
 Una transacción puede tener:
 
-- merchant global del sistema;
-- merchant privado del workspace;
+- un merchant del workspace;
 - o ningún merchant.
-
-Pero NO ambos al mismo tiempo.
 
 ### Ejemplo simple 1 — sueldo
 
@@ -855,7 +864,7 @@ Mostrar silenciosamente `1 USD = 1 PEN` por ausencia de rate.
 
 ## 5.9 `Merchant.suggestedCategoryKey` debe resolverse contra categorías reales del workspace
 
-El merchant global del sistema no apunta por FK a `Category`.
+El merchant del workspace no apunta por FK a `Category`.
 
 ### Regla de backend
 
@@ -1108,7 +1117,7 @@ El usuario carga “supermercado 120 PEN” en tarjeta.
 
 - `Transaction`
 - opcional `Category`
-- opcional `SystemMerchant` o `WorkspaceMerchant`
+- opcional `Merchant`
 - opcional `TransactionTag`
 
 #### Qué se guarda realmente
@@ -1166,21 +1175,33 @@ La semántica vive en `Transaction.kind`:
 
 #### Caso simple 1
 
-El usuario escribe “Starbucks”.
+El usuario escribe "Starbucks".
 
-La app puede sugerir un `SystemMerchant` existente.
+La app busca primero en los merchants del workspace.
+Si no lo encuentra, busca en `SystemMerchantCatalog`.
+Si el usuario lo selecciona del catálogo, se crea un `Merchant` en el workspace con `source = SYSTEM` y `originSlug = starbucks`.
 
 #### Caso simple 2
 
-El usuario escribe “Bodega Don Pepe”, que no existe globalmente.
+El usuario escribe "Bodega Don Pepe", que no existe en el workspace ni en el catálogo.
 
-La app crea un `WorkspaceMerchant` privado para ese workspace.
+La app crea un `Merchant` en el workspace con `source = CUSTOM` y `originSlug = null`.
+
+#### Caso simple 3
+
+El usuario ya tiene "Starbucks" en su workspace pero lo renombró a "Café Temprano".
+Busca "Starbucks" de nuevo.
+
+La app lo encuentra porque `originSlug = starbucks` matchea la búsqueda.
+Se muestra "Café Temprano (Starbucks)" — no se crea otro merchant.
 
 #### Qué ventaja tiene este modelo
 
-- los merchants globales se reutilizan;
-- los merchants privados no se mezclan entre workspaces;
-- la transacción puede apuntar a uno u otro sin fuga multi-tenant.
+- una sola FK en `Transaction` (`merchantId`): queries simples, un solo JOIN, un solo índice;
+- no hay COALESCE ni OR entre dos tablas;
+- el catálogo es solo referencia de consulta, no se vincula a transacciones;
+- los merchants no se mezclan entre workspaces;
+- el usuario puede personalizar libremente merchants copiados del catálogo.
 
 ---
 
