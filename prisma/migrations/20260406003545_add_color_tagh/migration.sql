@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "tags" ADD COLUMN     "color" VARCHAR(20) NOT NULL DEFAULT '#e99537';

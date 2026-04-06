@@ -879,6 +879,7 @@ model Tag {
   workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name           String    @db.VarChar(80)
   normalizedName String    @db.VarChar(80)
+  color          String    @default("#e99537") @db.VarChar(20)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
